@@ -435,6 +435,32 @@ def render_negotiation_card(brief: dict):
 # HELPER — QM Semantic Panel
 # ============================================================================
 
+def render_graph_scores_panel(graph_scores: list):
+    if not graph_scores:
+        return
+
+    st.markdown("---")
+    st.markdown("#### 🕸️ Graph Embedding Structural Discovery (Phase 5½)")
+    st.caption("Node2Vec graph embeddings fusion. Surfaces tables acting as cross-module hubs.")
+
+    for row in graph_scores[:5]:
+        tbl = row.get("table", "?")
+        mod = row.get("domain", "?")
+        role = row.get("structural_role", "?")
+        bridge = row.get("is_cross_module_bridge", False)
+        comp = row.get("composite_score", 0.0)
+        struct = row.get("structural_score", 0.0)
+        text = row.get("text_score", 0.0)
+        
+        bridge_badge = "<span style='background-color:#ffebee;color:#c62828;padding:2px 6px;border-radius:10px;font-size:0.75rem;margin-left:5px;'>Cross-Module Bridge</span>" if bridge else ""
+        
+        st.markdown(
+            f"**`{tbl}`** [{mod}] — {role.replace('_', ' ').title()} {bridge_badge}<br>"
+            f"<span style='font-size:0.85rem;color:#555;'>Score: **{comp:.3f}** (Struct: {struct:.3f} | Text: {text:.3f})</span>",
+            unsafe_allow_html=True
+        )
+
+
 def render_qm_panel(qm: dict):
     if not qm or qm.get("count", 0) == 0:
         return
@@ -601,7 +627,8 @@ def render_answer(msg: dict):
     render_negotiation_card(payload.get("negotiation_brief"))
 
     # ── QM Semantic ─────────────────────────────────────────────────────────
-    render_qm_panel(payload.get("qm_semantic"))
+    render_graph_scores_panel(payload.get('graph_scores'))
+    render_qm_panel(payload.get('qm_semantic'))
 
     # ── Masked Fields ───────────────────────────────────────────────────────
     masked = payload.get("masked_fields", [])

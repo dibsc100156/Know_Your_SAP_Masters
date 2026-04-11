@@ -196,6 +196,7 @@ def run_agent_loop(
     """
     start_time = time.time()
     tool_trace = []
+    graph_scores_data = None
     # Default sql_result for fast-path (meta-path matched) where Pillar 4 is skipped
     sql_result = ToolResult(status=ToolStatus.SUCCESS, message="fast_path", data={"patterns": []}, metadata={})
     top_pattern: Dict[str, Any] = {"intent": "unknown", "tables": []}
@@ -505,6 +506,7 @@ def run_agent_loop(
         trace("graph_enhanced_schema_discovery", graph_result)
 
         if graph_result.status == ToolStatus.SUCCESS:
+            graph_scores_data = graph_result.data.get("tables", [])
             graph_tables = graph_result.data.get("tables_discovered", [])
             # Merge graph-discovered tables into tables_involved if not already present
             merged_count = 0
@@ -1176,6 +1178,7 @@ def run_agent_loop(
             "logged": True,
         },
         "self_heal": heal_info if 'heal_info' in locals() else {"applied": False},
+        "graph_scores": graph_scores_data,
         "qm_semantic": {
             "count": len(qm_semantic_results) if 'qm_semantic_results' in dir() else 0,
             "results": qm_semantic_results if 'qm_semantic_results' in dir() else [],
