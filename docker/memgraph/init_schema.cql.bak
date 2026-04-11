@@ -15,6 +15,7 @@ CREATE INDEX ON :SAPTable(table_name);
 CREATE INDEX ON :SAPTable(module);
 CREATE INDEX ON :SAPTable(domain);
 CREATE INDEX ON :SAPTable(bridge);
+CREATE INDEX ON :SAPTable(table);  -- legacy label for mg_networkx compat
 
 -- ── 2. Material Master Nodes (MM) ───────────────────────────────────────────
 MERGE (m:SAPTable {table_name:"MARA"}) SET m.module="MM", m.domain="material_master", m.description="General Material Data", m.key_columns=["MATNR"], m.bridge=false;
@@ -232,4 +233,6 @@ MATCH (a:SAPTable {table_name:"ANLA"}), (b:SAPTable {table_name:"T001"}) MERGE (
 --   graph.compute_centrality()   # ← from memgraph_adapter.py
 
 -- ── Verify ────────────────────────────────────────────────────────────────────
-RETURN 'SAP Masters graph loaded successfully — schema ready' AS status;
+RETURN 'SAP Masters graph loaded: ' + 
+       toString(count{(:SAPTable)}) + ' nodes, ' + 
+       toString(count{(a)-[:FOREIGN_KEY]->(b)}) + ' edges' AS status;

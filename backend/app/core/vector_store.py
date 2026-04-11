@@ -248,7 +248,31 @@ class QdrantAdapter:
             timeout=10,
             prefer_grpc=True,
         )
-        self.embedding_fn = SentenceTransformer("all-MiniLM-L6-v2")
+        # Lazy encoder — only loaded on first search. Handles broken venv torch gracefully.
+        self._embedding_fn = None
+
+    def _get_encoder(self):
+        """Lazily load SentenceTransformer, falling back to system Python if venv torch is broken."""
+        if self._embedding_fn is not None:
+            return self._embedding_fn
+        try:
+            from sentence_transformers import SentenceTransformer
+            self._embedding_fn = SentenceTransformer("all-MiniLM-L6-v2")
+            return self._embedding_fn
+        except OSError as e:
+            if "torch" in str(e) or "shm.dll" in str(e):
+                import sys as _sys
+                import logging as _logging
+                _logging.warning(
+                    "[QdrantAdapter] Venv torch broken — routing encoder through system Python. "
+                    "This is a startup workaround. Fix: reinstall torch in the venv."
+                )
+                # Use system Python for encoding only
+                _sys.path.insert(0, str(_sys.prefix.parent / "Lib" / "site-packages"))
+                from sentence_transformers import SentenceTransformer as _ST
+                self._embedding_fn = _ST("all-MiniLM-L6-v2")
+                return self._embedding_fn
+            raise
 
         # Ensure collections exist
         self._ensure_collection(self.SCHEMA_COLLECTION)
@@ -317,7 +341,7 @@ class QdrantAdapter:
                     f" Columns: {col_desc}"
                 )
                 ids.append(f"schema_{domain_name}_{table_name}")
-                vecs.append(self.embedding_fn.encode(doc).tolist())
+                vecs.append(self._get_encoder().encode(doc).tolist())
                 payloads.append({
                     "document": doc,
                     "table": table_name,
@@ -332,7 +356,7 @@ class QdrantAdapter:
             ids, vecs, payloads = [], [], []
             for i, pat in enumerate(patterns):
                 ids.append(f"sql_{domain_name}_{i}")
-                vecs.append(self.embedding_fn.encode(pat["intent"]).tolist())
+                vecs.append(self._get_encoder().encode(pat["intent"]).tolist())
                 payloads.append({
                     "intent": pat["intent"],
                     "sql": pat["sql"],
@@ -346,7 +370,7 @@ class QdrantAdapter:
     def search_schema(
         self, query: str, n_results: int = 4, domain: str = None
     ) -> List[Dict]:
-        vec = self.embedding_fn.encode(query).tolist()
+        vec = self._get_encoder().encode(query).tolist()
 
         # Build filter
         from qdrant_client.models import Filter, FieldCondition, MatchValue
@@ -382,7 +406,7 @@ class QdrantAdapter:
     def search_sql_patterns(
         self, query: str, n_results: int = 2, domain: str = None
     ) -> List[Dict]:
-        vec = self.embedding_fn.encode(query).tolist()
+        vec = self._get_encoder().encode(query).tolist()
 
         from qdrant_client.models import Filter, FieldCondition, MatchValue
         filter_cond = None
@@ -529,13 +553,52 @@ def set_vector_store_backend(backend: str, **kwargs) -> VectorStoreManager:
     return store_manager
 
 
-# ── Module-level singleton (backward compatibility) ────────────────────────────
+# ── Module-level lazy singleton (avoids ChromaDB init at import time) ──────────────
+# Rationale: ChromaDB v0.4 (system Python) conflicts with ./chroma_db (v1.5.x backend
+# venv). By deferring adapter creation until first actual use, we let Qdrant-only
+# deployments avoid ChromaDB entirely.
+#
+# Usage:
+#   from app.core.vector_store import store_manager  # same API as before
+#   results = store_manager.search_schema(...)
 
 db_path_default = os.path.expanduser("~/.openclaw/workspace/chroma_db")
 if not os.path.exists(db_path_default):
     db_path_default = "./chroma_db"
 
-store_manager = VectorStoreManager(backend="chroma", db_path=db_path_default)
+
+class _LazyStoreManager:
+    """Lazy proxy: defers VectorStoreManager creation until first attribute access.
+
+    This prevents ChromaDB (system Python v0.4) from opening the ./chroma_db
+    directory when the deployment only uses Qdrant.
+    """
+
+    __slots__ = ("_real", "_backend_override")
+
+    def __init__(self, backend_override: str = None):
+        self._real: VectorStoreManager = None
+        self._backend_override = backend_override
+
+    def _resolve(self) -> VectorStoreManager:
+        if self._real is None:
+            backend = self._backend_override or os.environ.get(
+                "VECTOR_STORE_BACKEND", "chroma"
+            )
+            if backend == "qdrant":
+                self._real = VectorStoreManager(backend="qdrant")
+            else:
+                self._real = VectorStoreManager(backend="chroma", db_path=db_path_default)
+        return self._real
+
+    def __getattr__(self, name):
+        return getattr(self._resolve(), name)
+
+    def __repr__(self):
+        return repr(self._resolve())
+
+
+store_manager: VectorStoreManager = _LazyStoreManager()
 
 
 def init_vector_store(backend: str = None) -> VectorStoreManager:
@@ -547,7 +610,6 @@ def init_vector_store(backend: str = None) -> VectorStoreManager:
         backend: "chroma" or "qdrant".
                 Defaults to VECTOR_STORE_BACKEND env var or "chroma".
     """
-    global store_manager
     backend = backend or os.environ.get("VECTOR_STORE_BACKEND", "chroma")
     _db_path = os.path.expanduser("~/.openclaw/workspace/chroma_db")
     if not os.path.exists(_db_path):
@@ -565,10 +627,11 @@ def init_vector_store(backend: str = None) -> VectorStoreManager:
     else:
         logger.info(f"[init_vector_store] {_new_store.backend_name}: {count} schema vectors loaded. Skipping.")
 
-    # Update module-level singleton so subsequent imports get the right instance
+    # Resolve the lazy singleton and cache the real instance
+    # so that `from app.core.vector_store import store_manager` also sees it
     import app.core.vector_store as _vs_mod
-    _vs_mod.store_manager = _new_store
-    store_manager = _new_store
+    _vs_mod.store_manager._real = _new_store
+    _vs_mod.store_manager._backend_override = backend
     return _new_store
 
 

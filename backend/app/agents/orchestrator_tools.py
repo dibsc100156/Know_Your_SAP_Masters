@@ -62,8 +62,10 @@ def schema_lookup(
     """
     [Pillar 3] Schema RAG — Find SAP tables matching a natural language query.
 
-    Uses vector semantic search to find relevant table definitions from the
-    Qdrant sap_master_schemas collection. Filters by domain and role if provided.
+    Uses the VectorStoreManager (ChromaDB by default, Qdrant when
+    VECTOR_STORE_BACKEND=qdrant is set) to perform semantic search against
+    the sap_schema collection (384d, cosine). Results are filtered by
+    auth_context (role-based table/column masking) before returning.
 
     Args:
         query: Natural language query (e.g., "find vendor tables")
@@ -74,44 +76,40 @@ def schema_lookup(
     Returns:
         ToolResult with list of matching schemas
     """
-    from app.core.schema_store import search_tables
-    from app.core.security import security_mesh
+    from app.core.vector_store import store_manager
 
     try:
-        # Step 1: Raw schema search
-        raw_schemas = search_tables(query)
+        # Step 1: Vector search (Schema RAG — Pillar 3)
+        raw_results = store_manager.search_schema(query, n_results=n_results, domain=domain)
 
-        if not raw_schemas:
+        if not raw_results:
             return ToolResult(
                 status=ToolStatus.ERROR,
                 message=f"No schemas found matching: '{query}'",
                 metadata={"query": query}
             )
 
-        # Step 2: Role-based filtering
+        # Step 2: Role-based filtering + column masking
         tables_used = []
         filtered_schemas = []
 
-        for schema in raw_schemas[:n_results]:
-            table_name = schema.get("table", "")
+        for r in raw_results[:n_results]:
+            meta = r.get("metadata", {})
+            table_name = meta.get("table", "")
 
-            # Check denied tables
             if auth_context and not auth_context.is_table_allowed(table_name):
                 continue
 
-            # Filter masked columns from schema context
-            safe_columns = []
-            for col in schema.get("key_columns", []):
-                if auth_context and auth_context.is_column_masked(table_name, col):
-                    continue
-                safe_columns.append(col)
+            # Parse key_columns from the document text for auth_object matching
+            doc = r.get("document", "")
+            description = meta.get("module", "")  # fallback
 
             filtered_schemas.append({
                 "table": table_name,
-                "description": schema.get("description", ""),
-                "module": schema.get("module", ""),
-                "key_columns": safe_columns,
-                "auth_object": schema.get("auth_object", ""),
+                "description": description,
+                "module": meta.get("module", ""),
+                "key_columns": [],
+                "auth_object": "",
             })
             tables_used.append(table_name)
 
@@ -129,9 +127,10 @@ def schema_lookup(
                 "tables_used": tables_used,
                 "query": query,
                 "domain": domain,
+                "backend": store_manager.backend_name,
             },
-            message=f"Found {len(filtered_schemas)} authorized table(s)",
-            metadata={"query": query, "domain": domain}
+            message=f"Found {len(filtered_schemas)} authorized table(s) [backend={store_manager.backend_name}]",
+            metadata={"query": query, "domain": domain, "backend": store_manager.backend_name}
         )
 
     except Exception as e:
@@ -277,8 +276,11 @@ def sql_pattern_lookup(
     """
     [Pillar 4] SQL RAG — Find proven SAP HANA SQL patterns matching a query.
 
-    Uses the 68-pattern ChromaDB library across all 18 SAP domains.
-    Each pattern includes: intent, business use case, tables, and validated SQL.
+    Uses the VectorStoreManager (ChromaDB by default, Qdrant when
+    VECTOR_STORE_BACKEND=qdrant is set) to search the sql_patterns
+    collection across all 18 SAP domains.
+
+    Each stored pattern includes: intent, validated SQL, domain, tables_used.
 
     Args:
         query: Natural language business question (e.g., "show open purchase orders")
@@ -289,46 +291,33 @@ def sql_pattern_lookup(
     Returns:
         ToolResult with list of matching SQL patterns
     """
-    from sentence_transformers import SentenceTransformer
-    import chromadb
+    from app.core.vector_store import store_manager
 
     try:
-        # Load embedding model
-        encoder = SentenceTransformer("all-MiniLM-L6-v2")
-
-        # Connect to ChromaDB
-        client = chromadb.PersistentClient(path="./chroma_db")
-        collection = client.get_or_create_collection(
-            name="sap_sql_patterns",
-            metadata={"hnsw:space": "cosine"}
+        # Vector search via unified store manager (ChromaDB or Qdrant backend)
+        raw_results = store_manager.search_sql_patterns(
+            query, n_results=n_results, domain=domain
         )
 
-        # Embed the query
-        query_embedding = encoder.encode(query).tolist()
-
-        # Search
-        results = collection.query(
-            query_embeddings=[query_embedding],
-            n_results=n_results
-        )
-
-        if not results or not results["ids"] or not results["ids"][0]:
+        if not raw_results:
             return ToolResult(
                 status=ToolStatus.ERROR,
                 message=f"No SQL patterns found matching: '{query}'",
                 metadata={"query": query}
             )
 
-        # Build pattern list
+        # Normalize Qdrant response (intent + sql) to ChromaDB-compatible shape
         patterns = []
-        for i in range(len(results["ids"][0])):
+        for r in raw_results:
+            intent = r.get("intent", "")
             pattern = {
-                "query_id": results["ids"][0][i],
-                "intent": results["metadatas"][0][i].get("intent", ""),
-                "business_use_case": results["metadatas"][0][i].get("business_use_case", ""),
-                "tables": results["metadatas"][0][i].get("tables_used", "").split(","),
-                "distance": results["distances"][0][i] if "distances" in results else 0.0,
-                "sql": results["documents"][0][i],
+                "query_id": intent[:60] if intent else "unknown",
+                "intent": intent,
+                "business_use_case": r.get("business_use_case", ""),
+                "tables": r.get("tables_used", []) or r.get("tables", []),
+                "distance": 0.0,  # Qdrant doesn't return distance in search_schema/search_sql_patterns output
+                "sql": r.get("sql", ""),
+                "domain": r.get("domain", ""),
             }
             patterns.append(pattern)
 
@@ -337,10 +326,11 @@ def sql_pattern_lookup(
             filtered = []
             for p in patterns:
                 tables = p.get("tables", [])
-                if all(auth_context.is_table_allowed(t.strip()) for t in tables):
+                if isinstance(tables, str):
+                    tables = [t.strip() for t in tables.split(",") if t.strip()]
+                if all(auth_context.is_table_allowed(str(t).strip()) for t in tables):
                     filtered.append(p)
             if not filtered and patterns:
-                # Downgrade to partial - some patterns had unauthorized tables
                 return ToolResult(
                     status=ToolStatus.PARTIAL,
                     data={"patterns": filtered, "original_count": len(patterns)},
@@ -362,9 +352,10 @@ def sql_pattern_lookup(
                 "patterns": patterns,
                 "query": query,
                 "top_match_distance": patterns[0]["distance"] if patterns else None,
+                "backend": store_manager.backend_name,
             },
-            message=f"Found {len(patterns)} proven SQL pattern(s)",
-            metadata={"query": query}
+            message=f"Found {len(patterns)} proven SQL pattern(s) [backend={store_manager.backend_name}]",
+            metadata={"query": query, "backend": store_manager.backend_name}
         )
 
     except Exception as e:

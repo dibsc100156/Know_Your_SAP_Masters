@@ -1,0 +1,101 @@
+# docker-compose.infra.yml — Know Your SAP Masters
+# ================================================
+# Qdrant (vector search), Redis (session/state), RabbitMQ (Celery broker)
+# Start: docker compose -f docker-compose.infra.yml up -d
+# Stop:  docker compose -f docker-compose.infra.yml down -v
+# ================================================================
+version: "3.8"
+
+networks:
+  sapmasters:
+    name: docker_sapmasters
+    external: true
+
+volumes:
+  docker_qdrant_data:
+    name: docker_qdrant_data
+  docker_redis_data:
+    name: docker_redis_data
+  docker_rabbitmq_data:
+    name: docker_rabbitmq_data
+
+services:
+
+  # ── Qdrant ────────────────────────────────────────────────────────────────
+  # Vector search engine — replaces ChromaDB for Schema + Pattern RAG
+  # Ports:
+  #   6333 — REST API (http://localhost:6333)
+  #   6334 — gRPC (for high-throughput embedding searches)
+  # ─────────────────────────────────────────────────────────────────────────
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: sapmasters_qdrant
+    restart: unless-stopped
+    networks:
+      - sapmasters
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC vector search
+    volumes:
+      - docker_qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__SERVICE__MAX_REQUEST_SIZE_MB: 32
+      # Optional: enable verbose logging for debugging
+      # QDRANT__LOG_LEVEL: debug
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+      disabled: true
+
+  # ── Redis ────────────────────────────────────────────────────────────────
+  # Session state, dialog history, Celery result backend
+  # Port: 6379
+  # ─────────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: sapmasters_redis
+    restart: unless-stopped
+    networks:
+      - sapmasters
+    ports:
+      - "6379:6379"
+    volumes:
+      - docker_redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── RabbitMQ ─────────────────────────────────────────────────────────────
+  # Celery message broker — also runs the management UI
+  # Ports:
+  #   5672 — AMQP (Celery broker)
+  #   15672 — Management UI (http://localhost:15672, guest/guest)
+  # ─────────────────────────────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    container_name: sapmasters_rabbitmq
+    restart: unless-stopped
+    networks:
+      - sapmasters
+    ports:
+      - "5672:5672"   # AMQP broker
+      - "15672:15672" # Management UI
+    volumes:
+      - docker_rabbitmq_data:/var/lib/rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      # Erlang cookie for clustering (random, persistent)
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
