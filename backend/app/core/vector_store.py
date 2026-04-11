@@ -41,7 +41,6 @@ import logging
 from typing import Dict, Any, List, Optional
 
 import chromadb
-from sentence_transformers import SentenceTransformer
 
 from app.domain.business_partner_schema import BUSINESS_PARTNER_TABLES, BUSINESS_PARTNER_SQL_PATTERNS
 from app.domain.material_master_schema import MATERIAL_MASTER_TABLES, MATERIAL_MASTER_SQL_PATTERNS
@@ -90,7 +89,17 @@ class ChromaDBAdapter:
     def __init__(self, db_path: str):
         self.db_path = db_path
         self.client = chromadb.PersistentClient(path=db_path)
-        self.embedding_fn = SentenceTransformer("all-MiniLM-L6-v2")
+        
+        # Lazy load or fallback to system Python for torch issues
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.embedding_fn = SentenceTransformer("all-MiniLM-L6-v2")
+        except OSError:
+            import sys as _sys
+            import pathlib as _pathlib
+            _sys.path.insert(0, str(_pathlib.Path(_sys.prefix).parent / "Lib" / "site-packages"))
+            from sentence_transformers import SentenceTransformer
+            self.embedding_fn = SentenceTransformer("all-MiniLM-L6-v2")
 
         self.schema_collection = self.client.get_or_create_collection(
             name=self.SCHEMA_COLLECTION,
