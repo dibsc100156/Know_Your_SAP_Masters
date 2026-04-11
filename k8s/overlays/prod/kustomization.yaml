@@ -1,0 +1,112 @@
+# k8s/overlays/prod/kustomization.yaml
+# Production overlay — real SAP HANA, multi-replica data layer, full security
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sap-masters
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: prod
+
+images:
+  - name: sapmasters/backend
+    newTag: "v0.3.0"
+  - name: sapmasters/flower
+    newTag: "latest"
+
+patchesStrategicMerge:
+  - backend-prod.yaml
+  - data-layer-ha.yaml
+
+namePrefix: prod-
+
+patches:
+  # ── Backend: production HANA settings ───────────────────────────────────
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 4
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/cpu
+        value: "4"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 4Gi
+    target:
+      kind: Deployment
+      name: backend
+
+  # ── Memgraph: increase resources ───────────────────────────────────────
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/limits/memory
+        value: 16Gi
+    target:
+      kind: StatefulSet
+      name: memgraph
+
+  # ── Memgraph HA: enable 3 replicas ────────────────────────────────────
+  # NOTE: Requires Memgraph Enterprise license
+  # Uncomment when upgrading from Community to Enterprise:
+  # - patch: |-
+  #     - op: replace
+  #       path: /spec/replicas
+  #       value: 3
+  #   target:
+  #     kind: StatefulSet
+  #     name: memgraph
+
+  # ── Redis: enable persistence ─────────────────────────────────────────
+  - patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/args
+        value:
+          - redis-server
+          - --maxmemory
+          - 1gb
+          - --maxmemory-policy
+          - allkeys-lru
+          - --save
+          - "900"
+          - "1"
+          - --save
+          - "60"
+          - "1000"
+          - --appendonly
+          - "yes"
+    target:
+      kind: StatefulSet
+      name: redis
+
+  # ── Qdrant: larger storage ──────────────────────────────────────────────
+  - patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+    target:
+      kind: StatefulSet
+      name: qdrant
+    # NOTE: Enable Qdrant clustering in qdrant configMap for prod
+
+replacements:
+  # Replace REPLACEME placeholder with real RabbitMQ password
+  - source:
+      kind: Secret
+      name: sap-masters-secrets
+      fieldPath: data.RABBITMQ_PASSWORD
+      options:
+        create: false
+    targets:
+      - select:
+          kind: Deployment
+          name: backend
+        fieldPaths:
+          - spec.template.spec.containers[*].env[*].value
+        options:
+          oneWay: true
+        options:
+          regex: true
+        options:
+          form: value

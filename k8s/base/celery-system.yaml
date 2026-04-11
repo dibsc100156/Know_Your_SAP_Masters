@@ -1,0 +1,204 @@
+# celery-system.yaml — System worker (lightweight: health checks, memory cleanup)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-system
+  namespace: sap-masters
+  labels:
+    app: celery-system
+    app.kubernetes.io/name: sap-masters
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-system
+  template:
+    metadata:
+      labels:
+        app: celery-system
+        app.kubernetes.io/name: sap-masters
+    spec:
+      serviceAccountName: sap-masters
+      containers:
+        - name: celery-worker
+          image: sapmasters/backend:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              celery -A app.workers.celery_app worker \
+                --loglevel=info \
+                --hostname=celery-system-$(POD_NAME) \
+                --concurrency=2 \
+                --pool=prefork \
+                --queues=system \
+                --max-tasks-per-child=500 \
+                --soft-time-limit=30 \
+                --time-limit=60
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: CELERY_BROKER_URL
+              value: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      terminationGracePeriodSeconds: 30
+
+---
+# celery-beat.yaml — Celery Beat scheduler (periodic tasks)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-beat
+  namespace: sap-masters
+  labels:
+    app: celery-beat
+    app.kubernetes.io/name: sap-masters
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-beat
+  template:
+    metadata:
+      labels:
+        app: celery-beat
+        app.kubernetes.io/name: sap-masters
+    spec:
+      serviceAccountName: sap-masters
+      containers:
+        - name: celery-beat
+          image: sapmasters/backend:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              # Ensure schedule file exists and is writable
+              mkdir -p /tmp
+              celery -A app.workers.celery_app beat \
+                --loglevel=info \
+                --schedule=/tmp/celerybeat-schedule.db \
+                --pidfile=/tmp/celerybeat.pid
+          env:
+            - name: CELERY_BROKER_URL
+              value: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/0"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: celerybeat-data
+              mountPath: /tmp
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      volumes:
+        - name: celerybeat-data
+          persistentVolumeClaim:
+            claimName: celerybeat-pvc
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: celerybeat-pvc
+  namespace: sap-masters
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 100Mi
+
+---
+# flower.yaml — Celery Flower monitoring UI
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flower
+  namespace: sap-masters
+  labels:
+    app: flower
+    app.kubernetes.io/name: sap-masters
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flower
+  template:
+    metadata:
+      labels:
+        app: flower
+        app.kubernetes.io/name: sap-masters
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "5555"
+    spec:
+      serviceAccountName: sap-masters
+      containers:
+        - name: flower
+          image: sapmasters/flower:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              celery -A app.workers.celery_app flower \
+                --port=5555 \
+                --broker=amqp://sapmasters:REPLACEME@rabbitmq:5672// \
+                --url-prefix=flower
+          env:
+            - name: CELERY_BROKER_API
+              value: "amqp://sapmasters:REPLACEME@rabbitmq:15672/api"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+      terminationGracePeriodSeconds: 30
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: flower
+  namespace: sap-masters
+  labels:
+    app: flower
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5555
+      targetPort: 5555
+  selector:
+    app: flower

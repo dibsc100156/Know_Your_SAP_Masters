@@ -1,0 +1,26 @@
+# SAP Masters 5-Pillar RAG — Full Dependency Stack
+# Install: pip install -r requirements.txt
+
+# API Server
+fastapi==0.110.0
+uvicorn[standard]==0.28.0
+pydantic>=2.6.0,<2.10.0
+
+# Vector Stores — Schema RAG (Qdrant) + SQL RAG (ChromaDB)
+qdrant-client>=1.7.0,<1.8.0
+chromadb>=0.4.22,<1.0.0
+
+# Embeddings
+sentence-transformers==2.5.1
+torch==2.2.1
+
+# Graph RAG
+networkx==3.2.1
+
+# Optional: SAP HANA connector (uncomment when ready)
+# pyhdb==0.3.4
+# hdbcli==2.13.0
+
+# LLM Integration
+anthropic>=0.20.0
+openai>=1.12.0

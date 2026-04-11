@@ -1,0 +1,69 @@
+# hpa-backend.yaml — Horizontal Pod Autoscaler for Backend API
+# =============================================================================
+# Scales the FastAPI backend based on CPU and memory utilization.
+# Uses the Kubernetes Metrics Server (metrics-server addon required).
+#
+# Scale-up:   CPU > 70% OR memory > 80%
+# Scale-down: After 5 minutes of sustained low utilization
+# =============================================================================
+
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: backend-hpa
+  namespace: sap-masters
+  labels:
+    app: backend
+    app.kubernetes.io/name: sap-masters
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: backend
+  minReplicas: 2
+  maxReplicas: 10
+
+  # Both CPU and memory must breach threshold to scale up
+  # Either one breaching is sufficient to scale down
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          # Scale up when average CPU across all pods > 70%
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          # Scale up when average memory across all pods > 80%
+          averageUtilization: 80
+
+  # Scale behavior — prevent aggressive scaling
+  behavior:
+    scaleUp:
+      # stabilizationWindowSeconds: 0  # No stabilization — immediate scale-up
+      policies:
+        # At most 4 pods per 15-second window
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+        # At most 100% increase per 15-second window
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+      selectPolicy: Max   # Use whichever policy results in more pods
+    scaleDown:
+      stabilizationWindowSeconds: 300  # Wait 5 min before scaling down
+      policies:
+        # At most 1 pod per 60-second window (slow scale-down)
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+        # At most 10% decrease per 60-second window
+        - type: Percent
+          value: 10
+          periodSeconds: 60
+      selectPolicy: Min   # Use whichever policy results in fewer pods (slowest scale-down)

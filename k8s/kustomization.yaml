@@ -1,0 +1,32 @@
+# kustomization.yaml — SAP Masters K8s Kustomize overlay
+# Usage:
+#   kubectl apply -k k8s/overlay/dev
+#   kubectl apply -k k8s/overlay/staging
+#   kubectl apply -k k8s/overlay/prod
+#
+# Base resources:
+#   kubectl apply -k k8s/base
+
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - backend.yaml
+  - celery-primary.yaml
+  - celery-replica.yaml
+  - celery-system.yaml
+  - celery-beat.yaml
+  - flower.yaml
+  - hpa-backend.yaml
+  - service-backend.yaml
+  - ingress.yaml
+  - memgraph.yaml
+  - qdrant.yaml
+  - redis.yaml
+  - rabbitmq.yaml
+  - minio.yaml
+  - secrets.yaml
+  - pdb-backend.yaml
+  - network-policy.yaml

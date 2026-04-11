@@ -1,0 +1,341 @@
+# docker-compose.memgraph.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Know Your SAP Masters — Horizontal Scale Stack
+# Includes: Memgraph, Qdrant, Redis, RabbitMQ, MinIO, Celery Workers
+#
+# Start (dev):      docker compose -f docker-compose.memgraph.yml up
+# Start (prod):     docker compose -f docker-compose.memgraph.yml up -d
+# With app backend: docker compose -f docker-compose.yml -f docker-compose.memgraph.yml up -d
+#
+# Ports:
+#   Memgraph     : 7687 (bolt), 7444 (query modules), 3000 (Lab UI)
+#   Qdrant       : 6333 (REST), 6334 (gRPC)
+#   Redis        : 6379
+#   RabbitMQ     : 5672 (AMQP), 15672 (management UI)
+#   MinIO        : 9000 (API), 9001 (Console)
+#   Celery Flower: 5555 (monitoring UI)
+#   Memgraph Lab : 3000 (graph visualization)
+# ─────────────────────────────────────────────────────────────────────────────
+
+version: "3.9"
+
+x-backend-common: &backend_common
+  build:
+    context: ./backend
+    dockerfile: Dockerfile
+  working_dir: /app
+  volumes:
+    - ./backend:/app
+    - sap-masters-data:/app/data
+  environment:
+    # Point to Docker-managed services
+    CELERY_BROKER_URL: "amqp://sapmasters:${RABBITMQ_PASS:-sapmasters123}@rabbitmq:5672//"
+    CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+    REDIS_URL: "redis://redis:6379/0"
+    QDRANT_URL: "http://qdrant:6333"
+    MEMGRAPH_URI: "bolt://memgraph:7687"
+    # SAP HANA (Phase M7)
+    HANA_MODE: "${HANA_MODE:-mock}"
+    HANA_DB_ADDRESSES: "${HANA_DB_ADDRESSES:-hana:30015}"
+    HANA_DB_USER: "${HANA_DB_USER:-SYSTEM}"
+    HANA_DB_PASSWORD: "${HANA_DB_PASSWORD:-Manager1}"
+    HANA_POOL_MIN_CONN: "${HANA_POOL_MIN_CONN:-2}"
+    HANA_POOL_MAX_CONN: "${HANA_POOL_MAX_CONN:-20}"
+    HANA_QUERY_TIMEOUT: "${HANA_QUERY_TIMEOUT:-30}"
+    HANA_ENFORCE_MANDT: "${HANA_ENFORCE_MANDT:-true}"
+  depends_on:
+    memgraph:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+    qdrant:
+      condition: service_healthy
+  networks:
+    - sap-masters-net
+
+services:
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # DATA LAYER
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── Primary Graph Database ────────────────────────────────────────────────
+  memgraph:
+    image: memgraph/memgraph:latest  # Community edition — latest available
+    container_name: sap-masters-memgraph
+    restart: unless-stopped
+    ports:
+      - "7687:7687"   # Bolt — main Cypher query interface
+      - "7444:7444"   # Query modules RPC (MAGE extensions)
+      - "3000:3000"   # Memgraph Lab — graph visualization UI
+    environment:
+      MEMGRAPH --memory-limit: 2048M
+      MEMGRAPH --query-timeout: 30000
+      MEMGRAPH --log-level: INFO
+    volumes:
+      - memgraph_data:/var/lib/memgraph
+      # Load SAP schema on first start
+      - ./docker/memgraph/init_schema.cql:/docker-entrypoint-initdb.d/01-schema.cql:ro
+    networks:
+      - sap-masters-net
+    healthcheck:
+      test: ["CMD-SHELL", "mg", "execute", "RETURN 1;"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  # ── Vector Store (Schema RAG + SQL Patterns + Graph Embeddings) ──────────
+  qdrant:
+    image: qdrant/qdrant:v1.7.4
+    container_name: sapmasters-qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # REST API
+      - "6334:6334"   # gRPC (high-throughput embedding search)
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+      QDRANT__SERVICE__MAX_REQUEST_SIZE_MB: "32"
+    networks:
+      - sap-masters-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl", "-sf", "http://localhost:6333/readyz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Session + Dialog State + Celery Result Backend ───────────────────────
+  redis:
+    image: redis:7.4-alpine
+    container_name: sapmasters-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: >
+      redis-server
+      --maxmemory 512mb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+      --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - sap-masters-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # MESSAGE LAYER
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── Celery Message Broker ────────────────────────────────────────────────
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: sapmasters-rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"   # AMQP (Celery broker)
+      - "15672:15672" # Management UI (sapmasters / sapmasters123)
+    environment:
+      RABBITMQ_DEFAULT_USER: sapmasters
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-sapmasters123}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - sap-masters-net
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # STORAGE LAYER
+  # ══════════════════════════════════════════════════════════════════════════
+
+  # ── S3-compatible Object Storage ─────────────────────────────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: sap-masters-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console (minioadmin / minioadmin)
+    environment:
+      MINIO_ROOT_USER: sapmasters
+      MINIO_ROOT_PASSWORD: ${MINIO_PASS:-miniodemo123}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - sap-masters-net
+
+  # ══════════════════════════════════════════════════════════════════════════
+  # WORKER LAYER — Celery Fleet
+  # ══════════════════════════════════════════════════════════════════════════
+  # Scale workers: docker compose up --scale celery-worker=N
+
+  celery-worker-primary:
+    <<: *backend_common
+    container_name: sap-masters-celery-primary
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --hostname=celery-primary@%h
+      --concurrency=8
+      --pool=prefork
+      --queues=agent,priority
+      --max-tasks-per-child=200
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    healthcheck:
+      test: ["CMD-SHELL", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  celery-worker-replica-1:
+    <<: *backend_common
+    container_name: sap-masters-celery-replica-1
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --hostname=celery-replica1@%h
+      --concurrency=8
+      --pool=prefork
+      --queues=agent
+      --max-tasks-per-child=200
+    deploy:
+      resources:
+        limits:
+          cpus: "4.0"
+          memory: 4G
+        reservations:
+          cpus: "1.0"
+          memory: 1G
+    depends_on:
+      celery-worker-primary:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  celery-worker-system:
+    <<: *backend_common
+    container_name: sap-masters-celery-system
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --hostname=celery-system@%h
+      --concurrency=2
+      --pool=prefork
+      --queues=system
+      --max-tasks-per-child=500
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    healthcheck:
+      test: ["CMD-SHELL", "celery", "-A", "app.workers.celery_app", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── Celery Beat (Periodic Task Scheduler) ─────────────────────────────────
+  celery-beat:
+    <<: *backend_common
+    container_name: sap-masters-celery-beat
+    restart: unless-stopped
+    command: >
+      celery -A app.workers.celery_app beat
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule
+    volumes:
+      - celerybeat-data:/tmp
+    depends_on:
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ── Flower Monitoring UI ───────────────────────────────────────────────────
+  celery-flower:
+    <<: *backend_common
+    container_name: sap-masters-celery-flower
+    restart: unless-stopped
+    ports:
+      - "5555:5555"   # Flower UI: http://localhost:5555
+    command: >
+      celery -A app.workers.celery_app flower
+      --port=5555
+      --broker=amqp://sapmasters:${RABBITMQ_PASS:-sapmasters123}@rabbitmq:5672//
+      --url-prefix=flower
+    environment:
+      CELERY_BROKER_API: "amqp://sapmasters:${RABBITMQ_PASS:-sapmasters123}@rabbitmq:15672/api"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      celery-worker-primary:
+        condition: service_started
+
+  # ── FastAPI Backend (API Gateway) ────────────────────────────────────────
+  backend:
+    <<: *backend_common
+    container_name: sap-masters-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"   # FastAPI
+      - "5556:5556"   # Flower API (alternative)
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    environment:
+      SAP_BACKEND_MODE: "celery"
+      CELERY_BROKER_URL: "amqp://sapmasters:${RABBITMQ_PASS:-sapmasters123}@rabbitmq:5672//"
+      CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+      REDIS_URL: "redis://redis:6379/0"
+      QDRANT_URL: "http://qdrant:6333"
+      MEMGRAPH_URI: "bolt://memgraph:7687"
+    healthcheck:
+      test: ["CMD-SHELL", "curl", "-sf", "http://localhost:8000/health/queue"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+networks:
+  sap-masters-net:
+    driver: bridge
+
+volumes:
+  memgraph_data:
+  qdrant_data:
+  redis_data:
+  rabbitmq_data:
+  minio_data:
+  sap-masters-data:
+  celerybeat-data:

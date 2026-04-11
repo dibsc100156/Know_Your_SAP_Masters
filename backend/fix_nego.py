@@ -1,0 +1,6 @@
+content = open(r'C:\Users\vishnu\.openclaw\workspace\SAP_HANA_LLM_VendorChatbot\backend\app\core\negotiation_briefing.py', 'r', encoding='utf-8').read()
+count_before = content.count('entity_type = EntityType.')
+fixed = content.replace('entity_type = EntityType.', 'entity_type == EntityType.')
+count_after = fixed.count('entity_type = EntityType.')
+open(r'C:\Users\vishnu\.openclaw\workspace\SAP_HANA_LLM_VendorChatbot\backend\app\core\negotiation_briefing.py', 'w', encoding='utf-8').write(fixed)
+print(f'Fixed {count_before - count_after} occurrences of entity_type = EntityType.')

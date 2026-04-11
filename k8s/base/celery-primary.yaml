@@ -1,0 +1,211 @@
+# celery-primary.yaml — Primary Celery Agent Worker Deployment
+# =============================================================================
+# Handles run_orchestrator_task from the agent queue.
+# Horizontally auto-scaled by KEDA based on RabbitMQ queue depth.
+#
+# Scaling trigger: RabbitMQ queue "agent" depth > 10 messages per worker replica
+#   → Scale up (up to 20 replicas)
+#   → Scale down after 5 minutes of low queue depth
+#
+# KEDA is required for queue-based autoscaling:
+#   kubectl apply -f https://kedacore.io/keda-2.14.2.yaml
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-primary
+  namespace: sap-masters
+  labels:
+    app: celery-primary
+    app.kubernetes.io/name: sap-masters
+    app.kubernetes.io/component: celery-agent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: celery-primary
+  # Rolling update: replace pods one by one
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0    # Never take a pod down without replacement
+      maxSurge: 1          # Allow 1 extra pod during updates
+  template:
+    metadata:
+      labels:
+        app: celery-primary
+        app.kubernetes.io/name: sap-masters
+        app.kubernetes.io/component: celery-agent
+      annotations:
+        # Tell KEDA to scale this deployment
+        autoscaling.keda.sh/enabled: "true"
+        # KEDA polling interval
+        autoscaling.keda.sh/pollingInterval: "15"
+    spec:
+      serviceAccountName: sap-masters
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: celery-worker
+          image: sapmasters/backend:latest
+          imagePullPolicy: IfNotPresent
+          # ── Celery worker args ────────────────────────────────────────────
+          # POD_NAME is injected by Kubernetes downward API
+          command:
+            - sh
+            - -c
+            - |
+              celery -A app.workers.celery_app worker \
+                --loglevel=info \
+                --hostname=celery-primary-$(POD_NAME) \
+                --concurrency=8 \
+                --pool=prefork \
+                --queues=agent,priority \
+                --max-tasks-per-child=200 \
+                --soft-time-limit=240 \
+                --time-limit=300
+          env:
+            # Shared environment
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HANA_MODE
+              value: "pool"
+            - name: HANA_DB_ADDRESSES
+              value: "hana.prod.internal:30015"
+            - name: HANA_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sap-masters-secrets
+                  key: HANA_DB_USER
+            - name: HANA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sap-masters-secrets
+                  key: HANA_DB_PASSWORD
+            - name: HANA_POOL_MIN_CONN
+              value: "2"
+            - name: HANA_POOL_MAX_CONN
+              value: "20"
+            - name: QDRANT_URL
+              value: "http://qdrant:6333"
+            - name: MEMGRAPH_URI
+              value: "bolt://memgraph:7687"
+            - name: CELERY_BROKER_URL
+              value: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/0"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+
+          # ── Resources ──────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+
+          # ── Liveness (detect hung workers) ─────────────────────────────────
+          # Restart if a worker has been running >5 min without completing
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - app.workers.celery_app
+                - inspect
+                - ping
+                - --hostname
+                - celery-primary-$(POD_NAME)
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: celery-primary
+
+      terminationGracePeriodSeconds: 120
+
+---
+# KEDA ScaledObject — RabbitMQ queue depth autoscaler
+# =============================================================================
+# KEDA (Kubernetes Event-Driven Autoscaling) monitors the RabbitMQ "agent" queue
+# and scales celery-primary replicas based on message backlog.
+#
+# Scale-up:   Queue depth > (10 × replica_count)
+# Scale-down: Queue depth < 5 for 300s (5 minutes) — prevents thrashing
+# =============================================================================
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-primary-scaler
+  namespace: sap-masters
+  labels:
+    app: celery-primary
+    app.kubernetes.io/name: sap-masters
+spec:
+  scaleTargetRef:
+    name: celery-primary
+  pollingInterval: 15        # Check queue depth every 15s
+  cooldownPeriod: 300       # Wait 5 min after last scale-down before scaling again
+  minReplicaCount: 2
+  maxReplicaCount: 20
+
+  triggers:
+    # RabbitMQ AMQP trigger
+    - type: rabbitmq
+      metadata:
+        host: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+        queueName: agent
+        # Scale up when queue depth > 10 per replica
+        # e.g., 5 replicas → trigger at 50 messages
+        queueLengthTarget: "10"
+        activationQueueLengthTarget: "3"   # Scale from 0 at 3 messages
+        operation: max
+      authenticationRef:
+        name: keda-rabbitmq-credentials
+
+---
+# KEDA TriggerAuthentication — RabbitMQ credentials
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-rabbitmq-credentials
+  namespace: sap-masters
+spec:
+  secretTargetRef:
+    - parameter: username
+      name: sap-masters-secrets
+      key: RABBITMQ_USER       # Must match the secret key
+      # NOTE: Add RABBITMQ_USER key to secrets.yaml if using TriggerAuthentication
+    - parameter: password
+      name: sap-masters-secrets
+      key: RABBITMQ_PASSWORD

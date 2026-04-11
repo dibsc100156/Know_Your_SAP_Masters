@@ -1,0 +1,476 @@
+# values.yaml — sap-masters Helm Chart
+# =============================================================================
+# Primary configuration for the Know Your SAP Masters Kubernetes deployment.
+#
+# Per-environment overrides:
+#   Dev:    helm install ... --set profile=dev
+#   Staging: helm install ... --set profile=staging --set image.tag=staging
+#   Prod:   helm install ... --set profile=prod
+# =============================================================================
+
+profile: dev  # dev | staging | prod
+
+# ── Global image pull policy ────────────────────────────────────────────────
+image:
+  pullPolicy: IfNotPresent  # dev/staging — use 'Always' in prod with tag: latest
+
+# ── Backend API ───────────────────────────────────────────────────────────────
+backend:
+  replicaCount: 2
+
+  image:
+    repository: sapmasters/backend
+    tag: "latest"
+
+  service:
+    type: ClusterIP
+    port: 8000
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    # Scale up when CPU > 70% or memory > 80%
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "2"
+      memory: 2Gi
+
+  env:
+    # SAP HANA
+    HANA_MODE: "mock"           # mock | pool | direct
+    HANA_DB_ADDRESSES: "hana:30015"
+    HANA_DB_USER: ""            # Set via --set secrets.HANA_DB_USER=...
+    HANA_DB_PASSWORD: ""        # Set via --set-file secrets.HANA_DB_PASSWORD=./password.txt
+    HANA_POOL_MIN_CONN: "2"
+    HANA_POOL_MAX_CONN: "20"
+    HANA_QUERY_TIMEOUT: "30"
+    HANA_ENFORCE_MANDT: "true"
+
+    # Vector store
+    QDRANT_URL: "http://qdrant:6333"
+    VECTOR_CACHE_SIZE: "256"
+
+    # Graph
+    MEMGRAPH_URI: "bolt://memgraph:7687"
+
+    # Celery
+    CELERY_BROKER_URL: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+    CELERY_RESULT_BACKEND: "redis://redis:6379/0"
+    REDIS_URL: "redis://redis:6379/0"
+
+    # Feature flags
+    RATE_LIMIT_ENABLED: "true"
+    RATE_LIMIT_MAX: "30"
+    RATE_LIMIT_WINDOW: "60"
+
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    httpGet:
+      path: /health
+      port: 8000
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+# ── Celery Agent Workers ──────────────────────────────────────────────────────
+celery:
+  # Primary agent workers — handle orchestrator tasks
+  primary:
+    replicaCount: 2
+    image:
+      repository: sapmasters/backend
+      tag: "latest"
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --hostname=celery-primary-$(POD_NAME)
+      --concurrency=8
+      --pool=prefork
+      --queues=agent,priority
+      --max-tasks-per-child=200
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "4"
+        memory: 4Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 20
+      # Scale up when RabbitMQ queue depth > 10 messages
+      # Requires kube-rbac-proxy + metrics-server
+      queueDepthTarget: 10
+      scaleUpStabilization: 60s
+      scaleDownStabilization: 300s
+
+  # Replica workers — additional throughput
+  replica:
+    replicaCount: 1
+    image:
+      repository: sapmasters/backend
+      tag: "latest"
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --hostname=celery-replica-$(POD_NAME)
+      --concurrency=8
+      --pool=prefork
+      --queues=agent
+      --max-tasks-per-child=200
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1Gi
+      limits:
+        cpu: "4"
+        memory: 4Gi
+    autoscaling:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 20
+      queueDepthTarget: 20
+      scaleUpStabilization: 90s
+      scaleDownStabilization: 600s
+
+  # System workers — health checks, cleanup
+  system:
+    replicaCount: 1
+    image:
+      repository: sapmasters/backend
+      tag: "latest"
+    command: >
+      celery -A app.workers.celery_app worker
+      --loglevel=info
+      --hostname=celery-system-$(POD_NAME)
+      --concurrency=2
+      --pool=prefork
+      --queues=system
+      --max-tasks-per-child=500
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 1
+        memory: 512Mi
+
+  # Celery Beat scheduler
+  beat:
+    enabled: true
+    image:
+      repository: sapmasters/backend
+      tag: "latest"
+    command: >
+      celery -A app.workers.celery_app beat
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule.db
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+    persistence:
+      enabled: true
+      storageClass: "standard"
+      size: 100Mi
+      accessMode: ReadWriteOnce
+
+# ── Monitoring ────────────────────────────────────────────────────────────────
+flower:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: sapmasters/flower
+    tag: "latest"
+  service:
+    type: LoadBalancer
+    port: 5555
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ── Data Layer — Memgraph ────────────────────────────────────────────────────
+memgraph:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: "fast-ssd"    # Use SSD storage class in prod
+    size: 10Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 500m
+      memory: 2Gi
+    limits:
+      cpu: 4
+      memory: 8Gi
+  # Memgraph HA — 3 replicas for production
+  ha:
+    enabled: false              # Enable in prod
+    replicas: 3
+
+# ── Data Layer — Qdrant ──────────────────────────────────────────────────────
+qdrant:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 50Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  # Qdrant replication factor
+  config:
+    cluster:
+      enabled: false            # Enable in prod (requires Qdrant Enterprise)
+    optimizers:
+      max_segment_size: 2097152  # 2GB segments
+
+# ── Data Layer — Redis ───────────────────────────────────────────────────────
+redis:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: "standard"
+    size: 1Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+# ── Message Layer — RabbitMQ ────────────────────────────────────────────────
+rabbitmq:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: "fast-ssd"
+    size: 5Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  # RabbitMQ cluster — 3 nodes in prod
+  cluster:
+    enabled: false              # Enable in prod
+    size: 3
+  # LDAP or built-in auth
+  auth:
+    username: sapmasters
+    # password: Set via --set-file secrets.RABBITMQ_PASSWORD=./rabbitmq_password.txt
+    vhost: /sap_masters
+
+# ── Object Storage — MinIO ────────────────────────────────────────────────────
+minio:
+  enabled: true
+  persistence:
+    enabled: true
+    storageClass: "standard"
+    size: 20Gi
+    accessMode: ReadWriteOnce
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  # Access/secret keys — set via secrets
+  # accessKey: set via --set secrets.MINIO_ACCESS_KEY=...
+  # secretKey: set via --set-file secrets.MINIO_SECRET_KEY=./minio_secret.txt
+
+# ── Ingress ──────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+  hosts:
+    - host: sap-masters.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: backend
+          port: 8000
+        - path: /flower
+          pathType: Prefix
+          service: flower
+          port: 5555
+        - path: /rabbitmq
+          pathType: Prefix
+          service: rabbitmq
+          port: 15672
+  tls:
+    enabled: false              # Enable in prod with real certs
+    secretName: sap-masters-tls
+
+# ── Pod Disruption Budget ─────────────────────────────────────────────────────
+podDisruptionBudget:
+  enabled: true
+  # Ensure at least N-1 pods are available during updates
+  # For StatefulSets (Memgraph, Qdrant, RabbitMQ), use OnDelete
+  backend:
+    minAvailable: 1
+  celery:
+    minAvailable: 1
+
+# ── Pod Anti-Affinity ─────────────────────────────────────────────────────────
+# Spread pods across availability zones for HA
+affinity:
+  podAntiAffinity:
+    backend:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: backend
+            topologyKey: kubernetes.io/hostname
+    celery:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app: celery-primary
+            topologyKey: kubernetes.io/hostname
+
+# ── Topology Spread ───────────────────────────────────────────────────────────
+# Spread across availability zones (prod only)
+topologySpreadConstraints:
+  - maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+    labelSelector:
+      matchLabels:
+        app: backend
+
+# ── Security Context ──────────────────────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# ── Service Account ────────────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: sap-masters
+  annotations:
+    # Workload Identity (GKE) / AWS IRSA (EKS) — set cloud-specific values
+    iam.amazonaws.com/role: "sap-masters-role"
+
+# ── Network Policies ───────────────────────────────────────────────────────────
+networkPolicies:
+  enabled: false   # Enable in prod with Calico or Cilium CNI
+  # Restrict which pods can talk to which
+  # Example: Only backend can reach Memgraph/Qdrant/Redis/RabbitMQ
+  backendEgress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app: memgraph
+        - podSelector:
+            matchLabels:
+              app: qdrant
+        - podSelector:
+            matchLabels:
+              app: redis
+        - podSelector:
+            matchLabels:
+              app: rabbitmq
+      ports:
+        - protocol: TCP
+          port: 7687   # Memgraph
+        - protocol: TCP
+          port: 6333   # Qdrant
+        - protocol: TCP
+          port: 6379   # Redis
+        - protocol: TCP
+          port: 5672   # RabbitMQ
+
+# ── Pod Monitors (Prometheus) ────────────────────────────────────────────────
+prometheus:
+  enabled: false   # Enable in prod with Prometheus Operator
+  podMonitor:
+    enabled: true
+    interval: 30s
+    scrapeAnnotations: true  # Add prometheus.io/scrape: "true" annotation
+  ruleGroups:
+    - name: sap-masters.rules
+      rules:
+        - alert: CeleryQueueDepthHigh
+          expr: rabbitmq_queue_messages{queue="agent"} > 50
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Celery agent queue depth is high"
+        - alert: CeleryQueueCritical
+          expr: rabbitmq_queue_messages{queue="agent"} > 100
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Celery agent queue is critically backed up"
+        - alert: HANAConnectionPoolExhausted
+          expr: sap_hana_pool_available == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "SAP HANA connection pool exhausted"
+        - alert: MemgraphDown
+          expr: up{job="memgraph"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Memgraph is down"

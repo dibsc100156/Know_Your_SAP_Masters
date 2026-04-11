@@ -1,0 +1,93 @@
+# service-backend.yaml — Backend API ClusterIP Service
+# =============================================================================
+# Internal service — only accessible within the cluster.
+# External traffic enters via the Ingress controller.
+# =============================================================================
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: sap-masters
+  labels:
+    app: backend
+    app.kubernetes.io/name: sap-masters
+  annotations:
+    # Prometheus scraping
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  selector:
+    app: backend
+
+---
+# ingress.yaml — External access to API + Flower + RabbitMQ Management
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sap-masters-ingress
+  namespace: sap-masters
+  labels:
+    app: sap-masters
+    app.kubernetes.io/name: sap-masters
+  annotations:
+    # NGINX Ingress Controller annotations
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+    # Rate limiting at the ingress level
+    nginx.ingress.kubernetes.io/limit-rps: "30"
+    nginx.ingress.kubernetes.io/limit-connections: "100"
+    nginx.ingress.kubernetes.io/limit-rate: "100"
+    # CORS (adjust origins for production)
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "PUT GET POST DELETE PATCH OPTIONS"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    # Rewrite: /api/v1/... → /api/v1/...
+    nginx.ingress.kubernetes.io/use-regex: "true"
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: sap-masters.local
+      http:
+        paths:
+          # FastAPI backend
+          - path: /api/
+            pathType: Prefix
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8000
+          # Health endpoints
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: backend
+                port:
+                  number: 8000
+          # Flower monitoring
+          - path: /flower
+            pathType: Prefix
+            backend:
+              service:
+                name: flower
+                port:
+                  number: 5555
+          # RabbitMQ Management UI
+          - path: /rabbitmq
+            pathType: Prefix
+            backend:
+              service:
+                name: rabbitmq
+                port:
+                  number: 15672

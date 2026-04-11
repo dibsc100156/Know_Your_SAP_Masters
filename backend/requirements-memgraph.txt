@@ -1,0 +1,9 @@
+# requirements-memgraph.txt — Know Your SAP Masters
+# Memgraph migration additional dependencies
+# Install alongside requirements.txt:  pip install -r requirements-memgraph.txt
+
+# Memgraph Python client (GQLAlchemy ORM + Cypher support)
+gqlalchemy>=1.8.0
+
+# Memgraph mg_client CLI tool (for healthchecks — optional)
+# Available inside the memgraph container at /usr/lib/memgraphmg_client

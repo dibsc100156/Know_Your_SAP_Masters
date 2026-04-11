@@ -1,0 +1,133 @@
+# memgraph.yaml — Memgraph StatefulSet
+# =============================================================================
+# StatefulSet for Memgraph (requires persistent storage).
+# Volume claim template ensures one PVC per replica.
+# =============================================================================
+
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: memgraph
+  namespace: sap-masters
+  labels:
+    app: memgraph
+    app.kubernetes.io/name: sap-masters
+    app.kubernetes.io/component: graph-db
+spec:
+  serviceName: memgraph-headless
+  replicas: 1    # Community: 1 primary. Enterprise: 3 for HA.
+  selector:
+    matchLabels:
+      app: memgraph
+  template:
+    metadata:
+      labels:
+        app: memgraph
+        app.kubernetes.io/name: sap-masters
+        app.kubernetes.io/component: graph-db
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: memgraph
+          image: memgraph/memgraph:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 7687
+              name: bolt
+            - containerPort: 7444
+              name: mage-modules
+            - containerPort: 3000
+              name: lab-ui
+          args:
+            - --memory-limit=2048M
+            - --query-timeout=30000
+            - --log-level=INFO
+          env:
+            - name: MEMGRAPH
+              value: "--memory-limit=2048M"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 2.5Gi
+            limits:
+              cpu: 4
+              memory: 8Gi
+          livenessProbe:
+            tcpSocket:
+              port: 7687
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 5
+          readinessProbe:
+            tcpSocket:
+              port: 7687
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          volumeMounts:
+            - name: memgraph-data
+              mountPath: /var/lib/memgraph
+      volumes:
+        - name: memgraph-data
+          persistentVolumeClaim:
+            claimName: memgraph-pvc
+
+---
+# Headless Service for Memgraph StatefulSet
+apiVersion: v1
+kind: Service
+metadata:
+  name: memgraph-headless
+  namespace: sap-masters
+  labels:
+    app: memgraph
+spec:
+  clusterIP: None   # Headless — required for StatefulSet
+  ports:
+    - name: bolt
+      port: 7687
+      targetPort: 7687
+    - name: mage
+      port: 7444
+      targetPort: 7444
+  selector:
+    app: memgraph
+
+---
+# Service for Memgraph Lab (graph visualization UI)
+apiVersion: v1
+kind: Service
+metadata:
+  name: memgraph-lab
+  namespace: sap-masters
+  labels:
+    app: memgraph-lab
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+  selector:
+    app: memgraph
+
+---
+# PersistentVolumeClaim for Memgraph
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: memgraph-pvc
+  namespace: sap-masters
+  labels:
+    app: memgraph
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  # storageClassName: fast-ssd   # Uncomment for SSD-backed storage

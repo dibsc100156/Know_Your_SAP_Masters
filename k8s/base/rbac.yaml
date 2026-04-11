@@ -1,0 +1,47 @@
+# rbac.yaml — ServiceAccount + RBAC for SAP Masters
+# =============================================================================
+# Least-privilege service account for SAP Masters pods.
+# Add cloud-specific annotations for Workload Identity (GKE) or IRSA (EKS).
+# =============================================================================
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sap-masters
+  namespace: sap-masters
+  labels:
+    app: sap-masters
+  annotations:
+    # GKE Workload Identity (uncomment for GKE):
+    # iam.gke.io/gcp-service-account: sap-masters@PROJECT.iam.gserviceaccount.com
+    # AWS IRSA (uncomment for EKS):
+    # eks.amazonaws.com/role-arn: arn:aws:iam::ACCOUNT:role/sap-masters-role
+
+---
+# Role: pod-level permissions (least privilege)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: sap-masters-pod-reader
+  namespace: sap-masters
+rules:
+  # Read pod status (used by init container wait scripts)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+
+---
+# RoleBinding: bind Role to ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: sap-masters-pod-reader-binding
+  namespace: sap-masters
+subjects:
+  - kind: ServiceAccount
+    name: sap-masters
+    namespace: sap-masters
+roleRef:
+  kind: Role
+  name: sap-masters-pod-reader
+  apiGroup: rbac.authorization.k8s.io

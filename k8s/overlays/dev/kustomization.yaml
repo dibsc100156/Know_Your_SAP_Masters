@@ -1,0 +1,36 @@
+# k8s/overlays/dev/kustomization.yaml
+# Development overlay — uses mock data (no real HANA needed)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: sap-masters
+
+resources:
+  - ../../base
+
+commonLabels:
+  environment: dev
+
+images:
+  - name: sapmasters/backend
+    newTag: dev
+
+patchesStrategicMerge:
+  - backend-patch.yaml
+
+---
+# backend-patch.yaml — Override HANA_MODE=mock for dev
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: sap-masters
+spec:
+  template:
+    spec:
+      containers:
+        - name: backend
+          env:
+            - name: HANA_MODE
+              value: "mock"   # Override: use mock data, no real HANA
+            - name: HANA_DB_ADDRESSES
+              value: ""       # Disable HANA

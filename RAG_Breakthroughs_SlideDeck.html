@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Top 10 RAG Breakthroughs — Slide Deck</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f0f1a; color: #fff; }
+  .deck { width: 100vw; height: 100vh; overflow: hidden; position: relative; }
+  .slide { display: none; width: 100%; height: 100%; padding: 60px 80px; position: absolute; top: 0; left: 0; }
+  .slide.active { display: flex; flex-direction: column; }
+  .slide-number { position: absolute; bottom: 20px; right: 30px; font-size: 14px; color: rgba(255,255,255,0.4); }
+
+  /* Slide backgrounds */
+  .slide-cover { background: linear-gradient(135deg, #0a0a2e 0%, #1a0533 50%, #0f2027 100%); justify-content: center; align-items: center; text-align: center; }
+  .slide-cover h1 { font-size: 3.5em; font-weight: 800; background: linear-gradient(90deg, #a78bfa, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 20px; }
+  .slide-cover h2 { font-size: 1.8em; color: #94a3b8; font-weight: 400; margin-bottom: 40px; }
+  .slide-cover .tag { background: rgba(167,139,250,0.2); border: 1px solid #a78bfa; color: #a78bfa; padding: 8px 24px; border-radius: 20px; font-size: 0.95em; }
+
+  .slide-section { background: linear-gradient(135deg, #1e1e3f, #0f2027); justify-content: center; align-items: center; }
+  .slide-section h2 { font-size: 2.8em; color: #38bdf8; font-weight: 700; }
+  .slide-section .sub { font-size: 1.2em; color: #94a3b8; margin-top: 15px; }
+
+  .slide-content { background: linear-gradient(180deg, #111827 0%, #1a1a2e 100%); }
+  .slide-content h2 { font-size: 1.8em; color: #a78bfa; margin-bottom: 8px; border-bottom: 2px solid #a78bfa; padding-bottom: 8px; display: inline-block; }
+  .slide-content .meta { font-size: 0.85em; color: #38bdf8; margin-bottom: 25px; background: rgba(56,189,248,0.1); display: inline-block; padding: 4px 12px; border-radius: 6px; margin-left: 10px; }
+
+  .pill-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 25px; }
+  .pill { background: rgba(167,139,250,0.15); border: 1px solid rgba(167,139,250,0.3); color: #c4b5fd; padding: 6px 16px; border-radius: 20px; font-size: 0.88em; }
+
+  .content-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; flex: 1; }
+  .content-full { flex: 1; }
+  .left-col h3, .right-col h3 { font-size: 1.1em; color: #34d399; margin-bottom: 12px; font-weight: 600; }
+  .left-col ul, .right-col ul { list-style: none; padding: 0; }
+  .left-col ul li, .right-col ul li { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.07); font-size: 1.05em; color: #e2e8f0; line-height: 1.5; }
+  .left-col ul li:last-child, .right-col ul li:last-child { border: none; }
+  .left-col ul li::before { content: "▶"; color: #38bdf8; margin-right: 10px; font-size: 0.75em; }
+  .right-col ul li::before { content: "★"; color: #f59e0b; margin-right: 10px; font-size: 0.75em; }
+
+  .stat-box { background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.3); border-radius: 12px; padding: 16px 24px; text-align: center; margin-bottom: 20px; }
+  .stat-box .num { font-size: 2.4em; font-weight: 800; color: #38bdf8; }
+  .stat-box .label { font-size: 0.85em; color: #94a3b8; margin-top: 4px; }
+  .stat-row { display: flex; gap: 20px; }
+
+  .flow-diagram { display: flex; align-items: center; justify-content: center; gap: 10px; flex: 1; flex-wrap: wrap; }
+  .flow-box { background: linear-gradient(135deg, #1e293b, #334155); border: 1px solid #475569; border-radius: 10px; padding: 14px 20px; text-align: center; min-width: 120px; }
+  .flow-box .arrow { color: #38bdf8; font-size: 1.4em; }
+  .flow-box.green { border-color: #34d399; background: rgba(52,211,153,0.08); }
+  .flow-box.purple { border-color: #a78bfa; background: rgba(167,139,250,0.08); }
+  .flow-box.amber { border-color: #f59e0b; background: rgba(245,158,11,0.08); }
+
+  .table-slide { background: linear-gradient(180deg, #0f172a 0%, #1a1a2e 100%); }
+  .table-slide table { width: 100%; border-collapse: collapse; font-size: 0.9em; flex: 1; }
+  .table-slide table th { background: rgba(167,139,250,0.2); color: #a78bfa; padding: 12px 16px; text-align: left; font-weight: 600; }
+  .table-slide table td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.06); color: #cbd5e1; vertical-align: top; }
+  .table-slide table tr:hover td { background: rgba(56,189,248,0.05); }
+  .badge { display: inline-block; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 3px 10px; border-radius: 10px; font-size: 0.8em; }
+
+  .final-slide { background: linear-gradient(135deg, #0a0a2e, #1a0533, #0f2027); justify-content: center; align-items: center; text-align: center; }
+  .final-slide h2 { font-size: 2.5em; color: #a78bfa; margin-bottom: 30px; }
+
+  /* Nav */
+  .nav { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 100; }
+  .nav button { background: rgba(167,139,250,0.2); border: 1px solid #a78bfa; color: #a78bfa; padding: 8px 20px; border-radius: 8px; cursor: pointer; font-size: 14px; }
+  .nav button:hover { background: rgba(167,139,250,0.4); }
+
+  h1, h2, h3 { line-height: 1.3; }
+  .accent { color: #38bdf8; }
+  .green { color: #34d399; }
+  .amber { color: #f59e0b; }
+  .purple { color: #a78bfa; }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- Slide 1: Cover -->
+  <div class="slide slide-cover active" id="s1">
+    <h1>Top 10 RAG Breakthroughs</h1>
+    <h2>Retrieval-Augmented Generation — State of the Art 2025–2026</h2>
+    <div class="tag">📊 Research Report + Slide Deck | March 2026</div>
+    <div class="slide-number">1 / 14</div>
+  </div>
+
+  <!-- Slide 2: Overview -->
+  <div class="slide slide-content" id="s2">
+    <h2>Why RAG is Evolving Faster Than Ever</h2>
+    <div class="meta">The Agentic RAG market: $3.8B (2024) → $165B (2034)</div>
+    <div class="stat-row" style="margin-bottom:30px">
+      <div class="stat-box"><div class="num">10</div><div class="label">Major Breakthroughs</div></div>
+      <div class="stat-box"><div class="num" style="color:#34d399">+15%</div><div class="label">Avg accuracy gain</div></div>
+      <div class="stat-box"><div class="num" style="color:#f59e0b">3</div><div class="label">Core paradigms shift</div></div>
+      <div class="stat-box"><div class="num" style="color:#a78bfa">2024–26</div><div class="label">Rapid evolution window</div></div>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The 3 Paradigm Shifts</h3>
+        <ul>
+          <li><span class="accent">Linear → Modular</span> — Decoupled pipelines</li>
+          <li><span class="accent">Passive → Agentic</span> — Planning & self-correction</li>
+          <li><span class="accent">Flat → Structured</span> — Graphs & hierarchies</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Why Naive RAG Fails</h3>
+        <ul>
+          <li>Semantic gap — short query vs long doc</li>
+          <li>Loses exact keywords (SKUs, codes, IDs)</li>
+          <li>Context fragmentation destroys reasoning</li>
+          <li>Cannot answer "global" cross-doc questions</li>
+        </ul>
+      </div>
+    </div>
+    <div class="slide-number">2 / 14</div>
+  </div>
+
+  <!-- Slide 3: Breakthrough 1 -->
+  <div class="slide slide-content" id="s3">
+    <h2>#1 Modular RAG</h2><div class="meta">Component Decoupling & Pipeline Engineering</div>
+    <div class="pill-row">
+      <span class="pill">🔧 Swappable Retrievers</span>
+      <span class="pill">🔄 Hot-swappable Rerankers</span>
+      <span class="pill">📐 Domain-specific tuning</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>Broke the monolithic "Index → Retrieve → Generate" pipeline into independent components</li>
+          <li>Each module (retriever, reranker, query transformer, synthesizer) is independently optimizable</li>
+          <li>Enables A/B testing at the module level</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Why It Matters</h3>
+        <ul>
+          <li>Swap ChromaDB for Pinecone without rebuilding</li>
+          <li>Domain-specific rerankers (legal, medical, SAP)</li>
+          <li>Debugging becomes surgical — trace one module</li>
+          <li>Foundation for all subsequent breakthroughs</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram">
+      <div class="flow-box green">Query<br>Preprocess</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box">Retriever<br><small>(vector/bm25/sql)</small></div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">Reranker<br><small>(Cross-Encoder)</small></div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box">Synthesizer<br><small>(LLM)</small></div>
+    </div>
+    <div class="slide-number">3 / 14</div>
+  </div>
+
+  <!-- Slide 4: Breakthrough 2 -->
+  <div class="slide slide-content" id="s4">
+    <h2>#2 Hybrid Search</h2><div class="meta">Sparse (BM25) + Dense (Vector) via Reciprocal Rank Fusion</div>
+    <div class="pill-row">
+      <span class="pill">🔑 BM25 / SPLADE — exact keyword match</span>
+      <span class="pill">🧠 Dense vectors — semantic understanding</span>
+      <span class="pill">⚖️ RRF fusion — rank-based weighting</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li><strong>Sparse retrieval</strong> (BM25) — TF-IDF based, finds exact terms like "iPhone 15", "C++ error 0x8004"</li>
+          <li><strong>Dense retrieval</strong> (OpenAI/BGE embeddings) — understands synonyms, intent, cross-lingual</li>
+          <li><strong>RRF (Reciprocal Rank Fusion)</strong> — merges rankings without score normalization issues</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Real-World Impact</h3>
+        <ul>
+          <li><strong>Vanguard</strong> (global asset manager): +12% retrieval accuracy by tuning alpha weight</li>
+          <li>Financial docs have exact codes, abbreviations — pure vector search misses them</li>
+          <li>Production-ready: Pinecone, Weaviate, Elasticsearch all support hybrid today</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram">
+      <div class="flow-box">User Query</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box green">BM25 Retrieval<br><small>Top-50</small></div>
+      <div class="flow-box arrow">+</div>
+      <div class="flow-box purple">Dense Vector<br><small>Top-50</small></div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box amber">RRF Fusion<br><small>Final Top-20</small></div>
+    </div>
+    <div class="slide-number">4 / 14</div>
+  </div>
+
+  <!-- Slide 5: Breakthrough 3 -->
+  <div class="slide slide-content" id="s5">
+    <h2>#3 Reranking — Cross-Encoder Last Mile</h2><div class="meta">Precision gating after initial broad retrieval</div>
+    <div class="pill-row">
+      <span class="pill">⚡ Bi-Encoder → Query/Doc independently</span>
+      <span class="pill">🔥 Cross-Encoder → Query+Doc together</span>
+      <span class="pill">📦 Funnel Mode: Top-100 → Top-5</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>Initial retrieval is broad but imprecise — speed over accuracy</li>
+          <li>Cross-Encoder concatenates Query + Document as input — captures subtle interactions</li>
+          <li>Scores re-ranked, Top-5 fed to LLM — much higher precision</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Performance Gains</h3>
+        <ul>
+          <li><strong>Databricks Mosaic AI:</strong> Recall@10: 74% → 89%</li>
+          <li>Added latency: ~1.5 seconds for 50 docs (acceptable for async)</li>
+          <li>Cohere Rerank v3 and BGE-Reranker are top choices</li>
+          <li>FlashRank for ultra-low latency use cases</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:20px">
+      <div class="stat-box" style="flex:1"><div class="num">74→89%</div><div class="label">Databricks Recall@10 improvement</div></div>
+      <div class="stat-box" style="flex:1"><div class="num">1.5s</div><div class="label">Added latency (acceptable)</div></div>
+      <div class="stat-box" style="flex:1"><div class="num">Top-5</div><div class="label">Final context to LLM</div></div>
+    </div>
+    <div class="slide-number">5 / 14</div>
+  </div>
+
+  <!-- Slide 6: Breakthrough 4 -->
+  <div class="slide slide-content" id="s6">
+    <h2>#4 HyDE — Hypothetical Document Embeddings</h2><div class="meta">Generate hypothetical answer → embed that → retrieve real docs</div>
+    <div class="pill-row">
+      <span class="pill">💡 LLM generates "ideal answer" first</span>
+      <span class="pill">📐 Embed the hypothetical — not the query</span>
+      <span class="pill">🎯 Closer semantic distance to real document</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>User query → LLM generates a plausible, well-structured hypothetical answer</li>
+          <li>This hypothetical answer is embedded (not the short user query)</li>
+          <li>The hypothetical document is semantically closer to the real target document in vector space</li>
+          <li>Works especially well for technical, structured Q&A</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Why It Works</h3>
+        <ul>
+          <li>Short queries ("Q3 financial anomalies") are semantically distant from long documents</li>
+          <li>A generated answer has similar length and structure to real documents</li>
+          <li>Particularly powerful for Stack Overflow / technical forums</li>
+          <li>Can be combined with any embedding model</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram">
+      <div class="flow-box">User Query</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box green">LLM generates<br>hypothetical answer</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">Embed<br>hypothetical</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box amber">Retrieve real<br>docs (similar)</div>
+    </div>
+    <div class="slide-number">6 / 14</div>
+  </div>
+
+  <!-- Slide 7: Breakthrough 5 -->
+  <div class="slide slide-content" id="s7">
+    <h2>#5 Corrective RAG (CRAG)</h2><div class="meta">Self-correcting retrieval via confidence-gated quality check</div>
+    <div class="pill-row">
+      <span class="pill">🔍 Post-retrieval relevance evaluation</span>
+      <span class="pill">🌐 Low confidence → web search fallback</span>
+      <span class="pill">🗑️ Discard wrong docs before generation</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>After retrieval, a lightweight LLM evaluator scores the relevance of each chunk</li>
+          <li>If confidence is below threshold → trigger correction workflow</li>
+          <li>Correction can be: re-phrase query, expand to web search, or use alternative index</li>
+          <li>Acts as a quality gate — prevents garbage-in → garbage-out</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Why It Matters</h3>
+        <ul>
+          <li>Naive RAG blindly trusts retrieval — even wrong chunks go to LLM</li>
+          <li>CRAG distinguishes "good enough" from "hallucination-prone"</li>
+          <li>Can be combined with Self-RAG (token-level critique) for double safety</li>
+          <li>Production essential for high-stakes domains (legal, medical, finance)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram">
+      <div class="flow-box">Retrieve<br>Top-K</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box green">Confidence<br>Evaluator</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">High Conf?<br>✓ → Generate</div>
+      <div class="flow-box arrow">↓</div>
+      <div class="flow-box amber">Low Conf?<br>→ Re-query / Web search</div>
+    </div>
+    <div class="slide-number">7 / 14</div>
+  </div>
+
+  <!-- Slide 8: Breakthrough 6 -->
+  <div class="slide slide-content" id="s8">
+    <h2>#6 Self-RAG — Reflection Tokens</h2><div class="meta">End-to-end self-verification using reflective critique tokens</div>
+    <div class="pill-row">
+      <span class="pill">🪞 Critique tokens — IsRET, IsREF, IsSUP</span>
+      <span class="pill">🤖 Model judges its own retrieval quality</span>
+      <span class="pill">🚫 Suppress irrelevant generations</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>Trained models (or prompted) emit special reflection tokens during generation</li>
+          <li><strong>IsRET:</strong> Is the retrieved context relevant?</li>
+          <li><strong>IsREF:</strong> Does the response require retrieval?</li>
+          <li><strong>IsSUP:</strong> Is the generation fully supported by the context?</li>
+          <li>Tokens are parsed at inference — irrelevant generations are suppressed</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Why It Beats CRAG</h3>
+        <ul>
+          <li>CRAG needs an external evaluator LLM call</li>
+          <li>Self-RAG bakes the critique into the model's forward pass</li>
+          <li>No additional LLM call overhead during inference</li>
+          <li>Achieves lower hallucination rates than externally gated systems</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram" style="margin-top:10px">
+      <div class="flow-box green">User Query</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box">Retrieve<br>context</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">LLM generates<br>+ Reflection tokens</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box amber">Token parser<br>filters output</div>
+    </div>
+    <div class="slide-number">8 / 14</div>
+  </div>
+
+  <!-- Slide 9: Breakthrough 7 -->
+  <div class="slide slide-content" id="s9">
+    <h2>#7 Agentic RAG</h2><div class="meta">Planning, Tool Use & Autonomous Orchestration — RAG as an Agent</div>
+    <div class="pill-row">
+      <span class="pill">🧠 Planning — break complex queries into steps</span>
+      <span class="pill">🔧 Tool use — SQL, API, web, graph traversal</span>
+      <span class="pill">🔄 Multi-step reasoning with memory</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>RAG is no longer a passive pipeline — it is an <strong>autonomous agent</strong></li>
+          <li>Given a complex question, it plans sub-steps, calls tools, evaluates intermediate results</li>
+          <li>Can route between: vector search, SQL query, web search, knowledge graph traversal</li>
+          <li>Loops until satisfied — retrieve → evaluate → refine → retrieve again</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Market Reality</h3>
+        <ul>
+          <li><strong>$3.8B (2024) → $165B (2034)</strong> — 43× growth projected</li>
+          <li>Critical for enterprise: multi-system queries across SAP, Salesforce, databases</li>
+          <li>Enables "last 3 PO prices for vendor X" → SQL + Graph hybrid execution</li>
+          <li>Our "Know Your SAP Masters" Pillar 2 (Agentic Orchestrator) uses this!</li>
+        </ul>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box" style="flex:1"><div class="num">43×</div><div class="label">Market growth 2024–2034</div></div>
+      <div class="stat-box" style="flex:1"><div class="num">Multi-step</div><div class="label">Reasoning loops</div></div>
+      <div class="stat-box" style="flex:1"><div class="num">N tools</div><div class="label">SQL + API + Web + Graph</div></div>
+    </div>
+    <div class="slide-number">9 / 14</div>
+  </div>
+
+  <!-- Slide 10: Breakthrough 8 -->
+  <div class="slide slide-content" id="s10">
+    <h2>#8 GraphRAG — Knowledge Graph + Hierarchical Communities</h2><div class="meta">Microsoft Research | Leiden community detection + Map-Reduce summarization</div>
+    <div class="pill-row">
+      <span class="pill">🕸️ Knowledge graph over corpus</span>
+      <span class="pill">🏘️ Leiden community detection</span>
+      <span class="pill">🗺️ Map-Reduce for global questions</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>LLM extracts Entities + Relationships from all documents → builds a knowledge graph</li>
+          <li><strong>Leiden algorithm</strong> detects tightly connected communities (better than Louvain)</li>
+          <li>Each community gets a pre-computed natural language summary</li>
+          <li><strong>Map-Reduce:</strong> For global questions → fetch community summaries → map intermediate answers → reduce to final</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Solves the "Global Question" Problem</h3>
+        <ul>
+          <li>Naive RAG cannot answer: "What are all the conflicts in Q2?"</li>
+          <li>GraphRAG pre-computes community summaries — answers span entire corpus</li>
+          <li>LinkedIn case: drastically improved relevance on HR policy questions</li>
+          <li>⚠️ $33K indexing cost for large datasets — Local GraphRAG is the open-source fix</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram">
+      <div class="flow-box green">Extract Entities<br>& Relations</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">Build Graph<br>(NetworkX)</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box amber">Leiden Community<br>Detection</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box green">Generate Community<br>Summaries</div>
+    </div>
+    <div class="slide-number">10 / 14</div>
+  </div>
+
+  <!-- Slide 11: Breakthrough 9 -->
+  <div class="slide slide-content" id="s11">
+    <h2>#9 Vectorless RAG</h2><div class="meta">Deterministic Retrieval — SQL, Graph & Keyword Search without Embeddings</div>
+    <div class="pill-row">
+      <span class="pill">⚡ SQL-first retrieval — live DB queries</span>
+      <span class="pill">🕸️ Graph traversal — deterministic hops</span>
+      <span class="pill">🔑 BM25 / Elasticsearch — exact keyword</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li><strong>Text-to-SQL RAG:</strong> LLM writes SQL → executes against live DB → exact rows as context</li>
+          <li><strong>Graph RAG:</strong> Traverse relationships (e.g., MARA → LFA1) — deterministic, no hallucination</li>
+          <li><strong>Keyword RAG:</strong> BM25 / Elasticsearch for exact SKU, part number, tax code matching</li>
+          <li>Completely bypasses dense embeddings — no embedding cost, no vector search latency</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>Why It's Critical for Enterprise</h3>
+        <ul>
+          <li>Vector search is unreliable for exact IDs: "MAT-9921" vs "MAT-9922"</li>
+          <li>Can do MATH (SUM, AVG, COUNT) — vector stores cannot</li>
+          <li>Fully explainable: "I queried table LFA1 where LIFNR = '001'"</li>
+          <li><strong>Our "Know Your SAP Masters" already uses this!</strong> Pillars 3 (Schema) + 4 (SQL)</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram" style="margin-top:15px">
+      <div class="flow-box green">User Question<br>"Price of MAT-9921?"</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">LLM writes<br>SQL Query</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box amber">Execute on<br>SAP HANA DB</div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box green">Exact rows<br>→ LLM context</div>
+    </div>
+    <div class="slide-number">11 / 14</div>
+  </div>
+
+  <!-- Slide 12: Breakthrough 10 -->
+  <div class="slide slide-content" id="s12">
+    <h2>#10 Hierarchical RAG</h2><div class="meta">Tree-Structured Retrieval — Module → Transaction → Field (SAP-native)</div>
+    <div class="pill-row">
+      <span class="pill">🌲 Multi-level tree indexing</span>
+      <span class="pill">👆 Parent pointers preserve structure</span>
+      <span class="pill">🎯 Top-down progressive narrowing</span>
+    </div>
+    <div class="content-grid">
+      <div class="left-col">
+        <h3>The Innovation</h3>
+        <ul>
+          <li>Documents chunked into a <strong>tree</strong>: L0 (root/summary) → L1 (section) → L2 (subsection) → L3 (leaf chunks)</li>
+          <li>Each level has optimized index: L0=BM25, L1=small vectors, L3=large vectors</li>
+          <li>Retrieval narrows progressively: "Which module?" → "Which transaction?" → "Which field?"</li>
+          <li>Parent pointers restore structural context — no more "lost in the middle"</li>
+        </ul>
+      </div>
+      <div class="right-col">
+        <h3>SAP-Native Fit</h3>
+        <ul>
+          <li>SAP itself is hierarchical: <strong>Module (MM)</strong> → <strong>Transaction (ME21N)</strong> → <strong>Screen/Field (EKPO)</strong></li>
+          <li>Only relevant subtree is loaded — no noisy global search</li>
+          <li>Answers cite: [Module 3.2.1, Chunk 4] — fully traceable</li>
+          <li>Perfect match for our "Know Your SAP Masters" 5-Pillar architecture!</li>
+        </ul>
+      </div>
+    </div>
+    <div class="flow-diagram" style="margin-top:15px">
+      <div class="flow-box green">L0: Which Module?<br><small>BM25 routing</small></div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box purple">L1: Which Transaction?<br><small>Section summary vectors</small></div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box amber">L2: Which Field?<br><small>Subsection vectors</small></div>
+      <div class="flow-box arrow">→</div>
+      <div class="flow-box green">L3: Retrieve<br><small>Leaf chunks + parents</small></div>
+    </div>
+    <div class="slide-number">12 / 14</div>
+  </div>
+
+  <!-- Slide 13: Summary Table -->
+  <div class="slide slide-content table-slide" id="s13">
+    <h2 style="color:#a78bfa;margin-bottom:20px">All 10 Breakthroughs — Summary Matrix</h2>
+    <table>
+      <thead>
+        <tr>
+          <th style="width:40px">#</th>
+          <th>Breakthrough</th>
+          <th>Core Innovation</th>
+          <th>Best For</th>
+          <th>Status in KYSM*</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>1</strong></td><td>Modular RAG</td><td>Component decoupling</td><td>Production flexibility</td><td><span class="badge">✅ Done</span></td>
+        <tr><td><strong>2</strong></td><td>Hybrid Search</td><td>BM25 + Dense + RRF</td><td>Exact-match + semantic</td><td><span class="badge">📋 Planned</span></td>
+        <tr><td><strong>3</strong></td><td>Reranking</td><td>Cross-Encoder funnel</td><td>Precision gating</td><td><span class="badge">📋 Planned</span></td>
+        <tr><td><strong>4</strong></td><td>HyDE</td><td>Hypothetical doc embedding</td><td>Technical Q&A</td><td><span class="badge">📋 Planned</span></td>
+        <tr><td><strong>5</strong></td><td>Corrective RAG</td><td>Confidence-gated retrieval</td><td>Hallucination reduction</td><td><span class="badge">📋 Planned</span></td>
+        <tr><td><strong>6</strong></td><td>Self-RAG</td><td>Reflection tokens</td><td>Self-verification</td><td><span class="badge">📋 Planned</span></td>
+        <tr><td><strong>7</strong></td><td>Agentic RAG</td><td>Planning + multi-tool</td><td>Complex multi-hop</td><td><span class="badge">✅ Done</span></td>
+        <tr><td><strong>8</strong></td><td>GraphRAG</td><td>Leiden + Map-Reduce</td><td>Global/cross-doc</td><td><span class="badge">✅ Done</span></td>
+        <tr><td><strong>9</strong></td><td>Vectorless RAG</td><td>SQL / Graph / BM25</td><td>Exact-match enterprise</td><td><span class="badge">✅ Done</span></td>
+        <tr><td><strong>10</strong></td><td>Hierarchical RAG</td><td>Tree + parent pointers</td><td>Large structured docs</td><td><span class="badge">📋 Next</span></td>
+      </tbody>
+    </table>
+    <div style="margin-top:15px;font-size:0.8em;color:#64748b">*KYSM = "Know Your SAP Masters" | ✅ = Implemented | 📋 = Planned</div>
+    <div class="slide-number">13 / 14</div>
+  </div>
+
+  <!-- Slide 14: Final -->
+  <div class="slide final-slide" id="s14">
+    <h2>Building the Next Generation of<br>Enterprise RAG</h2>
+    <div style="max-width:700px;margin:0 auto;text-align:left;margin-top:30px">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.05);padding:14px 20px;border-radius:10px;border-left:3px solid #34d399">
+          <span style="font-size:1.3em">✅</span>
+          <span><strong>5-Pillar RAG</strong> already implements Agentic RAG + Graph RAG + Vectorless RAG</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.05);padding:14px 20px;border-radius:10px;border-left:3px solid #38bdf8">
+          <span style="font-size:1.3em">📋</span>
+          <span><strong>Next up:</strong> Hybrid Search + Hierarchical RAG for SAP MM/SD/FI modules</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;background:rgba(255,255,255,0.05);padding:14px 20px;border-radius:10px;border-left:3px solid #a78bfa">
+          <span style="font-size:1.3em">🚀</span>
+          <span><strong>Vision:</strong> Full Agentic RAG orchestrator with Self-RAG critique + HyDE for the "Know Your SAP Masters" system</span>
+        </div>
+      </div>
+    </div>
+    <div class="slide-number">14 / 14</div>
+  </div>
+
+</div>
+
+<div class="nav">
+  <button onclick="prev()">◀ Prev</button>
+  <button onclick="next()">Next ▶</button>
+  <span style="color:#475569;padding:8px 12px;font-size:13px" id="counter">1 / 14</span>
+</div>
+
+<script>
+let current = 1;
+const total = 14;
+function show(n) {
+  document.querySelectorAll('.slide').forEach(s => s.classList.remove('active'));
+  document.getElementById('s'+n).classList.add('active');
+  document.getElementById('counter').textContent = n + ' / ' + total;
+}
+function next() { if(current<total) { current++; show(current); } }
+function prev() { if(current>1) { current--; show(current); } }
+document.addEventListener('keydown', e => {
+  if(e.key==='ArrowRight'||e.key===' ') next();
+  if(e.key==='ArrowLeft') prev();
+});
+</script>
+</body>
+</html>

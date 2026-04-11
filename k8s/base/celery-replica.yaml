@@ -1,0 +1,127 @@
+# celery-replica.yaml — Additional Celery agent workers (throughput boost)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: celery-replica
+  namespace: sap-masters
+  labels:
+    app: celery-replica
+    app.kubernetes.io/name: sap-masters
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: celery-replica
+  template:
+    metadata:
+      labels:
+        app: celery-replica
+        app.kubernetes.io/name: sap-masters
+      annotations:
+        autoscaling.keda.sh/enabled: "true"
+    spec:
+      serviceAccountName: sap-masters
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: celery-worker
+          image: sapmasters/backend:latest
+          imagePullPolicy: IfNotPresent
+          command:
+            - sh
+            - -c
+            - |
+              celery -A app.workers.celery_app worker \
+                --loglevel=info \
+                --hostname=celery-replica-$(POD_NAME) \
+                --concurrency=8 \
+                --pool=prefork \
+                --queues=agent \
+                --max-tasks-per-child=200 \
+                --soft-time-limit=240 \
+                --time-limit=300
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: HANA_MODE
+              value: "pool"
+            - name: HANA_DB_ADDRESSES
+              value: "hana.prod.internal:30015"
+            - name: HANA_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sap-masters-secrets
+                  key: HANA_DB_USER
+            - name: HANA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sap-masters-secrets
+                  key: HANA_DB_PASSWORD
+            - name: QDRANT_URL
+              value: "http://qdrant:6333"
+            - name: MEMGRAPH_URI
+              value: "bolt://memgraph:7687"
+            - name: CELERY_BROKER_URL
+              value: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/0"
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - app.workers.celery_app
+                - inspect
+                - ping
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+      terminationGracePeriodSeconds: 120
+
+---
+# KEDA ScaledObject for celery-replica
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: celery-replica-scaler
+  namespace: sap-masters
+spec:
+  scaleTargetRef:
+    name: celery-replica
+  pollingInterval: 15
+  cooldownPeriod: 600     # 10 minutes — slower scale-down for replica pool
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  triggers:
+    - type: rabbitmq
+      metadata:
+        host: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+        queueName: agent
+        queueLengthTarget: "20"
+        activationQueueLengthTarget: "10"
+        operation: max
+      authenticationRef:
+        name: keda-rabbitmq-credentials

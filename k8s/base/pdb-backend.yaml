@@ -1,0 +1,85 @@
+# pdb-backend.yaml — PodDisruptionBudget
+# =============================================================================
+# Ensures at least N-1 pods are available during voluntary disruptions
+# (node drains, rolling updates, cluster upgrades).
+#
+# For StatefulSets (Memgraph, Qdrant, RabbitMQ, Redis): use OnDelete policy.
+# =============================================================================
+
+# Backend API — at least 1 pod must be available during updates
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: backend-pdb
+  namespace: sap-masters
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: backend
+
+---
+# Celery primary workers — at least 1 must be available
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: celery-primary-pdb
+  namespace: sap-masters
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: celery-primary
+
+---
+# StatefulSet PDBs (OnDelete — only applies during updates)
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: memgraph-pdb
+  namespace: sap-masters
+spec:
+  maxUnavailable: 1
+  updatePolicy: OnDelete
+  selector:
+    matchLabels:
+      app: memgraph
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: qdrant-pdb
+  namespace: sap-masters
+spec:
+  maxUnavailable: 1
+  updatePolicy: OnDelete
+  selector:
+    matchLabels:
+      app: qdrant
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  namespace: sap-masters
+spec:
+  maxUnavailable: 1
+  updatePolicy: OnDelete
+  selector:
+    matchLabels:
+      app: redis
+
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq-pdb
+  namespace: sap-masters
+spec:
+  maxUnavailable: 1
+  updatePolicy: OnDelete
+  selector:
+    matchLabels:
+      app: rabbitmq

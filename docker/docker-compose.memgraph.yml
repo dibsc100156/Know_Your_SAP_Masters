@@ -1,0 +1,105 @@
+# ============================================================
+# docker-compose.memgraph.yml — Know Your SAP Masters
+# Phase M1: Memgraph + Memgraph Lab (local smoke test)
+# ============================================================
+# Usage:
+#   Start:  docker compose -f docker-compose.memgraph.yml up memgraph lab -d
+#   Stop:   docker compose -f docker-compose.memgraph.yml down
+#   Logs:   docker compose -f docker-compose.memgraph.yml logs -f memgraph
+#   Lab UI: http://localhost:3000 (user: "", pass: "")
+#
+# Full stack (Memgraph + Qdrant + Redis + RabbitMQ):
+#   docker compose -f docker-compose.memgraph.yml -f docker-compose.memgraph-full.yml up -d
+# ============================================================
+
+services:
+
+  # ── Primary Graph Database ─────────────────────────────────────────────────
+  memgraph:
+    image: memgraph/memgraph:2.12.0
+    container_name: sapmasters_memgraph
+    restart: unless-stopped
+    ports:
+      # Bolt (Cypher) — used by gqlalchemy / Python client
+      - "7687:7687"
+      # HTTP — used by Memgraph Lab (optional direct HTTP)
+      - "7444:7444"
+    environment:
+      # Storage
+      MEMGRAPH_STORAGE_DIRECTORY: /var/lib/memgraph
+      MEMGRAPH_DATA_DIR: /var/lib/memgraph
+      # Auth — open for local dev, set secure for production
+      MEMGRAPH_AUTH: "false"        # allow blank auth in dev
+      # Performance tuning
+      MEMGRAPH_BOLT_SESSION_TIMEOUT_SECONDS: "60"
+      MEMGRAPH_QUERY_TIMEOUT: "180"
+      # Memory (adjust for your machine — default 2 GiB is fine for 80-node graph)
+      MEMGRAPH_MEMORY_TRACKING: "true"
+      # Audit (optional — enable for compliance)
+      # MEMGRAPH_AUDIT_ENABLED: "true"
+    volumes:
+      # NOTE: init_schema.cql does NOT auto-load in Memgraph — no entrypoint wrapper.
+      # Schema is loaded via smoke_test_memgraph.py or load_init_schema.py on first boot.
+      # Persist data across restarts
+      - memgraph_data:/var/lib/memgraph
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'timeout 1 bash -c \"cat < /dev/null > /dev/tcp/localhost/7687\"' 2>/dev/null && exit 0 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - sapmasters
+
+  # ── Memgraph Lab — Web UI for visualizing the graph ───────────────────────
+  lab:
+    image: memgraph/lab:2.12.0
+    container_name: sapmasters_memgraph_lab
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # Point Lab at the local Memgraph instance
+      MG_HOST: memgraph
+      MG_PORT: "7687"
+      # Disable telemetry in dev
+      MEMGRAPH_LAB_TELEMETRY: "false"
+    depends_on:
+      memgraph:
+        condition: service_healthy
+    networks:
+      - sapmasters
+
+  # ── Optional: Memgraph Replica (read scale-out — Phase M4+) ────────────────
+  # memgraph_replica:
+  #   image: memgraph/memgraph:2.12.0
+  #   container_name: sapmasters_memgraph_replica
+  #   restart: unless-stopped
+  #   ports:
+  #     - "7688:7687"
+  #   command: >
+  #     --bolt-port 7687
+  #     --management-port 9001
+  #     --data-directory /var/lib/memgraph_replica
+  #     -- replication
+  #     -- server-mode REPLICA
+  #     -- replication-replica-host memgraph_replica
+  #     -- replication-replica-port 10000
+  #     -- replication-replica-server-id 2
+  #   volumes:
+  #     - memgraph_replica_data:/var/lib/memgraph_replica
+  #   depends_on:
+  #     memgraph:
+  #       condition: service_healthy
+  #   networks:
+  #     - sapmasters
+
+volumes:
+  memgraph_data:
+    driver: local
+  # memgraph_replica_data:
+  #   driver: local
+
+networks:
+  sapmasters:
+    driver: bridge

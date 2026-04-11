@@ -1,0 +1,195 @@
+# backend.yaml — FastAPI Backend Deployment
+# =============================================================================
+# Know Your SAP Masters API Gateway — 5-Pillar RAG Orchestrator
+# Horizontal scaling controlled by HPA (hpa-backend.yaml)
+# =============================================================================
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: sap-masters
+  labels:
+    app: backend
+    app.kubernetes.io/name: sap-masters
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+        app.kubernetes.io/name: sap-masters
+        app.kubernetes.io/component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: sap-masters
+      # Security
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backend
+          image: sapmasters/backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+              name: http
+          # ── Environment ──────────────────────────────────────────────────────
+          env:
+            # HANA connection pool (Phase M7)
+            - name: HANA_MODE
+              value: "pool"
+            - name: HANA_DB_ADDRESSES
+              value: "hana.prod.internal:30015"
+            - name: HANA_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sap-masters-secrets
+                  key: HANA_DB_USER
+            - name: HANA_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sap-masters-secrets
+                  key: HANA_DB_PASSWORD
+            - name: HANA_POOL_MIN_CONN
+              value: "2"
+            - name: HANA_POOL_MAX_CONN
+              value: "20"
+            - name: HANA_QUERY_TIMEOUT
+              value: "30"
+            - name: HANA_ENFORCE_MANDT
+              value: "true"
+
+            # Vector store (Phase M6)
+            - name: QDRANT_URL
+              value: "http://qdrant:6333"
+
+            # Graph store (Phase M4)
+            - name: MEMGRAPH_URI
+              value: "bolt://memgraph:7687"
+
+            # Celery broker (Phase M4)
+            - name: CELERY_BROKER_URL
+              value: "amqp://sapmasters:REPLACEME@rabbitmq:5672//"
+            - name: CELERY_RESULT_BACKEND
+              value: "redis://redis:6379/0"
+
+            # Session state (Phase M5)
+            - name: REDIS_URL
+              value: "redis://redis:6379/0"
+            - name: RATE_LIMIT_ENABLED
+              value: "true"
+            - name: RATE_LIMIT_MAX
+              value: "30"
+
+            # SAP backend mode
+            - name: SAP_BACKEND_MODE
+              value: "celery"
+
+          # ── Resources ──────────────────────────────────────────────────────
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+
+          # ── Health checks ────────────────────────────────────────────────────
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+
+          # ── Security context ─────────────────────────────────────────────────
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          # Temp volume for Python bytecode
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: celery-schedule
+              mountPath: /tmp/celerybeat-schedule.db
+              subPath: celerybeat-schedule.db
+
+      # ── Init containers ────────────────────────────────────────────────────
+      initContainers:
+        - name: wait-for-dependencies
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              echo "Waiting for Memgraph..."
+              until nc -z memgraph 7687; do echo "Memgraph not ready"; sleep 2; done
+              echo "Memgraph ready."
+              echo "Waiting for Qdrant..."
+              until nc -z qdrant 6333; do echo "Qdrant not ready"; sleep 2; done
+              echo "Qdrant ready."
+              echo "Waiting for Redis..."
+              until nc -z redis 6379; do echo "Redis not ready"; sleep 2; done
+              echo "Redis ready."
+              echo "Waiting for RabbitMQ..."
+              until nc -z rabbitmq 5672; do echo "RabbitMQ not ready"; sleep 2; done
+              echo "RabbitMQ ready."
+              echo "All dependencies ready."
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+
+      volumes:
+        - name: tmp-volume
+          emptyDir: {}
+        - name: celery-schedule
+          emptyDir: {}
+
+      # ── Pod topology ────────────────────────────────────────────────────────
+      # Spread across nodes/zones for HA
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: backend
+
+      # ── Graceful shutdown ─────────────────────────────────────────────────
+      terminationGracePeriodSeconds: 60

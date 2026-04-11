@@ -1,0 +1,38 @@
+# Helm Chart: sap-masters
+# Know Your SAP Masters — Kubernetes Deployment
+# =============================================================================
+# Horizontal Pod Autoscaling for Celery workers based on RabbitMQ queue depth.
+#
+# Install:
+#   helm install sap-masters ./k8s/helm/sap-masters \
+#     --namespace sap-masters --create-namespace \
+#     --values ./k8s/helm/sap-masters/values.yaml
+#
+# Upgrade:
+#   helm upgrade sap-masters ./k8s/helm/sap-masters -f values.yaml -n sap-masters
+#
+# Uninstall:
+#   helm uninstall sap-masters -n sap-masters
+#
+# Prerequisites:
+#   kubectl create namespace sap-masters
+#   kubectl apply -f k8s/namespace.yaml
+#   kubectl apply -f k8s/secrets.yaml   (edit credentials first)
+# =============================================================================
+
+apiVersion: v2
+name: sap-masters
+description: Know Your SAP Masters — 5-Pillar RAG Enterprise Chatbot
+type: application
+version: 0.3.0
+appVersion: "0.3.0"
+keywords:
+  - sap
+  - hana
+  - llm
+  - rag
+  - agentic
+  - kubernetes
+maintainers:
+  - name: Know Your SAP Masters Team
+    email: sapmasters@example.com
