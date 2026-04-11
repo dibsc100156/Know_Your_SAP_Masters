@@ -169,6 +169,8 @@ with st.sidebar:
 
     if st.button("🗑 Clear Conversation", use_container_width=True):
         st.session_state.messages = []
+        import uuid
+        st.session_state.session_id = f"st-{uuid.uuid4().hex[:12]}"
         st.rerun()
 
     st.divider()
@@ -645,6 +647,11 @@ st.divider()
 
 # ── Chat History ──────────────────────────────────────────────────────────
 
+import uuid
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = f"st-{uuid.uuid4().hex[:12]}"
+
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
@@ -671,8 +678,12 @@ if prompt := st.chat_input(ph):
                     "domain": domain,
                     "user_role": role,
                 }
+                headers = {
+                    "X-Session-ID": st.session_state.session_id,
+                    "Content-Type": "application/json"
+                }
                 t0 = time.time()
-                response = requests.post(API_URL, json=payload, timeout=90)
+                response = requests.post(API_URL, json=payload, headers=headers, timeout=90)
                 elapsed_ms = int((time.time() - t0) * 1000)
 
                 if response.status_code == 200:
