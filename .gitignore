@@ -1,0 +1,32 @@
+# Virtual environments
+backend/.venv/
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyd
+*.pyo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Large binaries (no business in git)
+*.dll
+*.pyd
+*.so
+*.toml
+
+# Byte-compiled
+*.pyc
+*.pyo
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editor
+.vscode/
+.idea/
