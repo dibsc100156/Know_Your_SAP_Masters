@@ -491,7 +491,7 @@ class VectorStoreManager:
         **kwargs,
     ):
         # Resolve backend from env if not specified
-        backend = backend or os.environ.get("VECTOR_STORE_BACKEND", "chroma")
+        backend = backend or os.environ.get("VECTOR_STORE_BACKEND", "qdrant")
         db_path = db_path or os.environ.get("CHROMA_DB_PATH", "./chroma_db")
         self._backend_name = backend
 
@@ -592,7 +592,7 @@ class _LazyStoreManager:
     def _resolve(self) -> VectorStoreManager:
         if self._real is None:
             backend = self._backend_override or os.environ.get(
-                "VECTOR_STORE_BACKEND", "chroma"
+                "VECTOR_STORE_BACKEND", "qdrant"
             )
             if backend == "qdrant":
                 self._real = VectorStoreManager(backend="qdrant")
@@ -617,9 +617,9 @@ def init_vector_store(backend: str = None) -> VectorStoreManager:
 
     Args:
         backend: "chroma" or "qdrant".
-                Defaults to VECTOR_STORE_BACKEND env var or "chroma".
+                Defaults to VECTOR_STORE_BACKEND env var or "qdrant".
     """
-    backend = backend or os.environ.get("VECTOR_STORE_BACKEND", "chroma")
+    backend = backend or os.environ.get("VECTOR_STORE_BACKEND", "qdrant")
     _db_path = os.path.expanduser("~/.openclaw/workspace/chroma_db")
     if not os.path.exists(_db_path):
         _db_path = "./chroma_db"

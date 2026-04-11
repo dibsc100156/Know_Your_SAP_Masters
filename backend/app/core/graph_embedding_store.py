@@ -51,7 +51,8 @@ from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import MinMaxScaler
 
 # ChromaDB (already used by vector_store.py)
-import chromadb
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 
 # Local imports
 from app.core.graph_store import graph_store  # NetworkX graph singleton
@@ -69,7 +70,10 @@ NODE2VEC_EPOCHS        = 10     # Word2Vec training epochs
 NODE2VEC_P             = 1.0   # Return hyperparameter (Node2Vec)
 NODE2VEC_Q             = 0.5   # In-out hyperparameter (Node2Vec favors breadth — cross-module discovery)
 
-CHROMA_DB_PATH         = "./chroma_graph_db"
+
+QDRANT_HOST = os.environ.get("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.environ.get("QDRANT_PORT", "6333"))
+
 NODE_EMBEDDINGS_COL    = "graph_node_embeddings"   # Node2Vec structural vectors
 TABLE_CONTEXT_COL      = "graph_table_context"     # Text + structural semantic vectors
 TOP_K_STRUCTURAL       = 20      # Nodes to consider for context building
@@ -130,7 +134,7 @@ class GraphEmbeddingStore:
 
     def __init__(
         self,
-        db_path: str = CHROMA_DB_PATH,
+        qdrant_host: str = QDRANT_HOST, qdrant_port: int = QDRANT_PORT,
         embedding_dim: int = GRAPH_EMBEDDING_DIM,
     ):
         self.G = graph_store.G                       # NetworkX graph
@@ -146,21 +150,24 @@ class GraphEmbeddingStore:
 
         self.embedding_dim = embedding_dim
 
-        # --- ChromaDB client ---
-        self.chroma_client = chromadb.PersistentClient(path=db_path)
+        # --- Qdrant client ---
+        self.qdrant_client = QdrantClient(host=qdrant_host, port=qdrant_port, timeout=10)
 
         # --- Sentence Transformer (shared with VectorStoreManager) ---
-        self.text_encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        # Lazy fallback
+        try:
+            from sentence_transformers import SentenceTransformer
+            self.text_encoder = SentenceTransformer("all-MiniLM-L6-v2")
+        except OSError:
+            import sys as _sys
+            import pathlib as _pathlib
+            _sys.path.insert(0, str(_pathlib.Path(_sys.prefix).parent / "Lib" / "site-packages"))
+            from sentence_transformers import SentenceTransformer
+            self.text_encoder = SentenceTransformer("all-MiniLM-L6-v2")
 
-        # --- ChromaDB collections ---
-        self._node_col = self.chroma_client.get_or_create_collection(
-            name=NODE_EMBEDDINGS_COL,
-            metadata={"hnsw:space": "cosine", "hnsw:M": 16, "efConstruction": 64},
-        )
-        self._context_col = self.chroma_client.get_or_create_collection(
-            name=TABLE_CONTEXT_COL,
-            metadata={"hnsw:space": "cosine", "hnsw:M": 16, "efConstruction": 64},
-        )
+        # --- Qdrant collections ---
+        self._ensure_qdrant_collections()
+
 
         # --- Node2Vec model (lazy — populated on build) ---
         self._node2vec_model: Optional[Any] = None
@@ -179,6 +186,19 @@ class GraphEmbeddingStore:
     # Initialization / Build
     # -------------------------------------------------------------------------
 
+    def _ensure_qdrant_collections(self):
+        colls = {c.name for c in self.qdrant_client.get_collections().collections}
+        if NODE_EMBEDDINGS_COL not in colls:
+            self.qdrant_client.create_collection(
+                collection_name=NODE_EMBEDDINGS_COL,
+                vectors_config=VectorParams(size=self.embedding_dim, distance=Distance.COSINE),
+            )
+        if TABLE_CONTEXT_COL not in colls:
+            self.qdrant_client.create_collection(
+                collection_name=TABLE_CONTEXT_COL,
+                vectors_config=VectorParams(size=384, distance=Distance.COSINE), # all-MiniLM-L6-v2 is 384
+            )
+
     def build(self, force: bool = False) -> "GraphEmbeddingStore":
         """
         Full pipeline: compute Node2Vec → structural metrics → context texts → ChromaDB.
@@ -186,7 +206,7 @@ class GraphEmbeddingStore:
         Safe to call repeatedly — will skip if collections already have data
         unless force=True.
         """
-        node_count = self._node_col.count()
+        node_count = self.qdrant_client.get_collection(NODE_EMBEDDINGS_COL).points_count
         if node_count > 0 and not force:
             print(f"[GraphEmbeddings] Collections already populated ({node_count} nodes). "
                   "Call build(force=True) to rebuild.")
@@ -503,44 +523,37 @@ class GraphEmbeddingStore:
     # -------------------------------------------------------------------------
 
     def _index_node_embeddings(self):
-        """Store Node2Vec / fallback vectors in ChromaDB."""
-        existing_nodes = self._node_col.get()
-        if existing_nodes and existing_nodes.get("ids"):
-            self._node_col.delete(ids=existing_nodes["ids"])
-
-        ids, vectors, metas, docs = [], [], [], []
+        import uuid
+        def str_to_uuid(s): return str(uuid.uuid5(uuid.NAMESPACE_DNS, s))
+        points = []
         for table, embedding in self._node_embeddings.items():
             ctx = self._structural_ctx.get(table)
             meta = self._node_meta.get(table, {})
-            ids.append(f"node_{table}")
-            vectors.append(embedding.tolist())
-            docs.append(f"Graph structural embedding for {table}")
-            metas.append({
+            payload = {
+                "document": f"Graph structural embedding for {table}",
                 "table":                table,
                 "domain":               meta.get("domain", ""),
                 "structural_role":      ctx.structural_role if ctx else "unknown",
                 "is_cross_module_bridge": ctx.is_cross_module_bridge if ctx else False,
                 "degree":               ctx.degree if ctx else 0,
                 "centrality_percentile": ctx.centrality_percentile if ctx else 0.0,
-            })
-
-        if ids:
-            self._node_col.upsert(ids=ids, embeddings=vectors, metadatas=metas, documents=docs)
-            print(f"  [Node2Vec] Indexed {len(ids)} table embeddings.")
+            }
+            points.append(PointStruct(id=str_to_uuid(f"node_{table}"), vector=embedding.tolist(), payload=payload))
+        
+        if points:
+            # We just overwrite by ID, no need to delete all first in Qdrant
+            for i in range(0, len(points), 200):
+                self.qdrant_client.upsert(collection_name=NODE_EMBEDDINGS_COL, points=points[i:i+200])
+            print(f"  [Node2Vec] Indexed {len(points)} table embeddings.")
 
     def _index_context_embeddings(self, context_docs: Dict[str, Dict]):
-        """Store context-rich text embeddings in ChromaDB."""
-        existing_ctx = self._context_col.get()
-        if existing_ctx and existing_ctx.get("ids"):
-            self._context_col.delete(ids=existing_ctx["ids"])
-
-        ids, vectors, metas, docs = [], [], [], []
+        import uuid
+        def str_to_uuid(s): return str(uuid.uuid5(uuid.NAMESPACE_DNS, s))
+        points = []
         for table, cdoc in context_docs.items():
-            ids.append(f"context_{table}")
             vector = self.text_encoder.encode(cdoc["document"]).tolist()
-            vectors.append(vector)
-            docs.append(cdoc["document"])
-            metas.append({
+            payload = {
+                "document": cdoc["document"],
                 "table":                 table,
                 "domain":                cdoc["domain"],
                 "module":                cdoc["module"],
@@ -548,11 +561,13 @@ class GraphEmbeddingStore:
                 "is_cross_module_bridge": cdoc["is_cross_module_bridge"],
                 "centrality_percentile": cdoc["centrality_percentile"],
                 "cross_module_paths":    cdoc["cross_module_paths"],
-            })
-
-        if ids:
-            self._context_col.upsert(ids=ids, embeddings=vectors, metadatas=metas, documents=docs)
-            print(f"  [Context] Indexed {len(ids)} context documents.")
+            }
+            points.append(PointStruct(id=str_to_uuid(f"context_{table}"), vector=vector, payload=payload))
+        
+        if points:
+            for i in range(0, len(points), 200):
+                self.qdrant_client.upsert(collection_name=TABLE_CONTEXT_COL, points=points[i:i+200])
+            print(f"  [Context] Indexed {len(points)} context documents.")
 
     # -------------------------------------------------------------------------
     # Public API: Hybrid Search
@@ -590,20 +605,22 @@ class GraphEmbeddingStore:
         # ── Step 1: Text semantic search to get candidate tables ───────────
         query_vec_text = self.text_encoder.encode(query).tolist()
 
-        domain_filter = None
+        filter_cond = None
         if domain and domain not in ("auto", "cross_module", "transactional"):
-            domain_filter = {"domain": domain}
+            filter_cond = Filter(must=[FieldCondition(key="domain", match=MatchValue(value=domain))])
 
-        text_results = self._context_col.query(
-            query_embeddings=[query_vec_text],
-            n_results=TOP_K_STRUCTURAL,
-            where=domain_filter,
+        text_results = self.qdrant_client.search(
+            collection_name=TABLE_CONTEXT_COL,
+            query_vector=query_vec_text,
+            limit=TOP_K_STRUCTURAL,
+            query_filter=filter_cond,
+            with_payload=True,
         )
 
-        if not text_results or not text_results.get("documents"):
+        if not text_results:
             return []
 
-        candidate_tables = [m["table"] for m in text_results["metadatas"][0]]
+        candidate_tables = [r.payload.get("table") for r in text_results]
 
         # ── Step 2: Structural neighborhood coherence scores ─────────────────
         # For each candidate table: compare its embedding to the mean of its
