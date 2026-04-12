@@ -210,9 +210,10 @@ class DomainAgent(ABC):
             return [], []
         rows = exec_result.data["rows"]
         masked = []
+        table = self.primary_tables[0] if self.primary_tables else ""
         for row in rows:
             for col, val in list(row.items()):
-                if auth_context.is_column_masked(self.primary_tables[0], col):
+                if table and auth_context.is_column_masked(table, col):
                     row[col] = "***MASKED***"
                     masked.append(f"{col}")
         return rows, list(set(masked))

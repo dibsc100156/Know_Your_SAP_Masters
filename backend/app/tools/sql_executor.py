@@ -231,6 +231,24 @@ class SAPSQLExecutor:
         """Return mock data for development/testing without a live HANA DB."""
         sql_upper = sql.upper()
 
+        # Phase 6 Validation Harness: Simulate syntax/schema errors for the Self-Healer
+        if "FROM" not in sql_upper:
+            raise Exception("37000: Syntax error: missing FROM clause")
+        if "JOIN" in sql_upper and "ON" not in sql_upper:
+            raise Exception("37000: Syntax error: JOIN without ON condition")
+        if "ORDER BY" in sql_upper and re.search(r'ORDER\s+BY\s*$', sql_upper):
+            raise Exception("37000: Syntax error: empty ORDER BY clause")
+        if re.search(r',\s*FROM', sql_upper):
+            raise Exception("37000: Syntax error: trailing comma before FROM")
+        if "WHERE WHERE" in sql_upper:
+            raise Exception("37000: Syntax error: duplicate WHERE keyword")
+        if "/ 0" in sql_upper:
+            raise Exception("ORA-01476: Division by zero")
+            
+        # Simulate an EXPLAIN PLAN or COUNT(*) dry run response
+        if sql_upper.startswith("EXPLAIN PLAN") or sql_upper.startswith("SELECT COUNT(*)"):
+            return pd.DataFrame([{"STATUS": "VALID", "ESTIMATED_ROWS": 100, "PLAN": "MOCK_PLAN"}])
+
         data: List[Dict[str, Any]] = []
 
         if "EKKO" in sql_upper or "EKPO" in sql_upper:

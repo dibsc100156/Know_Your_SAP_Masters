@@ -1,4 +1,4 @@
-"""
+﻿"""
 Know Your SAP Masters — Modernized Frontend v2
 ===============================================
 Full 8-phase orchestration visibility:
@@ -19,7 +19,7 @@ import requests
 import pandas as pd
 import time
 
-API_BASE = "http://localhost:8000"
+API_BASE = "http://localhost:8001"
 API_URL = f"{API_BASE}/api/v1/chat/master-data"
 
 # ============================================================================
@@ -103,6 +103,9 @@ st.markdown("""
 
     /* ── Pattern badge ── */
     .pattern-badge { background:#fce4ec; color:#880e4f; padding:3px 10px; border-radius:8px; font-weight:600; font-family:monospace; }
+
+    /* ── Swarm badge ── */
+    .swarm-badge { background:#e8f5e9; color:#1b5e20; padding:3px 10px; border-radius:10px; font-weight:700; font-size:0.9em; border:1px solid #2e7d32; }
 
     /* ── Section headers ── */
     .section-hdr { font-size:0.75em; color:#888; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px; }
@@ -584,6 +587,17 @@ def render_answer(msg: dict):
             r_icon = "⚡" if routing_path == "fast_path" else "🔗" if routing_path == "cross_module" else "📋"
             st.markdown(f"<span class='{r_cls}'>{r_icon} {routing_path.replace('_', ' ').title()}</span>", unsafe_allow_html=True)
 
+    # ── Swarm Metadata (shown when swarm is active) ────────────────────────────
+    swarm_routing = payload.get("swarm_routing")
+    if swarm_routing and swarm_routing not in ("monolithic", "swarm_delegated", ""):
+        domain_coverage = payload.get("domain_coverage", [])
+        complexity = payload.get("complexity_score", 0)
+        agent_summary = payload.get("agent_summary", {})
+        agent_count = len(agent_summary)
+        success_agents = [k for k, v in agent_summary.items() if isinstance(v, dict) and v.get("status") == "success"]
+        with r1c3:
+            st.markdown(f"<span class='swarm-badge'>🤖 SWARM [{swarm_routing.upper()}] — {agent_count} agent(s): {', '.join(success_agents)}</span>", unsafe_allow_html=True)
+
     with r1c3:
         if pattern_name and pattern_name != "?":
             st.markdown(f"**Pattern:** <span class='pattern-badge'>{pattern_name}</span>", unsafe_allow_html=True)
@@ -630,6 +644,25 @@ def render_answer(msg: dict):
     render_graph_scores_panel(payload.get('graph_scores'))
     render_qm_panel(payload.get('qm_semantic'))
 
+
+    # ── Swarm Summary (shown when swarm executed) ─────────────────────────────
+    swarm_routing = payload.get("swarm_routing")
+    if swarm_routing and swarm_routing not in ("monolithic", "swarm_delegated"):
+        with st.expander("🤖 Swarm Execution Summary"):
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown(f"**Routing:** `{swarm_routing}`")
+                st.markdown(f"**Complexity:** `{payload.get('complexity_score', 0):.2f}`")
+                st.markdown(f"**Planner:** {payload.get('planner_reasoning', '')}")
+            with col2:
+                agent_summary = payload.get("agent_summary", {})
+                for agent_name, agent_data in agent_summary.items():
+                    if isinstance(agent_data, dict):
+                        status_icon = "✅" if agent_data.get("status") == "success" else "❌"
+                        st.markdown(f"{status_icon} **{agent_name}** — {agent_data.get('record_count', 0)} records in {agent_data.get('execution_time_ms', 0)}ms")
+            conflicts = payload.get("conflicts", [])
+            if conflicts:
+                st.warning(f"⚠️ **{len(conflicts)} value conflict(s)** detected and resolved across agents")
     # ── Masked Fields ───────────────────────────────────────────────────────
     masked = payload.get("masked_fields", [])
     if masked:
@@ -714,6 +747,7 @@ if prompt := st.chat_input(ph):
                     "query": prompt,
                     "domain": domain,
                     "user_role": role,
+                    "use_swarm": True,  # Multi-Agent Domain Swarm for parallel domain execution
                 }
                 headers = {
                     "X-Session-ID": st.session_state.session_id,

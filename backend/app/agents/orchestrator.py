@@ -178,6 +178,7 @@ def run_agent_loop(
     domain: str = "auto",
     verbose: bool = False,
     use_supervisor: bool = True,
+    use_swarm: bool = False,
 ) -> Dict[str, Any]:
     """
     Agentic RAG Orchestrator (Pillar 2).
@@ -190,16 +191,66 @@ def run_agent_loop(
         auth_context: SAPAuthContext with role permissions
         domain: Routing domain (auto, business_partner, purchasing, etc.)
         verbose: Print detailed reasoning steps
+        use_supervisor: Use supervisor agent for routing decisions
+        use_swarm: Use Multi-Agent Domain Swarm (PlannerAgent) instead of
+                   the monolithic single-orchestrator path.
+                   When True, delegates to the swarm architecture with
+                   PlannerAgent → Domain Agents → SynthesisAgent.
 
     Returns:
         Dict with: answer, tables_used, executed_sql, masked_fields, data, tool_trace
     """
+    # ============================================================================
+    # [Phase 6] SWARM GATE — Delegate to Multi-Agent Domain Swarm if enabled
+    # ============================================================================
+    if use_swarm:
+        from app.agents.swarm import run_swarm
+        return run_swarm(
+            query=query,
+            auth_context=auth_context,
+            domain_hint=domain,
+            verbose=verbose,
+        )
+
     start_time = time.time()
     from app.core.token_tracker import TokenTracker
     token_tracker = TokenTracker(model_name="claude-3-opus")
     # Mock token usage for orchestrator prompt (varies by query length + schema context)
     token_tracker.add_call(prompt_tokens=450 + len(query)//4, completion_tokens=0)
+
+    # Initialize variables used by sentinel BEFORE sentinel evaluation
+    tables_involved: List[str] = []
+    temporal_mode: str = "none"
+
+    # [Phase 6] Security Sentinel — Proactive Threat Evaluation
+    from app.core.security_sentinel import get_sentinel, ThreatSeverity
+    sentinel = get_sentinel()
+    session_id = auth_context.role_id + "_" + str(hash(query) % 100000)  # simplified session key
     
+    # Run threat evaluation BEFORE query executes
+    sentinel_verdict = sentinel.evaluate(
+        query=query,
+        auth_context=auth_context,
+        session_id=session_id,
+        tables_accessed=tables_involved,
+        domains_accessed=[domain],
+        graph_hop_depth=len(tables_involved) if tables_involved else 0,
+        row_count=0,  # Will be updated post-execution
+        temporal_mode=temporal_mode,
+        denied_table_access=False,  # Will be set if sql_validate found denied tables
+    )
+    if sentinel_verdict.threat_detected:
+        sev_label = sentinel_verdict.severity.value.upper()
+        print(f"\n[!!] SECURITY SENTINEL [{sev_label}]: {sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else 'unknown'} detected!")
+        for ev in sentinel_verdict.evidence[:3]:
+            print(f"    Evidence: {ev}")
+        if sentinel_verdict.severity in (ThreatSeverity.HIGH, ThreatSeverity.CRITICAL):
+            sentinel.alert_security_team(sentinel_verdict, session_id, auth_context.role_id)
+        if sentinel_verdict.recommended_action in ("tighten", "block"):
+            # Dynamically tighten auth context
+            sentinel.apply_tightening_to_auth_context(sentinel_verdict, auth_context)
+            print(f"    [!!] AuthContext tightened for role {auth_context.role_id}. Denied tables expanded.")
+
     tool_trace = []
     graph_scores_data = None
     # Default sql_result for fast-path (meta-path matched) where Pillar 4 is skipped
@@ -1092,9 +1143,49 @@ def run_agent_loop(
         print(f"    AuthContext suggestions: {validate_result.data['suggestions']}")
 
     # =========================================================================
+    # STEP 5.5: DRY-RUN VALIDATION HARNESS (Phase 6)
+    # =========================================================================
+    print("\n[5.5/5] [Phase 6] Validation Harness — SELECT COUNT(*) Dry-Run")
+    validation_sql = f"SELECT COUNT(*) FROM (\n{generated_sql}\n) AS dry_run_sub"
+    val_exec_result = call_tool("sql_execute", {
+        "sql": validation_sql,
+        "dry_run": True,
+        "max_rows": 1,
+    }, auth_context=auth_context)
+    trace("sql_execute(dry_run)", val_exec_result)
+
+    if val_exec_result.status == ToolStatus.ERROR:
+        val_error = val_exec_result.message or "SQL validation execution failed"
+        print(f"    [!!] Dry-Run Validation failed: {val_error[:60]}")
+        print(f"    [!!] Attempting autonomous self-heal...")
+        healed_sql, heal_reason, heal_code = self_healer.heal(
+            sql=generated_sql,
+            error=val_error,
+            schema_context=schema_context,
+        )
+        heal_info = {"applied": bool(heal_code), "code": heal_code, "reason": heal_reason}
+        if heal_code and healed_sql != generated_sql:
+            print(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
+            generated_sql = healed_sql
+            # Re-test the healed SQL
+            validation_sql = f"SELECT COUNT(*) FROM (\n{generated_sql}\n) AS dry_run_sub"
+            reval_exec_result = call_tool("sql_execute", {
+                "sql": validation_sql,
+                "dry_run": True,
+                "max_rows": 1,
+            }, auth_context=auth_context)
+            trace("sql_execute(dry_run_retry)", reval_exec_result)
+            if reval_exec_result.status == ToolStatus.SUCCESS:
+                print(f"    [OK] Healed SQL passed the Validation Harness!")
+            else:
+                print(f"    [WARN] Healed SQL still failing validation dry-run.")
+        else:
+            print(f"    [WARN] No autonomous heal possible: {heal_reason}")
+
+    # =========================================================================
     # STEP 6: EXECUTION
     # =========================================================================
-    print("\n[*] Executing SQL against SAP HANA (mock)...")
+    print("\n[*] Executing Final SQL against SAP HANA (mock)...")
     exec_result = call_tool("sql_execute", {
         "sql": generated_sql,
         "dry_run": True,
@@ -1189,6 +1280,16 @@ def run_agent_loop(
             "logged": True,
         },
         "self_heal": heal_info if 'heal_info' in locals() else {"applied": False},
+        # [Phase 6] Proactive Threat Sentinel verdict — surfaced in API response
+        "sentinel": {
+            "threat_detected": sentinel_verdict.threat_detected,
+            "threat_type": sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else None,
+            "severity": sentinel_verdict.severity.value if sentinel_verdict.severity else None,
+            "confidence": round(sentinel_verdict.confidence, 3),
+            "evidence": sentinel_verdict.evidence[:4],
+            "session_flags": sentinel_verdict.session_flags,
+            "tightness_level": get_sentinel().get_session_profile(session_id).tightness_level if sentinel_verdict.threat_detected else 0,
+        } if 'sentinel_verdict' in dir() and sentinel_verdict.threat_detected else {"threat_detected": False},
         "graph_scores": graph_scores_data,
         "qm_semantic": {
             "count": len(qm_semantic_results) if 'qm_semantic_results' in dir() else 0,
@@ -1216,19 +1317,44 @@ def run_agent_loop(
             if sql_result.status == ToolStatus.SUCCESS and sql_result.data.get("patterns")
             else "ad_hoc"
         ),
+        "sentinel_stats": get_sentinel().get_threat_stats() if 'get_sentinel' in dir() else {},
+        # [Phase 6] Swarm routing metadata
+        "swarm_routing": "monolithic" if not use_swarm else "swarm_delegated",
     }
     
     # ========================================================================
-    # [Phase 4] STEP 8b: PERSISTENT MEMORY LOGGING
+    # [Phase 4] STEP 8b: PERSISTENT MEMORY LOGGING & COMPOUNDING
     # ========================================================================
     if exec_result.status == ToolStatus.SUCCESS and data_records:
         result_status = "success"
+        pattern_name = top_pattern.get("intent", "unknown") if sql_result.status == ToolStatus.SUCCESS and sql_result.data.get("patterns") else "ad_hoc"
+        
         sap_memory.log_pattern_success(
             domain=domain,
-            pattern_name=top_pattern.get("intent", "unknown") if sql_result.status == ToolStatus.SUCCESS and sql_result.data.get("patterns") else "ad_hoc",
+            pattern_name=pattern_name,
             sql=generated_sql,
             tables=tables_involved,
         )
+
+        # [Harness Engineering] Automated Qdrant Vectorization
+        # If this was self-healed, we inject the fixed pattern back into the Qdrant store
+        if heal_info.get("applied", False):
+            print(f"\n    [MEMORY COMPOUNDING] Vectorizing newly-healed pattern to Qdrant: {pattern_name}")
+            try:
+                from app.core.vector_store import store_manager
+                # Generate an intent string to encode for the search index
+                new_intent = f"{pattern_name} (Auto-Healed: {heal_info.get('reason')})"
+                
+                # Load back into the active vector backend (Qdrant by default)
+                store_manager.load_domain(
+                    domain_name=domain,
+                    tables={}, # No schema updates, just SQL
+                    patterns=[{"intent": new_intent, "sql": generated_sql}]
+                )
+                print(f"    [MEMORY COMPOUNDING] Healed SQL successfully indexed into '{store_manager.backend_name}' store.")
+            except Exception as e:
+                print(f"    [WARN] Failed to index healed SQL into vector store: {e}")
+
     elif exec_result.status == ToolStatus.ERROR or validate_result.status == ToolStatus.ERROR:
         result_status = "error"
         sap_memory.log_pattern_failure(

@@ -19,6 +19,7 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="Natural language question about SAP master data")
     domain: str = Field(default="auto", description="Routing domain (auto or explicit)")
     user_role: str = Field(default="AP_CLERK", description="SAP Role Key")
+    use_swarm: bool = Field(default=False, description="Use Multi-Agent Domain Swarm instead of monolithic orchestrator")
 
 
 class ChatResponse(BaseModel):
@@ -62,8 +63,16 @@ class ChatResponse(BaseModel):
     confidence_score: Optional[Dict[str, Any]] = None
 
     # Routing intelligence (new)
-    routing_path: Optional[str] = None   # "fast_path" | "cross_module" | "standard"
+    routing_path: Optional[str] = None   # "fast_path" | "cross_module" | "standard" | swarm routing
     pattern_name: Optional[str] = None   # SQL pattern that fired, or "ad_hoc"
+
+    # Swarm-specific fields (populated when use_swarm=True)
+    swarm_routing: Optional[str] = None  # "single" | "parallel" | "cross_module" | "negotiation" | "escalated"
+    planner_reasoning: Optional[str] = None
+    agent_summary: Optional[Dict[str, Any]] = None  # {agent_name: {status, record_count, ...}}
+    domain_coverage: Optional[List[str]] = None     # ["bp_agent", "mm_agent", ...]
+    conflicts: Optional[List[Dict[str, Any]]] = None  # value conflicts across agents
+    complexity_score: Optional[float] = None
 
     # Role context returned for frontend display
     role_applied: str
@@ -92,6 +101,7 @@ async def chat_master_data_endpoint(request: ChatRequest):
                                    # tool_trace, and all other enrichment fields needed by the
                                    # frontend. Keep disabled until the SupervisorAgent is updated
                                    # to return the full 8-phase result dict.
+            use_swarm=request.use_swarm,  # Multi-Agent Domain Swarm vs monolithic orchestrator
         )
 
         # negotiation_brief can be a NegotiationBrief dataclass or dict
@@ -145,8 +155,14 @@ async def chat_master_data_endpoint(request: ChatRequest):
             execution_time_ms=result.get("execution_time_ms"),
             token_tracking=result.get("token_tracking"),
             confidence_score=result.get("confidence_score"),
-            routing_path=result.get("routing_path"),
+            routing_path=result.get("routing_path") or result.get("swarm_routing"),
             pattern_name=result.get("pattern_name"),
+            swarm_routing=result.get("swarm_routing"),
+            planner_reasoning=result.get("planner_reasoning"),
+            agent_summary=result.get("agent_summary"),
+            domain_coverage=result.get("domain_coverage"),
+            conflicts=result.get("conflicts"),
+            complexity_score=result.get("complexity_score"),
             role_applied=auth_context.role_id,
             user_id=f"user:{auth_context.role_id.lower()}",
         )
