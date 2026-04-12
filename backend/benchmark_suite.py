@@ -36,6 +36,9 @@ import asyncio
 # ── Add backend to path ────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+# ── Eval Alerting integration ───────────────────────────────────────────────────
+from app.core.eval_alerting import EvalAlertMonitor
+
 # ── Benchmark Query Store ──────────────────────────────────────────────────────
 
 DOMAINS = [
@@ -1065,6 +1068,45 @@ class BenchmarkRunner:
 
 # ── CLI ──────────────────────────────────────────────────────────────────────
 
+def _run_benchmark_with_alerts(runner: BenchmarkRunner, args) -> Dict[str, Any]:
+    """Shared logic to run benchmark and record alerts."""
+    if args.query:
+        queries = [next((q for q in GOLDEN_QUERIES if q.id == args.query), None)]
+        if not queries[0]:
+            print(f"Query {args.query} not found")
+            sys.exit(1)
+        results = asyncio.run(runner.run_query(queries[0]))
+        all_results = [results]
+    elif args.domain:
+        all_results = asyncio.run(runner.run_all(domains=[args.domain.lower()]))
+    else:
+        all_results = asyncio.run(runner.run_all())
+
+    summary = runner.print_report()
+
+    # ── Record run + fire alerts ──────────────────────────────────────────
+    monitor = EvalAlertMonitor()
+    run_id = f"bm-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+    summary["run_id"] = run_id
+    new_alerts = monitor.record_run(summary)
+
+    if new_alerts:
+        print()
+        print("=" * 80)
+        print("  🚨 EVAL ALERTS FIRED")
+        print("=" * 80)
+        for a in new_alerts:
+            sev = a.severity.value.upper()
+            print(f"  [{sev}] {a.title}")
+            print(f"         {a.message}")
+        print()
+    else:
+        print()
+        print("  ✅ Benchmark run clean — no alerts fired.")
+
+    return summary
+
+
 def main():
     parser = argparse.ArgumentParser(description="SAP Masters 50-Query Benchmark")
     parser.add_argument("--mode", choices=["mock", "live"], default="mock")
@@ -1073,6 +1115,8 @@ def main():
     parser.add_argument("--query", type=int, help="Run single query by ID")
     parser.add_argument("--export-json", action="store_true")
     parser.add_argument("--export-csv", action="store_true")
+    parser.add_argument("--alert-only", action="store_true",
+                        help="Skip benchmark run, just print active alerts")
     args = parser.parse_args()
 
     print("=" * 80)
@@ -1080,20 +1124,27 @@ def main():
     print("  Runtime:", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"))
     print("=" * 80)
 
+    # ── Alert-only mode ────────────────────────────────────────────────────
+    if args.alert_only:
+        monitor = EvalAlertMonitor()
+        summary = monitor.get_alert_summary()
+        alerts = monitor.get_active_alerts()
+        print()
+        print(f"  Active alerts: {summary['total']}"
+              f"  (CRITICAL={summary['critical']} "
+              f"ERROR={summary['error']} "
+              f"WARNING={summary['warning']})")
+        if alerts:
+            print()
+            for a in alerts:
+                print(f"  [{a['severity'].upper():8s}] {a['title']}")
+                print(f"    {a['message'][:80]}")
+        else:
+            print("  ✅ No active alerts.")
+        sys.exit(0)
+
     runner = BenchmarkRunner(mode=args.mode, role=args.role)
-
-    if args.query:
-        gq = next((q for q in GOLDEN_QUERIES if q.id == args.query), None)
-        if not gq:
-            print(f"Query {args.query} not found")
-            sys.exit(1)
-        results = [asyncio.run(runner.run_query(gq))]
-    elif args.domain:
-        results = asyncio.run(runner.run_all(domains=[args.domain.lower()]))
-    else:
-        results = asyncio.run(runner.run_all())
-
-    summary = runner.print_report()
+    summary = _run_benchmark_with_alerts(runner, args)
 
     if args.export_json:
         runner.export_json()
@@ -1107,7 +1158,7 @@ def main():
                 "tables_correct", "sql_valid", "security_pass", "overall_score", "status",
             ])
             writer.writeheader()
-            for r in results:
+            for r in runner.results:
                 writer.writerow({k: v for k, v in asdict(r).items()
                                 if k in writer.fieldnames})
         print("  Exported to benchmark_results.csv")

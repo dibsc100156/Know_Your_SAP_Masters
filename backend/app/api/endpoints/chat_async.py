@@ -42,6 +42,7 @@ from app.workers.orchestrator_tasks import (
     get_task_result,
     AsyncResultNotReadyError,
 )
+from app.core.eval_alerting import EvalAlertMonitor
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/chat", tags=["chat"])
@@ -365,3 +366,55 @@ async def queue_health():
                 "broker_url": celery_app.conf.broker_url.split("@")[-1] if "@" in celery_app.conf.broker_url else "configured",
             },
         )
+
+
+# ── Eval Alerting Endpoints ───────────────────────────────────────────────────
+
+@router.get(
+    "/alerts",
+    summary="Active eval alerts",
+    tags=["system"],
+)
+async def get_eval_alerts():
+    """
+    Returns all unresolved eval alerts (benchmark regressions).
+    Frontend polls this every ~30s to show notification badges.
+    """
+    monitor = EvalAlertMonitor()
+    alerts = monitor.get_active_alerts()
+    summary = monitor.get_alert_summary()
+    last_run = monitor.get_last_run()
+    return {
+        "alerts": alerts,
+        "summary": summary,
+        "last_run": last_run,
+    }
+
+
+@router.delete(
+    "/alerts/{alert_id}",
+    summary="Resolve an alert",
+    tags=["system"],
+)
+async def resolve_alert(alert_id: str):
+    """
+    Acknowledge and resolve a specific alert.
+    Called when the frontend user has seen and dismissed the alert.
+    """
+    monitor = EvalAlertMonitor()
+    success = monitor.resolve_alert(alert_id)
+    if success:
+        return {"status": "resolved", "alert_id": alert_id}
+    raise HTTPException(status_code=404, detail="Alert not found")
+
+
+@router.delete(
+    "/alerts",
+    summary="Clear all resolved alerts",
+    tags=["system"],
+)
+async def clear_resolved_alerts():
+    """Delete all resolved alerts from Redis."""
+    monitor = EvalAlertMonitor()
+    monitor.clear_resolved()
+    return {"status": "cleared"}

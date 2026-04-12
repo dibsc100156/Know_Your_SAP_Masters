@@ -679,29 +679,21 @@ class GraphEmbeddingStore:
                          + 0.15 * cross_pct)
                     structural_scores[table] = round(min(1.0, raw), 4)
 
-        # ── Step 3: Text similarity scores (from ChromaDB L2 distance) ────
+        # 👉 Step 3: Text similarity scores (from Qdrant Cosine Similarity) 👈
         text_scores: Dict[str, float] = {}
-        for i, meta in enumerate(text_results["metadatas"][0]):
-            table = meta["table"]
-            dist  = text_results["distances"][0][i] if text_results.get("distances") else 0.0
-            text_scores[table] = 1.0 / (1.0 + dist)
+        for r in text_results:
+            table = r.payload.get("table")
+            text_scores[table] = max(0.0, float(r.score))
 
-        # ── Step 4: Composite fusion + metadata enrichment ─────────────────
+        # 👉 Step 4: Composite fusion + metadata enrichment 👈
         scored: List[Dict[str, Any]] = []
-        for table in candidate_tables:
+        for r in text_results:
+            table = r.payload.get("table")
+            meta = r.payload
+            
             ss = structural_scores.get(table, 0.0)
             ts = text_scores.get(table, 0.0)
             composite = sw * ss + tw * ts
-
-            ctx_doc = self._context_col.get(
-                where={"table": table},
-                include=["metadatas", "documents"],
-            )
-            meta = {}
-            doc  = ""
-            if ctx_doc and ctx_doc.get("metadatas"):
-                meta = ctx_doc["metadatas"][0]
-                doc  = (ctx_doc["documents"] or [""])[0]
 
             scored.append({
                 "table":                    table,
@@ -712,12 +704,11 @@ class GraphEmbeddingStore:
                 "centrality_percentile":    meta.get("centrality_percentile", 0.0),
                 "cross_module_paths":       meta.get("cross_module_paths", 0),
                 "degree":                   meta.get("degree", 0),
-                "description":              doc,
+                "description":              meta.get("document", ""),
                 "composite_score":          round(composite, 4),
                 "structural_score":         round(ss, 4),
-                "text_score":             round(ts, 4),
+                "text_score":               round(ts, 4),
             })
-
         # Sort by composite score descending, add rank
         scored.sort(key=lambda x: x["composite_score"], reverse=True)
         for i, row in enumerate(scored):

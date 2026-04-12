@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
+from app.core.eval_alerting import EvalAlertMonitor
+
 router = APIRouter()
 
 # Import the real 8-phase orchestrator
@@ -54,6 +56,7 @@ class ChatResponse(BaseModel):
 
     # Meta
     execution_time_ms: Optional[int] = None
+    token_tracking: Optional[Dict[str, Any]] = None
 
     # Confidence breakdown (new — multi-signal composite)
     confidence_score: Optional[Dict[str, Any]] = None
@@ -140,6 +143,7 @@ async def chat_master_data_endpoint(request: ChatRequest):
             negotiation_brief=neg_brief,
             self_heal=result.get("self_heal"),
             execution_time_ms=result.get("execution_time_ms"),
+            token_tracking=result.get("token_tracking"),
             confidence_score=result.get("confidence_score"),
             routing_path=result.get("routing_path"),
             pattern_name=result.get("pattern_name"),
@@ -208,3 +212,43 @@ async def list_supported_roles():
             "purchasing_orgs": [],
         },
     }
+
+
+# ── Eval Alerting Endpoints ───────────────────────────────────────────────────
+
+
+@router.get("/alerts", tags=["system"])
+async def get_eval_alerts():
+    """
+    Returns all unresolved eval alerts (benchmark regressions).
+    Frontend polls this every ~30s to show notification badges.
+    """
+    monitor = EvalAlertMonitor()
+    alerts = monitor.get_active_alerts()
+    summary = monitor.get_alert_summary()
+    last_run = monitor.get_last_run()
+    return {
+        "alerts": alerts,
+        "summary": summary,
+        "last_run": last_run,
+    }
+
+
+
+@router.delete("/alerts/{alert_id}", tags=["system"])
+async def resolve_alert(alert_id: str):
+    """Acknowledge and resolve a specific alert."""
+    monitor = EvalAlertMonitor()
+    success = monitor.resolve_alert(alert_id)
+    if success:
+        return {"status": "resolved", "alert_id": alert_id}
+    raise HTTPException(status_code=404, detail="Alert not found")
+
+
+
+@router.delete("/alerts", tags=["system"])
+async def clear_resolved_alerts():
+    """Delete all resolved alerts from Redis."""
+    monitor = EvalAlertMonitor()
+    monitor.clear_resolved()
+    return {"status": "cleared"}

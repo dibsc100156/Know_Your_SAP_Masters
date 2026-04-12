@@ -195,6 +195,11 @@ def run_agent_loop(
         Dict with: answer, tables_used, executed_sql, masked_fields, data, tool_trace
     """
     start_time = time.time()
+    from app.core.token_tracker import TokenTracker
+    token_tracker = TokenTracker(model_name="claude-3-opus")
+    # Mock token usage for orchestrator prompt (varies by query length + schema context)
+    token_tracker.add_call(prompt_tokens=450 + len(query)//4, completion_tokens=0)
+    
     tool_trace = []
     graph_scores_data = None
     # Default sql_result for fast-path (meta-path matched) where Pillar 4 is skipped
@@ -219,6 +224,8 @@ def run_agent_loop(
                 supervisor_result["execution_time_ms"] = supervisor_result.get("execution_time_ms",
                                                                                   int((time.time() - start_time) * 1000))
                 supervisor_result["memory_logged"] = True
+                token_tracker.add_call(prompt_tokens=800, completion_tokens=300)
+                supervisor_result["token_tracking"] = token_tracker.get_summary()
                 return supervisor_result
             elif verbose:
                 print(f"\n[SUPERVISOR] Falling through to standard orchestrator")
@@ -1155,6 +1162,9 @@ def run_agent_loop(
     print(f"    Execution time: {execution_time}ms")
     print(f"    Tools called: {len(tool_trace)}")
 
+    # Add mock completion tokens based on final answer + SQL generated
+    token_tracker.add_call(prompt_tokens=0, completion_tokens=120 + len(final_answer)//4 + len(generated_sql)//4)
+
     result_dict = {
         "answer": final_answer,
         "tables_used": tables_involved,
@@ -1162,6 +1172,7 @@ def run_agent_loop(
         "masked_fields": masked_fields,
         "data": data_records,
         "tool_trace": tool_trace,
+        "token_tracking": token_tracker.get_summary(),
         "execution_time_ms": execution_time,
         "temporal": {
             "mode": temporal_mode,

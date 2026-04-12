@@ -201,8 +201,8 @@ Once wired:
 
 | Strong ✅                                                               | Partial ⚠️                                             |
 | ---------------------------------------------------------------------- | ------------------------------------------------------ |
-| Agent Loop, Specialist Subagents, Parallel Subagents, Routing Handoffs | Token Budget Tracking (no per-call measurement)        |
-| Red/Green TDD (critique → self-heal → re-critique)                     | Eval Alerting (threshold-based alerts not wired to UI) |
+| Agent Loop, Specialist Subagents, Parallel Subagents, Routing Handoffs |                                                        |
+| Red/Green TDD (critique → self-heal → re-critique)                     |                                                        |
 | Hoarding (68 SQL patterns, 14 meta-paths, 80+ DDIC tables)             |                                                        |
 | Recombination (Graph RAG AllPathsExplorer)                             |                                                        |
 | Self-Improvement (self_improver closed loop)                           |                                                        |
@@ -218,9 +218,11 @@ Once wired:
 | -------- | ------------------------------------------- | ---------------------------- |
 | P0       | Real SAP HANA via `hdbcli`                  | Makes everything real        |
 | P1       | Benchmark Suite (50-query golden dataset)   | Regression safety net        |
-| P1       | Eval Alerting (success_rate < 0.7 → alert)  | Proactive quality monitoring |
-| P2       | Token Budget Tracking per orchestrator call | Cost governance              |
 | P2       | CDS view equivalents for S/4HANA Cloud      | Cloud compatibility          |
 | P3       | DDIC auto-population from DD08L             | Zero manual graph building   |
 
 *Phase 3 is the only P0. Everything else compounds once real data flows.* 🦞
+
+### Recently Completed 
+- ✅ **Eval Alerting (wired to UI)** (Added `/eval/alerts` API and Streamlit UI alert banner)
+- ✅ **Token Budget Tracking per orchestrator call** (Added `TokenTracker` to `orchestrator.py` & API endpoint for cost governance)

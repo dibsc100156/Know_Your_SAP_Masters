@@ -666,7 +666,17 @@ except Exception:
     backend_ok = False
 
 if backend_ok:
-    st.success("🟢 Backend connected — 8-phase orchestrator active")
+    st.success("✅ Backend connected — 8-phase orchestrator active")
+    try:
+        alert_r = requests.get(f"{API_BASE}/api/v1/eval/alerts", timeout=2)
+        if alert_r.status_code == 200:
+            alerts_data = alert_r.json()
+            if alerts_data.get("count", 0) > 0:
+                st.warning(f"⚠️ **Eval Alerts ({alerts_data['count']}):** Quality thresholds breached.")
+                for alert in alerts_data.get("alerts", []):
+                    st.error(f"[{alert['level']}] {alert['message']}")
+    except Exception:
+        pass
 else:
     st.error("🔴 Backend unreachable — is FastAPI running on port 8000?")
 
