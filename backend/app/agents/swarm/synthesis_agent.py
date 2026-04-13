@@ -26,6 +26,7 @@ from dataclasses import dataclass
 from collections import defaultdict
 
 from app.core.security import SAPAuthContext, security_mesh
+from app.agents.swarm.contracts import validate_contract, build_contract, get_contract_for_agent
 
 
 @dataclass
@@ -108,18 +109,54 @@ class SynthesisAgent:
                 "conflicts": [],
                 "execution_time_ms": int((time.time() - start) * 1000),
                 "record_count": 0,
+                "validation_summary": {"agents_validated": 0, "agents_passed": 0, "agents_failed": 0},
             }
 
-        # Step 1: Merge records from all agents
+        # [Harness] Validate each agent's output before merging
+        # Contract validation failures flag outputs as partial but NEVER block synthesis
+        validation_summary = {
+            "agents_validated": 0,
+            "agents_passed": 0,
+            "agents_failed": 0,
+            "per_agent": {},
+        }
+        for name, result in valid_results.items():
+            validation_summary["agents_validated"] += 1
+            is_valid, errors = False, []
+            try:
+                contract_cls = get_contract_for_agent(name)
+                # If the result is already a contract dict (from build_contract), rebuild from raw
+                # If it's a plain dict, build a contract now
+                if result.get("validation_passed") is not None:
+                    # Already validated by domain agent — trust it
+                    is_valid = bool(result.get("validation_passed"))
+                    errors = result.get("validation_errors", [])
+                else:
+                    # Not yet validated — build contract and validate now
+                    contract = build_contract(name, result)
+                    is_valid, errors = validate_contract(contract)
+            except Exception as e:
+                is_valid, errors = False, [f"validation error: {e}"]
+
+            validation_summary["per_agent"][name] = {
+                "validation_passed": is_valid,
+                "validation_errors": errors,
+            }
+            if is_valid:
+                validation_summary["agents_passed"] += 1
+            else:
+                validation_summary["agents_failed"] += 1
+
+        # Step 2: Merge records from all agents
         merged = self._merge_results(valid_results, query)
 
-        # Step 2: Apply masking based on auth context
+        # Step 3: Apply masking based on auth context
         merged = self._apply_masking(merged, auth_context)
 
-        # Step 3: Rank by relevance
+        # Step 4: Rank by relevance
         ranked = self._rank_results(merged, query)
 
-        # Step 4: Build per-agent summary
+        # Step 5: Build per-agent summary (now includes validation results)
         agent_summary = {}
         for name, result in valid_results.items():
             agent_summary[name] = {
@@ -128,18 +165,22 @@ class SynthesisAgent:
                 "tables_used": result.get("tables_used", []),
                 "execution_time_ms": result.get("execution_time_ms", 0),
                 "answer_excerpt": result.get("answer", "")[:80],
+                # [Harness] Contract validation results
+                "validation_passed": validation_summary["per_agent"].get(name, {}).get("validation_passed"),
+                "validation_errors": validation_summary["per_agent"].get(name, {}).get("validation_errors", []),
             }
 
         for name, err in error_results.items():
-            agent_summary[name] = {"status": "error", "error": str(err)}
+            agent_summary[name] = {"status": "error", "error": str(err),
+                                   "validation_passed": False, "validation_errors": ["agent returned error"]}
 
-        # Step 5: Detect and resolve conflicts
+        # Step 6: Detect and resolve conflicts
         conflicts = self._detect_conflicts(valid_results)
 
-        # Step 6: Generate natural language synthesis
+        # Step 7: Generate natural language synthesis
         answer = self._generate_answer(query, ranked, agent_summary, routing)
 
-        # Step 7: Domain coverage
+        # Step 8: Domain coverage
         domain_coverage = list(valid_results.keys())
 
         elapsed = int((time.time() - start) * 1000)
@@ -154,6 +195,8 @@ class SynthesisAgent:
             "execution_time_ms": elapsed,
             "record_count": len(ranked),
             "masked_fields": self._get_masked_fields(ranked, auth_context),
+            # [Harness] Contract validation summary
+            "validation_summary": validation_summary,
         }
 
     # =========================================================================

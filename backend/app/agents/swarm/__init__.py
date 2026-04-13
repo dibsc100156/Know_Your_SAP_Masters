@@ -17,6 +17,8 @@ Usage:
     result = run_swarm(query, auth_context, domain_hint="auto")
 """
 
+from typing import Optional
+
 from app.agents.swarm.planner_agent import (
     PlannerAgent,
     SwarmDecision,
@@ -42,6 +44,7 @@ def run_swarm(
     domain_hint: str = "auto",
     verbose: bool = False,
     use_swarm: bool = True,
+    run_id: Optional[str] = None,
 ):
     """
     Convenience entry point — runs the multi-agent swarm or falls back
@@ -73,4 +76,5 @@ def run_swarm(
         auth_context=auth_context,
         domain_hint=domain_hint,
         verbose=verbose,
+        run_id=run_id,
     )

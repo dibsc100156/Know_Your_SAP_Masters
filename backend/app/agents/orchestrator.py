@@ -1,4 +1,4 @@
-"""
+﻿"""
 orchestrator.py — Agentic RAG Orchestrator (Pillar 2)
 ======================================================
 Coordinates all 5 Pillars via the unified tool registry:
@@ -49,6 +49,42 @@ from app.core.schema_auto_discover import schema_auto_discoverer
 from app.core.self_improver import self_improver
 from app.core.temporal_engine import TemporalEngine
 from app.core.security import SAPAuthContext
+from app.core.harness_runs import get_harness_runs
+
+
+# =============================================================================
+# Harness Phase Tracking Helper
+# =============================================================================
+
+def _update_harness_phase(
+    hr, run_id: str, phase: str, status: str,
+    artifacts: Optional[Dict[str, Any]] = None,
+    error: Optional[str] = None,
+    duration_ms: int = 0,
+    validator_fired: bool = False,
+    validator_errors: Optional[List[str]] = None,
+    verbose: bool = False,
+) -> None:
+    """"Log a phase completion to Redis (idempotent — safe to call even if Redis is down)."""
+    if not run_id:
+        return
+    try:
+        hr.update_phase(
+            run_id=run_id,
+            phase=phase,
+            status=status,
+            artifacts=artifacts or {},
+            error=error,
+            validator_fired=validator_fired,
+            validator_errors=validator_errors or [],
+        )
+        if verbose:
+            icon = "[OK]" if status == "completed" else "[FAIL]" if status == "failed" else "[SKIP]"
+            print(f"  {icon} [HARNESS] phase={phase} status={status} dur={duration_ms}ms")
+    except Exception as e:
+        if verbose:
+            print(f"  [WARN] [HARNESS] phase={phase} update failed: {e}")
+
 
 
 # =============================================================================
@@ -212,6 +248,29 @@ def run_agent_loop(
             verbose=verbose,
         )
 
+    # ============================================================================
+    # [Harness] Track every orchestrator execution in Redis
+    # ============================================================================
+    hr = get_harness_runs()
+    try:
+        hr_run = hr.start_run(
+            run_id=None,
+            query=query,
+            user_role=auth_context.role_id,
+            swarm_routing="monolithic",
+            planner_reasoning="",
+            complexity_score=0.0,
+        )
+        run_id = hr_run.run_id
+        if verbose:
+            print(f"\n[HARNESS] Starting run {run_id}")
+    except Exception as e:
+        hr_run = None
+        run_id = None
+        if verbose:
+            print(f"\n[WARN] Harness tracking unavailable: {e}")
+
+
     start_time = time.time()
     from app.core.token_tracker import TokenTracker
     token_tracker = TokenTracker(model_name="claude-3-opus")
@@ -303,30 +362,30 @@ def run_agent_loop(
     # =========================================================================
     # STEP 0: META-PATH MATCH (Fast-path)
     # =========================================================================
+    phase_0_start = time.time()
     print("\n[0/5] [Pillar 5] Meta-Path Match — meta_path_match()")
     meta_result = call_tool("meta_path_match", {
         "query": query,
         "domain": domain,
     }, auth_context=auth_context)
     trace("meta_path_match", meta_result)
-    
+
     meta_path_used = False
     base_sql = ""
-    tables_involved = []
+    tables_involved: List[str] = []
     temporal_filters: List[str] = []
     temporal_mode: str = "none"
-    
+
+
     if meta_result.status == ToolStatus.SUCCESS:
         match_data = meta_result.data["match"]
         print(f"    HIT: '{match_data['name']}' (Score: {match_data['match_score']})")
         base_sql = match_data["sql_template"]
         tables_involved = match_data["tables"]
         meta_path_used = True
-        
-        # We can skip Schema and SQL pattern lookup!
+
         print("    [FAST PATH] Skipping Schema & SQL RAG — using Meta-Path template.")
-        
-        # Still run temporal detection on fast path (dates apply to meta-paths too)
+
         if len(tables_involved) >= 2:
             temporal_result = call_tool("temporal_graph_search", {
                 "query": query,
@@ -340,6 +399,20 @@ def run_agent_loop(
                 print(f"    [TEMPORAL] Fast-path resolved: {temporal_result.data.get('resolved')} | Mode: {temporal_mode}")
     else:
         print("    MISS: No strong meta-path found. Proceeding to dynamic RAG.")
+
+
+    if run_id:
+        _update_harness_phase(
+            hr, run_id, "phase_0", "completed",
+            artifacts={
+                "meta_path_used": meta_path_used,
+                "tables": tables_involved,
+                "sql_template": base_sql[:200] if base_sql else "",
+                "match_score": meta_result.data.get("match", {}).get("match_score", 0) if meta_result.status == ToolStatus.SUCCESS else 0,
+            },
+            duration_ms=int((time.time() - phase_0_start) * 1000),
+            verbose=verbose,
+        )
 
     # Only run dynamic steps if we didn't hit a meta-path
 
@@ -486,6 +559,7 @@ def run_agent_loop(
         # =========================================================================
         # STEP 1: SCHEMA RETRIEVAL (Pillar 3)
         # =========================================================================
+        phase_1_start = time.time()
         print("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
         schema_result = call_tool("schema_lookup", {
             "query": query,
@@ -507,6 +581,11 @@ def run_agent_loop(
 
         tables_involved = schema_result.data["tables_used"]
         print(f"    Tables found: {tables_involved}")
+        if run_id:
+            _update_harness_phase(hr, run_id, "phase_1", "completed",
+                artifacts={"tables_found": tables_involved, "domain": domain},
+                duration_ms=int((time.time() - phase_1_start) * 1000),
+                verbose=verbose)
 
         # =========================================================================
         # STEP 1b: [Phase 5] SCHEMA AUTO-DISCOVERY (DDIC fallback)
@@ -554,6 +633,7 @@ def run_agent_loop(
         # Run graph embedding search in parallel with SQL pattern lookup.
         # Even if text-schema finds tables, graph embeddings surface cross-module
         # bridges and structurally central tables that naive text-match would miss.
+        phase_1b_start = time.time()
         print("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
         graph_result = call_tool("graph_enhanced_schema_discovery", {
             "query": query,
@@ -590,6 +670,7 @@ def run_agent_loop(
         # =========================================================================
         # STEP 2: SQL PATTERN RETRIEVAL (Pillar 4)
         # =========================================================================
+        phase_2_start = time.time()
         print("\n[2/5] [Pillar 4] SQL RAG — sql_pattern_lookup()")
         
         # [Phase 4] Memory Layer: pull boosted patterns for this domain
@@ -892,6 +973,7 @@ def run_agent_loop(
         if sql_result.status != ToolStatus.SUCCESS or not sql_result.data.get("patterns"):
             # Only use Graph RAG when we have no pattern — build JOIN from scratch
             if len(tables_involved) > 1:
+                phase_3_start = time.time()
                 print(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
                 graph_result = call_tool("all_paths_explore", {
                     "start_table": tables_involved[0],
@@ -909,9 +991,19 @@ def run_agent_loop(
         else:
             print("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
 
+        if run_id:
+            _update_harness_phase(hr, run_id, "phase_3", "completed",
+                artifacts={
+                    "tables": tables_involved,
+                    "join_clause": join_clause[:200] if join_clause else "",
+                },
+                duration_ms=int((time.time() - phase_3_start) * 1000),
+                verbose=verbose)
+
     # =========================================================================
     # STEP 4: SQL ASSEMBLY + AUTHCONTEXT INJECTION
     # =========================================================================
+    phase_4_start = time.time()
     print("\n[4/5] [Pillar 1] SQL Assembly + AuthContext Injection")
 
     # Build WHERE clauses from AuthContext
@@ -1022,7 +1114,7 @@ def run_agent_loop(
     # =========================================================================
     # STEP 4.5: SELF-CRITIQUE LOOP (Phase 4 — Gatekeeper)
     # =========================================================================
-    print("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
+        print("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
     
     # Initialize heal_info upfront (may be updated by self-healer during critique or validation)
     heal_info: Dict[str, Any] = {"applied": False, "code": None, "reason": None}
@@ -1099,6 +1191,7 @@ def run_agent_loop(
     # =========================================================================
     # STEP 5: SQL VALIDATION (Security Check)
     # =========================================================================
+    phase_5_start = time.time()
     print("\n[5/5] [Security] sql_validate()")
     validate_result = call_tool("sql_validate", {
         "sql": generated_sql,
@@ -1145,6 +1238,7 @@ def run_agent_loop(
     # =========================================================================
     # STEP 5.5: DRY-RUN VALIDATION HARNESS (Phase 6)
     # =========================================================================
+    phase_5b_start = time.time()
     print("\n[5.5/5] [Phase 6] Validation Harness — SELECT COUNT(*) Dry-Run")
     validation_sql = f"SELECT COUNT(*) FROM (\n{generated_sql}\n) AS dry_run_sub"
     val_exec_result = call_tool("sql_execute", {
@@ -1185,6 +1279,7 @@ def run_agent_loop(
     # =========================================================================
     # STEP 6: EXECUTION
     # =========================================================================
+    phase_exec_start = time.time()
     print("\n[*] Executing Final SQL against SAP HANA (mock)...")
     exec_result = call_tool("sql_execute", {
         "sql": generated_sql,
@@ -1318,6 +1413,7 @@ def run_agent_loop(
             else "ad_hoc"
         ),
         "sentinel_stats": get_sentinel().get_threat_stats() if 'get_sentinel' in dir() else {},
+        "run_id": run_id or "",
         # [Phase 6] Swarm routing metadata
         "swarm_routing": "monolithic" if not use_swarm else "swarm_delegated",
     }
@@ -1395,6 +1491,19 @@ def run_agent_loop(
         error=exec_result.message if exec_result.status == ToolStatus.ERROR else None,
     )
     
+    # [Harness] Mark run complete
+    if run_id:
+        try:
+            hr.complete_run(
+                run_id,
+                status="completed",
+                confidence_score=result_dict.get("confidence_score", {}).get("composite", 0.0),
+                execution_time_ms=execution_time,
+            )
+        except Exception as e:
+            if verbose:
+                print(f"  [WARN] [HARNESS] complete_run failed: {e}")
+
     return result_dict
 
 

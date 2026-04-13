@@ -319,6 +319,7 @@ class PlannerAgent:
         decision: SwarmDecision,
         auth_context: SAPAuthContext,
         verbose: bool = False,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Dispatch to a single domain agent.
@@ -329,14 +330,40 @@ class PlannerAgent:
         if not agent:
             return {"error": f"Unknown agent: {assignment.agent_name}"}
 
+        phase_start = time.time()
         result = agent.run(
             query=decision.query,
             auth_context=auth_context,
             tables_hint=assignment.tables_hint,
             verbose=verbose,
+            run_id=run_id,
         )
+        elapsed = int((time.time() - phase_start) * 1000)
+
+        # [Harness] Track single-agent phase
+        if run_id:
+            try:
+                from app.core.harness_runs import get_harness_runs
+                hr = get_harness_runs()
+                hr.update_phase(
+                    run_id=run_id,
+                    phase=f"domain_{assignment.agent_name}",
+                    status="completed" if "error" not in result else "failed",
+                    artifacts={
+                        "agent": assignment.agent_name,
+                        "tables_used": result.get("tables_used", []),
+                        "record_count": result.get("record_count", 0),
+                        "validation_passed": result.get("validation_passed"),
+                    },
+                    error=result.get("error"),
+                    duration_ms=elapsed,
+                )
+            except Exception:
+                pass
+
         result["swarm_routing"] = decision.routing.value
         result["planner_reasoning"] = decision.reasoning
+        result["run_id"] = run_id or ""
         return result
 
     def dispatch_parallel(
@@ -345,6 +372,7 @@ class PlannerAgent:
         auth_context: SAPAuthContext,
         verbose: bool = False,
         max_workers: int = 4,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Dispatch to multiple domain agents in parallel threads.
@@ -359,12 +387,38 @@ class PlannerAgent:
             agent = self._domain_agents.get(assignment.agent_name)
             if not agent:
                 return {"error": f"Unknown agent: {assignment.agent_name}"}
-            return agent.run(
+            agent_start = time.time()
+            result = agent.run(
                 query=decision.query,
                 auth_context=auth_context,
                 tables_hint=assignment.tables_hint,
                 verbose=verbose,
+                run_id=run_id,
             )
+            elapsed = int((time.time() - agent_start) * 1000)
+
+            # [Harness] Track each domain agent's phase
+            if run_id:
+                try:
+                    from app.core.harness_runs import get_harness_runs
+                    hr = get_harness_runs()
+                    hr.update_phase(
+                        run_id=run_id,
+                        phase=f"domain_{assignment.agent_name}",
+                        status="completed" if "error" not in result else "failed",
+                        artifacts={
+                            "agent": assignment.agent_name,
+                            "tables_used": result.get("tables_used", []),
+                            "record_count": result.get("record_count", 0),
+                            "validation_passed": result.get("validation_passed"),
+                            "validation_errors": result.get("validation_errors", []),
+                        },
+                        error=result.get("error"),
+                        duration_ms=elapsed,
+                    )
+                except Exception:
+                    pass
+            return result
 
         results = {}
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -382,10 +436,39 @@ class PlannerAgent:
 
         elapsed = int((time.time() - start) * 1000)
 
+        # [Harness] Track synthesis phase
+        synth_start = time.time()
         # Synthesis
         synthesis = self._synthesize(decision, results, auth_context)
+        synth_elapsed = int((time.time() - synth_start) * 1000)
 
-        return {
+        if run_id:
+            try:
+                from app.core.harness_runs import get_harness_runs
+                hr = get_harness_runs()
+                hr.update_phase(
+                    run_id=run_id,
+                    phase="synthesis",
+                    status="completed" if synthesis.get("merged_data") else "failed",
+                    artifacts={
+                        "merged_records": len(synthesis.get("merged_data", [])),
+                        "domain_coverage": synthesis.get("domain_coverage", []),
+                        "conflicts": len(synthesis.get("conflicts", [])),
+                        "synthesis_status": synthesis.get("status", "unknown"),
+                    },
+                    duration_ms=synth_elapsed,
+                )
+                # Complete the full run
+                hr.complete_run(
+                    run_id=run_id,
+                    status="completed",
+                    confidence_score=0.9,  # synthesis doesn't compute confidence
+                    execution_time_ms=elapsed + synth_elapsed,
+                )
+            except Exception:
+                pass
+
+        ret = {
             "swarm_routing": decision.routing.value,
             "planner_reasoning": decision.reasoning,
             "complexity_score": decision.complexity_score,
@@ -402,7 +485,9 @@ class PlannerAgent:
             "conflicts": synthesis.get("conflicts"),
             "execution_time_ms": elapsed,
             "agent_count": len(results),
+            "run_id": run_id or "",
         }
+        return ret
 
     def _synthesize(
         self,
@@ -435,11 +520,33 @@ class PlannerAgent:
         auth_context: SAPAuthContext,
         domain_hint: str = "auto",
         verbose: bool = False,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Main entry point — plan AND execute the swarm.
         Returns the final synthesized result.
         """
+        # [Harness] Start run tracking (if run_id not already provided)
+        hr = None
+        if not run_id:
+            try:
+                from app.core.harness_runs import get_harness_runs
+                hr = get_harness_runs()
+                hr_run = hr.start_run(
+                    run_id=None,
+                    query=query,
+                    user_role=auth_context.role_id,
+                    swarm_routing="swarm",
+                    planner_reasoning="",
+                    complexity_score=0.0,
+                )
+                run_id = hr_run.run_id
+                if verbose:
+                    print(f"\n[HARNESS] Starting swarm run {run_id}")
+            except Exception as e:
+                if verbose:
+                    print(f"\n[WARN] Harness unavailable: {e}")
+
         # Plan
         decision = self.plan(query, auth_context, domain_hint, verbose=verbose)
 
@@ -465,9 +572,9 @@ class PlannerAgent:
 
         # Execute based on routing type
         if decision.routing == RoutingType.SINGLE:
-            return self.dispatch_single(decision, auth_context, verbose=verbose)
+            return self.dispatch_single(decision, auth_context, verbose=verbose, run_id=run_id)
         else:
-            return self.dispatch_parallel(decision, auth_context, verbose=verbose)
+            return self.dispatch_parallel(decision, auth_context, verbose=verbose, run_id=run_id)
 
     @staticmethod
     def _build_task(

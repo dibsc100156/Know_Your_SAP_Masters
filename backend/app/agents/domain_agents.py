@@ -1,4 +1,4 @@
-"""
+﻿"""
 domain_agents.py — Phase 4 Sub-Agent System
 =============================================
 Each DomainAgent is a focused specialist for one SAP module.
@@ -31,6 +31,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from app.agents.orchestrator_tools import call_tool, ToolResult, ToolStatus
 from app.core.security import SAPAuthContext
 from app.core.memory_layer import sap_memory
+from app.agents.swarm.contracts import build_contract
 
 
 # ---------------------------------------------------------------------------
@@ -61,16 +62,25 @@ class DomainAgent(ABC):
         0.0 = cannot handle, 1.0 = perfect match.
         """
 
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import AgentOutputContract
+        return AgentOutputContract
+
     def run(
         self,
         query: str,
         auth_context: SAPAuthContext,
         tables_hint: Optional[List[str]] = None,
         verbose: bool = False,
+        run_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Run this agent's domain-specific pipeline.
         Returns dict with: {agent_name, tables_used, sql, data, answer, execution_time_ms}
+        
+        If run_id is provided, wraps output in a typed AgentOutputContract
+        (via build_contract) for structured validation by the Synthesis Agent.
         """
         start = time.time()
         self._call_count += 1
@@ -99,6 +109,7 @@ class DomainAgent(ABC):
             "agent": self.name,
             "domain": self.domain,
             "query": query,
+            "run_id": run_id or "",
             "tables_used": tables,
             "executed_sql": sql,
             "data": data,
@@ -107,6 +118,13 @@ class DomainAgent(ABC):
             "execution_time_ms": elapsed,
             "record_count": len(data),
         }
+
+        # [Harness] Wrap in typed contract for structured validation
+        if run_id:
+            result = build_contract(self.name, result)
+            # build_contract returns a Pydantic model — convert to dict for API compat
+            if hasattr(result, "model_dump"):
+                result = result.model_dump()
 
         # Log to memory layer
         sap_memory.log_query(
@@ -274,6 +292,11 @@ class BPAgent(DomainAgent):
             score = min(score, 0.3)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import BPAgentContract
+        return BPAgentContract
+
 
 
 class MMAgent(DomainAgent):
@@ -317,6 +340,11 @@ class MMAgent(DomainAgent):
             score = min(score, 0.3)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import MMAgentContract
+        return MMAgentContract
+
 
 
 class PURAgent(DomainAgent):
@@ -360,6 +388,11 @@ class PURAgent(DomainAgent):
             score = min(score, 0.3)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import PURAgentContract
+        return PURAgentContract
+
 
 
 class SDAgent(DomainAgent):
@@ -402,6 +435,11 @@ class SDAgent(DomainAgent):
             score = min(score, 0.3)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import SDAgentContract
+        return SDAgentContract
+
 
 
 class QMAgent(DomainAgent):
@@ -440,6 +478,11 @@ class QMAgent(DomainAgent):
             score = max(score, 0.85)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import QMAgentContract
+        return QMAgentContract
+
 
 
 class WMAgent(DomainAgent):
@@ -478,6 +521,11 @@ class WMAgent(DomainAgent):
             score = max(score, 0.85)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import WMAgentContract
+        return WMAgentContract
+
 
 
 class CROSSAgent(DomainAgent):
@@ -530,6 +578,11 @@ class CROSSAgent(DomainAgent):
             score = max(score, 0.9)
 
         return min(score, 1.0)
+    def get_contract_class(self) -> type:
+        """Return the typed output contract class for this agent."""
+        from app.agents.swarm.contracts import CROSSAgentContract
+        return CROSSAgentContract
+
 
     def _resolve_tables(self, query: str) -> List[str]:
         """Use Graph RAG to dynamically discover cross-module tables."""
