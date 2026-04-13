@@ -592,7 +592,7 @@ def render_answer(msg: dict):
     if swarm_routing and swarm_routing not in ("monolithic", "swarm_delegated", ""):
         domain_coverage = payload.get("domain_coverage", [])
         complexity = payload.get("complexity_score", 0)
-        agent_summary = payload.get("agent_summary", {})
+        agent_summary = payload.get("agent_summary") or {}
         agent_count = len(agent_summary)
         success_agents = [k for k, v in agent_summary.items() if isinstance(v, dict) and v.get("status") == "success"]
         with r1c3:
@@ -655,7 +655,7 @@ def render_answer(msg: dict):
                 st.markdown(f"**Complexity:** `{payload.get('complexity_score', 0):.2f}`")
                 st.markdown(f"**Planner:** {payload.get('planner_reasoning', '')}")
             with col2:
-                agent_summary = payload.get("agent_summary", {})
+                agent_summary = payload.get("agent_summary") or {}
                 for agent_name, agent_data in agent_summary.items():
                     if isinstance(agent_data, dict):
                         status_icon = "✅" if agent_data.get("status") == "success" else "❌"
