@@ -74,6 +74,16 @@ class ChatResponse(BaseModel):
     conflicts: Optional[List[Dict[str, Any]]] = None  # value conflicts across agents
     complexity_score: Optional[float] = None
 
+    # Phase 6c: Threat Sentinel
+    sentinel: Optional[Dict[str, Any]] = None      # {verdict, flags, session_tightness}
+    sentinel_stats: Optional[Dict[str, Any]] = None  # per-engine detection counts
+
+    # Harness Runs tracking
+    run_id: Optional[str] = None                  # Redis harness run identifier
+
+    # Synthesis validation summary (populated when use_swarm=True)
+    validation_summary: Optional[Dict[str, Any]] = None  # {agents_validated, agents_passed, agents_failed, per_agent}
+
     # Role context returned for frontend display
     role_applied: str
     user_id: str
@@ -163,6 +173,10 @@ async def chat_master_data_endpoint(request: ChatRequest):
             domain_coverage=result.get("domain_coverage"),
             conflicts=result.get("conflicts"),
             complexity_score=result.get("complexity_score"),
+            sentinel=result.get("sentinel"),
+            sentinel_stats=result.get("sentinel_stats"),
+            run_id=result.get("run_id"),
+            validation_summary=result.get("validation_summary"),
             role_applied=auth_context.role_id,
             user_id=f"user:{auth_context.role_id.lower()}",
         )

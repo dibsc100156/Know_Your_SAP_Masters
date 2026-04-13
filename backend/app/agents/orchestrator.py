@@ -988,17 +988,18 @@ def run_agent_loop(
                     print(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
                 else:
                     print(f"    [WARN] {graph_result.message}")
+                if run_id:
+                    _update_harness_phase(hr, run_id, "phase_3", "completed",
+                        artifacts={
+                            "tables": tables_involved,
+                            "join_clause": join_clause[:200] if join_clause else "",
+                        },
+                        duration_ms=int((time.time() - phase_3_start) * 1000),
+                        verbose=verbose)
+            else:
+                print("\n[3/5] [Pillar 5] Graph RAG — Skipped (single table, no traversal needed)")
         else:
             print("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
-
-        if run_id:
-            _update_harness_phase(hr, run_id, "phase_3", "completed",
-                artifacts={
-                    "tables": tables_involved,
-                    "join_clause": join_clause[:200] if join_clause else "",
-                },
-                duration_ms=int((time.time() - phase_3_start) * 1000),
-                verbose=verbose)
 
     # =========================================================================
     # STEP 4: SQL ASSEMBLY + AUTHCONTEXT INJECTION

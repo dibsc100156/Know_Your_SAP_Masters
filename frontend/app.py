@@ -660,9 +660,46 @@ def render_answer(msg: dict):
                     if isinstance(agent_data, dict):
                         status_icon = "✅" if agent_data.get("status") == "success" else "❌"
                         st.markdown(f"{status_icon} **{agent_name}** — {agent_data.get('record_count', 0)} records in {agent_data.get('execution_time_ms', 0)}ms")
-            conflicts = payload.get("conflicts", [])
+            conflicts = payload.get("conflicts") or []
             if conflicts:
                 st.warning(f"⚠️ **{len(conflicts)} value conflict(s)** detected and resolved across agents")
+
+            # [Harness] Validation Summary
+            vs = payload.get("validation_summary") or {}
+            if vs:
+                validated = vs.get("agents_validated", 0)
+                passed = vs.get("agents_passed", 0)
+                failed = vs.get("agents_failed", 0)
+                if validated > 0:
+                    vs_color = "🟢" if failed == 0 else "🟡" if failed < validated else "🔴"
+                    st.markdown(f"**Contract Validation:** {vs_color} {passed}/{validated} agents passed")
+                    for agent, info in vs.get("per_agent", {}).items():
+                        vp = info.get("validation_passed", False)
+                        icon = "✅" if vp else "❌"
+                        errs = info.get("validation_errors", [])
+                        err_str = f" — {errs[0]}" if errs else ""
+                        st.markdown(f"&nbsp;&nbsp;&nbsp;{icon} **{agent}**: {'PASS' if vp else 'FAIL'}{err_str}")
+    # ── Sentinel Verdict ──────────────────────────────────────────────────────
+    sentinel = payload.get("sentinel")
+    sentinel_stats = payload.get("sentinel_stats") or {}
+    if sentinel:
+        verdict = sentinel.get("verdict", "?")
+        flags = sentinel.get("flags", [])
+        tightness = sentinel.get("session_tightness", 0)
+        if verdict == "CLEAN":
+            st.markdown("🛡️ **Security Sentinel:** `CLEAN` — no anomalies detected")
+        elif verdict == "WARNING":
+            st.warning(f"🛡️ **Security Sentinel:** `WARNING` — {len(flags)} flag(s): {', '.join(flags[:3])}")
+        elif verdict == "BLOCKED":
+            st.error(f"🛡️ **Security Sentinel:** `BLOCKED` — query blocked: {', '.join(flags)}")
+        if sentinel_stats:
+            with st.expander("📊 Sentinel Detection Stats"):
+                cols = st.columns(len(sentinel_stats))
+                for ci, (engine, count) in enumerate(sentinel_stats.items()):
+                    with cols[ci]:
+                        icon = "🔴" if count > 0 else "🟢"
+                        st.metric(engine.replace("_", " ").title(), f"{icon} {count}")
+
     # ── Masked Fields ───────────────────────────────────────────────────────
     masked = payload.get("masked_fields", [])
     if masked:
@@ -677,9 +714,13 @@ def render_answer(msg: dict):
             st.markdown("**Generated SQL:**")
             st.code(payload["sql_generated"], language="sql")
 
-        tables = payload.get("tables_used", [])
+        tables = payload.get("tables_used") or []
         if tables:
             st.markdown(f"**Schema RAG Access:** `{', '.join(tables)}`")
+
+        run_id = payload.get("run_id")
+        if run_id:
+            st.markdown(f"**Run ID:** `{run_id}`")
 
         render_tool_trace(payload.get("tool_trace"))
 
