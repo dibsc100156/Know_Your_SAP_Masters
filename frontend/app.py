@@ -652,7 +652,7 @@ def render_answer(msg: dict):
             col1, col2 = st.columns(2)
             with col1:
                 st.markdown(f"**Routing:** `{swarm_routing}`")
-                st.markdown(f"**Complexity:** `{payload.get('complexity_score', 0):.2f}`")
+                st.markdown(f"**Complexity:** `{(payload.get('complexity_score') or 0):.2f}`")
                 st.markdown(f"**Planner:** {payload.get('planner_reasoning', '')}")
             with col2:
                 agent_summary = payload.get("agent_summary") or {}
