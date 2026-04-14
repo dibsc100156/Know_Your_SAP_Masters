@@ -1527,7 +1527,6 @@ class AllPathsExplorer:
     """
     def __init__(self, graph_manager: GraphRAGManager):
         self.gm = graph_manager
-        self.G = graph_manager.G
         
         # Scoring weights (lower score = better path)
         self.WEIGHTS = {
@@ -1539,6 +1538,10 @@ class AllPathsExplorer:
             "huge_table_penalty": 5.0 # e.g. BSEG, MSEG
         }
         self.HUGE_TABLES = {"BSEG", "MSEG", "MKPF", "BSIS", "BSAS", "BSID", "BSAD", "BSIK", "BSAK", "LIPS"}
+
+    @property
+    def G(self):
+        return getattr(self.gm, "G", getattr(self.gm, "_nx_cache", None))
 
     def _score_path(self, path: List[str]) -> Tuple[float, List[dict]]:
         score = 0.0
@@ -1577,6 +1580,9 @@ class AllPathsExplorer:
 
     def find_all_ranked_paths(self, start_table: str, end_table: str, max_depth: int = 5, top_k: int = 3) -> List[dict]:
         """Finds all paths up to max_depth and returns the top_k best scored paths."""
+        if hasattr(self.gm, "find_all_ranked_paths_native"):
+            return self.gm.find_all_ranked_paths_native(start_table, end_table, max_depth, top_k)
+            
         start = start_table.upper()
         end = end_table.upper()
         
@@ -1629,7 +1635,6 @@ class TemporalGraphRAG:
     """
     def __init__(self, graph_manager: GraphRAGManager):
         self.gm = graph_manager
-        self.G = graph_manager.G
         
         # Registry of temporal columns per table
         self.TEMPORAL_REGISTRY = {
@@ -1654,6 +1659,10 @@ class TemporalGraphRAG:
             "MBEW": {"type": "key_date", "date": "BWDAT", "fallback": "LFMON"},  # Valuation price effective date
             "EORD": {"type": "range", "from": "VDATU", "to": "BDATU"}        # Source list validity
         }
+
+    @property
+    def G(self):
+        return getattr(self.gm, "G", getattr(self.gm, "_nx_cache", None))
 
     def generate_temporal_sql_filters(self, tables_in_path: List[str], key_date: date) -> List[str]:
         """

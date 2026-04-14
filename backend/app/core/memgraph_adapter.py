@@ -705,6 +705,99 @@ class MemgraphGraphRAGManager:
         except nx.NetworkXNoPath:
             return None
 
+    def find_all_ranked_paths_native(self, start_table: str, end_table: str, max_depth: int = 5, top_k: int = 3) -> List[dict]:
+        """
+        [Phase M2] Native Cypher path-finding logic execution.
+        Instead of Python pulling the graph locally and using nx.all_simple_paths,
+        we execute a variable-length relationship match directly on Memgraph.
+        """
+        start = start_table.upper()
+        end = end_table.upper()
+        
+        # Guard
+        if start not in self._node_meta or end not in self._node_meta:
+            return []
+
+        # We need a query that returns the paths up to max_depth.
+        # Since we use node names as properties 'table_name' on SAPTable labeled nodes:
+        # NOTE: Neo4j Python driver returns `neo4j.graph.Path` objects which are rich and easy to parse.
+        query = (
+            f"MATCH path = (a:SAPTable {{table_name: $start}})-[*..{max_depth}]-(b:SAPTable {{table_name: $end}}) "
+            f"RETURN path"
+        )
+        
+        try:
+            results = list(self._mg.execute_and_fetch(query, parameters={"start": start, "end": end}))
+        except Exception as e:
+            logger.error(f"[Memgraph] find_all_ranked_paths_native failed: {e}")
+            return []
+            
+        # Scoring Weights mirror AllPathsExplorer
+        WEIGHTS = {
+            "cardinality_1:1": 1.0,
+            "cardinality_N:1": 1.2,
+            "cardinality_1:N": 3.0,
+            "cross_module": 0.8,
+            "internal": 1.0,
+            "huge_table_penalty": 5.0
+        }
+        HUGE_TABLES = {"BSEG", "MSEG", "MKPF", "BSIS", "BSAS", "BSID", "BSAD", "BSIK", "BSAK", "LIPS"}
+
+        ranked = []
+        for row in results:
+            path_obj = row["path"]
+            
+            # Extract sequence of table names
+            path_nodes = [getattr(node, "table_name", "UNKNOWN") for node in getattr(path_obj, "_nodes", [])]
+            
+            # Extract relationship data
+            score = 0.0
+            details = []
+            
+            # Penalize intermediate huge tables
+            for i in range(1, len(path_nodes) - 1):
+                if path_nodes[i] in HUGE_TABLES:
+                    score += WEIGHTS["huge_table_penalty"]
+                    
+            path_rels = getattr(path_obj, "_relationships", [])
+            for i, rel in enumerate(path_rels):
+                u = path_nodes[i]
+                v = path_nodes[i+1]
+                
+                # Retrieve edge properties (using networkx mirror to be perfectly consistent with metadata)
+                # But we can also read rel properties if we stored them (we didn't store cardinality in Memgraph init_schema, we stored condition/bridge_type?
+                # Actually, in build_enterprise_schema_graph we stored them in self._edge_meta and NX, but let's check what we stored in Memgraph.
+                # Better to just use self._edge_meta to guarantee parity.
+                edge_meta = self._edge_meta.get((u, v)) or self._edge_meta.get((v, u))
+                if not edge_meta:
+                    continue
+                    
+                card = getattr(edge_meta, "cardinality", "1:1")
+                bridge = getattr(edge_meta, "bridge_type", "internal")
+                condition = getattr(edge_meta, "condition", "")
+                
+                hop_score = 1.0 * WEIGHTS.get(f"cardinality_{card}", 2.0) * WEIGHTS.get(bridge, 1.0)
+                score += hop_score
+                
+                details.append({
+                    "from": u,
+                    "to": v,
+                    "condition": condition,
+                    "cardinality": card,
+                    "bridge_type": bridge,
+                    "hop_cost": hop_score
+                })
+                
+            ranked.append({
+                "path": path_nodes,
+                "score": round(score, 2),
+                "hops": len(path_nodes) - 1,
+                "details": details
+            })
+            
+        ranked.sort(key=lambda x: x["score"])
+        return ranked[:top_k]
+
     def get_join_condition(self, table_a: str, table_b: str) -> Optional[str]:
         """Get the FK join condition between two directly connected tables."""
         edge = self._get_nx().get_edge_data(table_a.upper(), table_b.upper())

@@ -18,6 +18,7 @@
 | M2 | Regex fix — `m.group(6)` bridge flag (was `m.group(7)`) | ✅ DONE | `IndexError: no such group` bug fixed |
 | M2 | Edge regex fixed — `)-[` pattern for `FOREIGN_KEY` edges | ✅ DONE | All 47 edges now parse correctly |
 | M2 | Duplicate kwargs fix in `MemgraphShim.__init__` | ✅ DONE | Fixed `TypeError` on hot-reload |
+| M2 | Orchestrator Native Cypher Querying (`AllPathsExplorer`) | ✅ DONE | `find_all_ranked_paths_native` implemented natively in `memgraph_adapter.py`. Variable-length queries (`-[*..5]-`) offloaded from Python to DB engine. |
 | M3 | Wire `use_memgraph()` into `main.py` startup | ✅ DONE | Sets `MEMGRAPH_URI` env var; falls back to NX on failure |
 | M3 | `smoke_test_memgraph.py` + `load_init_schema.py` scripts | ✅ DONE | |
 | M4 | Celery async workers + circular import fix | ✅ DONE | `celery_app_instance` name change + `@shared_task` migration |

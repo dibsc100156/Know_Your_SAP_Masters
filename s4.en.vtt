@@ -1,0 +1,1016 @@
+WEBVTT
+Kind: captions
+Language: en
+
+00:00:00.400 --> 00:00:02.389 align:start position:0%
+ 
+Let's<00:00:00.640><c> start</c><00:00:00.800><c> with</c><00:00:00.960><c> a</c><00:00:01.199><c> quick</c><00:00:01.360><c> recap.</c><00:00:02.080><c> What</c><00:00:02.240><c> is</c>
+
+00:00:02.389 --> 00:00:02.399 align:start position:0%
+Let's start with a quick recap. What is
+ 
+
+00:00:02.399 --> 00:00:04.630 align:start position:0%
+Let's start with a quick recap. What is
+an<00:00:02.560><c> AI</c><00:00:02.879><c> agent?</c><00:00:03.360><c> It's</c><00:00:03.520><c> more</c><00:00:03.679><c> than</c><00:00:03.840><c> a</c><00:00:03.919><c> chatbot.</c>
+
+00:00:04.630 --> 00:00:04.640 align:start position:0%
+an AI agent? It's more than a chatbot.
+ 
+
+00:00:04.640 --> 00:00:07.110 align:start position:0%
+an AI agent? It's more than a chatbot.
+At<00:00:04.880><c> its</c><00:00:05.040><c> core</c><00:00:05.279><c> is</c><00:00:05.440><c> an</c><00:00:05.600><c> LLM,</c><00:00:06.240><c> a</c><00:00:06.480><c> large</c><00:00:06.720><c> language</c>
+
+00:00:07.110 --> 00:00:07.120 align:start position:0%
+At its core is an LLM, a large language
+ 
+
+00:00:07.120 --> 00:00:09.190 align:start position:0%
+At its core is an LLM, a large language
+model<00:00:07.359><c> that</c><00:00:07.600><c> can</c><00:00:07.759><c> reason,</c><00:00:08.480><c> but</c><00:00:08.639><c> what</c><00:00:08.880><c> makes</c><00:00:09.040><c> it</c>
+
+00:00:09.190 --> 00:00:09.200 align:start position:0%
+model that can reason, but what makes it
+ 
+
+00:00:09.200 --> 00:00:11.589 align:start position:0%
+model that can reason, but what makes it
+an<00:00:09.360><c> agent</c><00:00:09.679><c> are</c><00:00:09.920><c> three</c><00:00:10.160><c> key</c><00:00:10.400><c> capabilities.</c>
+
+00:00:11.589 --> 00:00:11.599 align:start position:0%
+an agent are three key capabilities.
+ 
+
+00:00:11.599 --> 00:00:13.589 align:start position:0%
+an agent are three key capabilities.
+First,<00:00:12.080><c> tools,</c><00:00:12.480><c> the</c><00:00:12.639><c> ability</c><00:00:12.960><c> to</c><00:00:13.120><c> take</c><00:00:13.360><c> real</c>
+
+00:00:13.589 --> 00:00:13.599 align:start position:0%
+First, tools, the ability to take real
+ 
+
+00:00:13.599 --> 00:00:16.070 align:start position:0%
+First, tools, the ability to take real
+actions<00:00:14.000><c> in</c><00:00:14.160><c> the</c><00:00:14.320><c> world.</c><00:00:15.120><c> Second,</c><00:00:15.519><c> memory,</c><00:00:15.920><c> so</c>
+
+00:00:16.070 --> 00:00:16.080 align:start position:0%
+actions in the world. Second, memory, so
+ 
+
+00:00:16.080 --> 00:00:18.310 align:start position:0%
+actions in the world. Second, memory, so
+it<00:00:16.240><c> can</c><00:00:16.400><c> remember</c><00:00:16.720><c> context</c><00:00:17.199><c> across</c><00:00:17.600><c> steps.</c>
+
+00:00:18.310 --> 00:00:18.320 align:start position:0%
+it can remember context across steps.
+ 
+
+00:00:18.320 --> 00:00:20.550 align:start position:0%
+it can remember context across steps.
+And<00:00:18.560><c> third,</c><00:00:19.039><c> autonomy,</c><00:00:19.760><c> the</c><00:00:20.000><c> ability</c><00:00:20.320><c> to</c>
+
+00:00:20.550 --> 00:00:20.560 align:start position:0%
+And third, autonomy, the ability to
+ 
+
+00:00:20.560 --> 00:00:22.390 align:start position:0%
+And third, autonomy, the ability to
+decide<00:00:20.880><c> what</c><00:00:21.039><c> to</c><00:00:21.199><c> do</c><00:00:21.359><c> next</c><00:00:21.680><c> without</c><00:00:22.080><c> being</c>
+
+00:00:22.390 --> 00:00:22.400 align:start position:0%
+decide what to do next without being
+ 
+
+00:00:22.400 --> 00:00:25.189 align:start position:0%
+decide what to do next without being
+told.<00:00:23.199><c> It</c><00:00:23.439><c> reasons</c><00:00:23.840><c> about</c><00:00:24.000><c> what</c><00:00:24.240><c> to</c><00:00:24.400><c> do,</c><00:00:24.880><c> takes</c>
+
+00:00:25.189 --> 00:00:25.199 align:start position:0%
+told. It reasons about what to do, takes
+ 
+
+00:00:25.199 --> 00:00:27.830 align:start position:0%
+told. It reasons about what to do, takes
+action,<00:00:25.600><c> and</c><00:00:25.840><c> learns</c><00:00:26.160><c> from</c><00:00:26.400><c> the</c><00:00:26.560><c> results.</c>
+
+00:00:27.830 --> 00:00:27.840 align:start position:0%
+action, and learns from the results.
+ 
+
+00:00:27.840 --> 00:00:29.589 align:start position:0%
+action, and learns from the results.
+Now,<00:00:28.080><c> let's</c><00:00:28.320><c> look</c><00:00:28.400><c> at</c><00:00:28.560><c> the</c><00:00:28.720><c> agent</c><00:00:29.039><c> loop.</c><00:00:29.359><c> the</c>
+
+00:00:29.589 --> 00:00:29.599 align:start position:0%
+Now, let's look at the agent loop. the
+ 
+
+00:00:29.599 --> 00:00:32.229 align:start position:0%
+Now, let's look at the agent loop. the
+pattern<00:00:29.920><c> that</c><00:00:30.160><c> drives</c><00:00:30.480><c> every</c><00:00:30.800><c> AI</c><00:00:31.199><c> agent.</c><00:00:32.000><c> It</c>
+
+00:00:32.229 --> 00:00:32.239 align:start position:0%
+pattern that drives every AI agent. It
+ 
+
+00:00:32.239 --> 00:00:34.470 align:start position:0%
+pattern that drives every AI agent. It
+starts<00:00:32.399><c> with</c><00:00:32.640><c> think.</c><00:00:33.360><c> The</c><00:00:33.600><c> agent</c><00:00:34.000><c> examines</c>
+
+00:00:34.470 --> 00:00:34.480 align:start position:0%
+starts with think. The agent examines
+ 
+
+00:00:34.480 --> 00:00:36.229 align:start position:0%
+starts with think. The agent examines
+the<00:00:34.719><c> problem</c><00:00:34.960><c> and</c><00:00:35.200><c> reasons</c><00:00:35.600><c> about</c><00:00:35.760><c> what</c><00:00:35.920><c> to</c><00:00:36.079><c> do</c>
+
+00:00:36.229 --> 00:00:36.239 align:start position:0%
+the problem and reasons about what to do
+ 
+
+00:00:36.239 --> 00:00:38.790 align:start position:0%
+the problem and reasons about what to do
+next.<00:00:36.800><c> Then</c><00:00:37.040><c> it</c><00:00:37.200><c> moves</c><00:00:37.440><c> to</c><00:00:37.600><c> act.</c><00:00:38.160><c> It</c><00:00:38.399><c> calls</c><00:00:38.559><c> a</c>
+
+00:00:38.790 --> 00:00:38.800 align:start position:0%
+next. Then it moves to act. It calls a
+ 
+
+00:00:38.800 --> 00:00:41.350 align:start position:0%
+next. Then it moves to act. It calls a
+tool,<00:00:39.200><c> writes</c><00:00:39.520><c> code</c><00:00:39.840><c> or</c><00:00:40.079><c> sends</c><00:00:40.320><c> a</c><00:00:40.480><c> request.</c>
+
+00:00:41.350 --> 00:00:41.360 align:start position:0%
+tool, writes code or sends a request.
+ 
+
+00:00:41.360 --> 00:00:43.190 align:start position:0%
+tool, writes code or sends a request.
+Finally,<00:00:41.840><c> it</c><00:00:42.000><c> observes</c><00:00:42.399><c> the</c><00:00:42.640><c> result</c><00:00:42.879><c> and</c>
+
+00:00:43.190 --> 00:00:43.200 align:start position:0%
+Finally, it observes the result and
+ 
+
+00:00:43.200 --> 00:00:45.510 align:start position:0%
+Finally, it observes the result and
+decides<00:00:43.600><c> whether</c><00:00:43.840><c> to</c><00:00:44.079><c> continue.</c><00:00:44.960><c> Each</c><00:00:45.200><c> step</c>
+
+00:00:45.510 --> 00:00:45.520 align:start position:0%
+decides whether to continue. Each step
+ 
+
+00:00:45.520 --> 00:00:47.670 align:start position:0%
+decides whether to continue. Each step
+feeds<00:00:45.840><c> into</c><00:00:46.079><c> the</c><00:00:46.239><c> next.</c><00:00:46.879><c> For</c><00:00:47.039><c> example,</c><00:00:47.440><c> the</c>
+
+00:00:47.670 --> 00:00:47.680 align:start position:0%
+feeds into the next. For example, the
+ 
+
+00:00:47.680 --> 00:00:49.830 align:start position:0%
+feeds into the next. For example, the
+agent<00:00:48.000><c> thinks,</c><00:00:48.320><c> I</c><00:00:48.559><c> need</c><00:00:48.640><c> to</c><00:00:48.800><c> find</c><00:00:49.039><c> this</c><00:00:49.280><c> file.</c>
+
+00:00:49.830 --> 00:00:49.840 align:start position:0%
+agent thinks, I need to find this file.
+ 
+
+00:00:49.840 --> 00:00:52.229 align:start position:0%
+agent thinks, I need to find this file.
+It<00:00:50.079><c> acts</c><00:00:50.399><c> by</c><00:00:50.640><c> searching</c><00:00:50.879><c> the</c><00:00:51.120><c> codebase.</c><00:00:52.000><c> It</c>
+
+00:00:52.229 --> 00:00:52.239 align:start position:0%
+It acts by searching the codebase. It
+ 
+
+00:00:52.239 --> 00:00:54.950 align:start position:0%
+It acts by searching the codebase. It
+observes<00:00:52.640><c> the</c><00:00:52.879><c> results,</c><00:00:53.360><c> then</c><00:00:53.600><c> loops</c><00:00:54.000><c> back.</c>
+
+00:00:54.950 --> 00:00:54.960 align:start position:0%
+observes the results, then loops back.
+ 
+
+00:00:54.960 --> 00:00:57.189 align:start position:0%
+observes the results, then loops back.
+This<00:00:55.199><c> is</c><00:00:55.360><c> called</c><00:00:55.520><c> the</c><00:00:55.680><c> react</c><00:00:56.239><c> pattern</c><00:00:56.800><c> and</c><00:00:57.039><c> it</c>
+
+00:00:57.189 --> 00:00:57.199 align:start position:0%
+This is called the react pattern and it
+ 
+
+00:00:57.199 --> 00:00:59.830 align:start position:0%
+This is called the react pattern and it
+repeats<00:00:57.600><c> until</c><00:00:57.920><c> the</c><00:00:58.079><c> task</c><00:00:58.320><c> is</c><00:00:58.559><c> done.</c><00:00:59.520><c> Now,</c>
+
+00:00:59.830 --> 00:00:59.840 align:start position:0%
+repeats until the task is done. Now,
+ 
+
+00:00:59.840 --> 00:01:01.910 align:start position:0%
+repeats until the task is done. Now,
+here's<00:01:00.079><c> the</c><00:01:00.320><c> concept</c><00:01:00.719><c> most</c><00:01:01.039><c> people</c><00:01:01.280><c> miss.</c>
+
+00:01:01.910 --> 00:01:01.920 align:start position:0%
+here's the concept most people miss.
+ 
+
+00:01:01.920 --> 00:01:03.670 align:start position:0%
+here's the concept most people miss.
+What<00:01:02.079><c> is</c><00:01:02.160><c> an</c><00:01:02.320><c> agent</c><00:01:02.640><c> harness?</c><00:01:03.199><c> Think</c><00:01:03.359><c> of</c><00:01:03.520><c> it</c>
+
+00:01:03.670 --> 00:01:03.680 align:start position:0%
+What is an agent harness? Think of it
+ 
+
+00:01:03.680 --> 00:01:06.070 align:start position:0%
+What is an agent harness? Think of it
+this<00:01:03.920><c> way.</c><00:01:04.400><c> The</c><00:01:04.640><c> agent</c><00:01:04.960><c> is</c><00:01:05.119><c> the</c><00:01:05.360><c> engine.</c><00:01:05.920><c> It</c>
+
+00:01:06.070 --> 00:01:06.080 align:start position:0%
+this way. The agent is the engine. It
+ 
+
+00:01:06.080 --> 00:01:07.990 align:start position:0%
+this way. The agent is the engine. It
+does<00:01:06.240><c> the</c><00:01:06.400><c> thinking</c><00:01:06.640><c> and</c><00:01:06.960><c> reasoning.</c><00:01:07.600><c> But</c><00:01:07.760><c> an</c>
+
+00:01:07.990 --> 00:01:08.000 align:start position:0%
+does the thinking and reasoning. But an
+ 
+
+00:01:08.000 --> 00:01:09.910 align:start position:0%
+does the thinking and reasoning. But an
+engine<00:01:08.320><c> doesn't</c><00:01:08.640><c> drive</c><00:01:08.880><c> itself.</c><00:01:09.600><c> You</c><00:01:09.760><c> need</c>
+
+00:01:09.910 --> 00:01:09.920 align:start position:0%
+engine doesn't drive itself. You need
+ 
+
+00:01:09.920 --> 00:01:11.670 align:start position:0%
+engine doesn't drive itself. You need
+the<00:01:10.080><c> harness,</c><00:01:10.400><c> which</c><00:01:10.640><c> is</c><00:01:10.799><c> the</c><00:01:10.960><c> entire</c><00:01:11.360><c> car,</c>
+
+00:01:11.670 --> 00:01:11.680 align:start position:0%
+the harness, which is the entire car,
+ 
+
+00:01:11.680 --> 00:01:13.910 align:start position:0%
+the harness, which is the entire car,
+the<00:01:11.920><c> steering,</c><00:01:12.320><c> brakes,</c><00:01:12.640><c> and</c><00:01:12.880><c> dashboard.</c><00:01:13.680><c> The</c>
+
+00:01:13.910 --> 00:01:13.920 align:start position:0%
+the steering, brakes, and dashboard. The
+ 
+
+00:01:13.920 --> 00:01:16.149 align:start position:0%
+the steering, brakes, and dashboard. The
+agent<00:01:14.240><c> is</c><00:01:14.400><c> the</c><00:01:14.560><c> brain.</c><00:01:15.280><c> The</c><00:01:15.439><c> harness</c><00:01:15.760><c> is</c><00:01:16.000><c> the</c>
+
+00:01:16.149 --> 00:01:16.159 align:start position:0%
+agent is the brain. The harness is the
+ 
+
+00:01:16.159 --> 00:01:17.910 align:start position:0%
+agent is the brain. The harness is the
+infrastructure<00:01:16.720><c> that</c><00:01:16.960><c> makes</c><00:01:17.119><c> it</c><00:01:17.439><c> safe</c><00:01:17.680><c> and</c>
+
+00:01:17.910 --> 00:01:17.920 align:start position:0%
+infrastructure that makes it safe and
+ 
+
+00:01:17.920 --> 00:01:19.590 align:start position:0%
+infrastructure that makes it safe and
+useful.<00:01:18.560><c> So,</c><00:01:18.720><c> what</c><00:01:18.960><c> does</c><00:01:19.040><c> the</c><00:01:19.200><c> harness</c>
+
+00:01:19.590 --> 00:01:19.600 align:start position:0%
+useful. So, what does the harness
+ 
+
+00:01:19.600 --> 00:01:21.830 align:start position:0%
+useful. So, what does the harness
+provide?<00:01:20.240><c> Tool</c><00:01:20.640><c> execution.</c><00:01:21.520><c> Actually</c>
+
+00:01:21.830 --> 00:01:21.840 align:start position:0%
+provide? Tool execution. Actually
+ 
+
+00:01:21.840 --> 00:01:23.830 align:start position:0%
+provide? Tool execution. Actually
+running<00:01:22.159><c> the</c><00:01:22.320><c> tools.</c><00:01:22.640><c> The</c><00:01:22.880><c> agent</c><00:01:23.200><c> picks.</c>
+
+00:01:23.830 --> 00:01:23.840 align:start position:0%
+running the tools. The agent picks.
+ 
+
+00:01:23.840 --> 00:01:25.910 align:start position:0%
+running the tools. The agent picks.
+Permissions<00:01:24.720><c> controlling</c><00:01:25.200><c> what</c><00:01:25.439><c> the</c><00:01:25.600><c> agent</c>
+
+00:01:25.910 --> 00:01:25.920 align:start position:0%
+Permissions controlling what the agent
+ 
+
+00:01:25.920 --> 00:01:29.510 align:start position:0%
+Permissions controlling what the agent
+can<00:01:26.159><c> do.</c><00:01:27.119><c> Sandboxing</c><00:01:27.840><c> to</c><00:01:28.080><c> keep</c><00:01:28.320><c> things</c><00:01:28.640><c> safe.</c>
+
+00:01:29.510 --> 00:01:29.520 align:start position:0%
+can do. Sandboxing to keep things safe.
+ 
+
+00:01:29.520 --> 00:01:31.749 align:start position:0%
+can do. Sandboxing to keep things safe.
+Context<00:01:30.080><c> management</c><00:01:30.720><c> so</c><00:01:30.880><c> the</c><00:01:31.119><c> agent</c><00:01:31.439><c> doesn't</c>
+
+00:01:31.749 --> 00:01:31.759 align:start position:0%
+Context management so the agent doesn't
+ 
+
+00:01:31.759 --> 00:01:34.310 align:start position:0%
+Context management so the agent doesn't
+lose<00:01:32.000><c> its</c><00:01:32.240><c> place.</c><00:01:32.960><c> And</c><00:01:33.200><c> human</c><00:01:33.520><c> in</c><00:01:33.680><c> the</c><00:01:33.840><c> loop</c><00:01:34.079><c> so</c>
+
+00:01:34.310 --> 00:01:34.320 align:start position:0%
+lose its place. And human in the loop so
+ 
+
+00:01:34.320 --> 00:01:36.789 align:start position:0%
+lose its place. And human in the loop so
+you<00:01:34.560><c> stay</c><00:01:34.720><c> in</c><00:01:34.960><c> control.</c><00:01:36.159><c> Let's</c><00:01:36.400><c> make</c><00:01:36.560><c> the</c>
+
+00:01:36.789 --> 00:01:36.799 align:start position:0%
+you stay in control. Let's make the
+ 
+
+00:01:36.799 --> 00:01:38.950 align:start position:0%
+you stay in control. Let's make the
+distinction<00:01:37.200><c> crystal</c><00:01:37.680><c> clear.</c><00:01:38.320><c> On</c><00:01:38.560><c> the</c><00:01:38.720><c> left,</c>
+
+00:01:38.950 --> 00:01:38.960 align:start position:0%
+distinction crystal clear. On the left,
+ 
+
+00:01:38.960 --> 00:01:40.870 align:start position:0%
+distinction crystal clear. On the left,
+what<00:01:39.119><c> the</c><00:01:39.280><c> agent</c><00:01:39.680><c> does,</c><00:01:40.240><c> it</c><00:01:40.479><c> handles</c>
+
+00:01:40.870 --> 00:01:40.880 align:start position:0%
+what the agent does, it handles
+ 
+
+00:01:40.880 --> 00:01:42.550 align:start position:0%
+what the agent does, it handles
+reasoning,<00:01:41.439><c> figuring</c><00:01:41.759><c> out</c><00:01:41.920><c> what</c><00:01:42.159><c> needs</c><00:01:42.400><c> to</c>
+
+00:01:42.550 --> 00:01:42.560 align:start position:0%
+reasoning, figuring out what needs to
+ 
+
+00:01:42.560 --> 00:01:44.870 align:start position:0%
+reasoning, figuring out what needs to
+happen.<00:01:43.200><c> It</c><00:01:43.439><c> does</c><00:01:43.600><c> planning,</c><00:01:44.079><c> breaking</c><00:01:44.479><c> tasks</c>
+
+00:01:44.870 --> 00:01:44.880 align:start position:0%
+happen. It does planning, breaking tasks
+ 
+
+00:01:44.880 --> 00:01:47.429 align:start position:0%
+happen. It does planning, breaking tasks
+into<00:01:45.200><c> steps.</c><00:01:45.759><c> It</c><00:01:45.920><c> picks</c><00:01:46.240><c> which</c><00:01:46.399><c> tools</c><00:01:46.720><c> to</c><00:01:46.960><c> use,</c>
+
+00:01:47.429 --> 00:01:47.439 align:start position:0%
+into steps. It picks which tools to use,
+ 
+
+00:01:47.439 --> 00:01:49.190 align:start position:0%
+into steps. It picks which tools to use,
+and<00:01:47.600><c> it</c><00:01:47.840><c> makes</c><00:01:48.079><c> decisions</c><00:01:48.479><c> about</c><00:01:48.720><c> what</c><00:01:48.880><c> to</c><00:01:49.040><c> do</c>
+
+00:01:49.190 --> 00:01:49.200 align:start position:0%
+and it makes decisions about what to do
+ 
+
+00:01:49.200 --> 00:01:51.190 align:start position:0%
+and it makes decisions about what to do
+next.<00:01:49.920><c> on</c><00:01:50.079><c> the</c><00:01:50.240><c> right.</c><00:01:50.479><c> What</c><00:01:50.640><c> the</c><00:01:50.720><c> harness</c>
+
+00:01:51.190 --> 00:01:51.200 align:start position:0%
+next. on the right. What the harness
+ 
+
+00:01:51.200 --> 00:01:53.429 align:start position:0%
+next. on the right. What the harness
+does,<00:01:51.680><c> it</c><00:01:51.920><c> handles</c><00:01:52.320><c> tool</c><00:01:52.720><c> execution,</c>
+
+00:01:53.429 --> 00:01:53.439 align:start position:0%
+does, it handles tool execution,
+ 
+
+00:01:53.439 --> 00:01:55.670 align:start position:0%
+does, it handles tool execution,
+actually<00:01:53.840><c> running</c><00:01:54.079><c> the</c><00:01:54.320><c> tool.</c><00:01:54.880><c> It</c><00:01:55.119><c> enforces</c>
+
+00:01:55.670 --> 00:01:55.680 align:start position:0%
+actually running the tool. It enforces
+ 
+
+00:01:55.680 --> 00:01:57.990 align:start position:0%
+actually running the tool. It enforces
+permissions<00:01:56.079><c> and</c><00:01:56.399><c> sandboxing.</c><00:01:57.360><c> It</c><00:01:57.600><c> manages</c>
+
+00:01:57.990 --> 00:01:58.000 align:start position:0%
+permissions and sandboxing. It manages
+ 
+
+00:01:58.000 --> 00:01:59.749 align:start position:0%
+permissions and sandboxing. It manages
+the<00:01:58.159><c> context</c><00:01:58.719><c> window</c><00:01:59.119><c> and</c><00:01:59.360><c> session</c>
+
+00:01:59.749 --> 00:01:59.759 align:start position:0%
+the context window and session
+ 
+
+00:01:59.759 --> 00:02:01.990 align:start position:0%
+the context window and session
+persistence.<00:02:00.719><c> And</c><00:02:00.880><c> it</c><00:02:01.040><c> provides</c><00:02:01.360><c> guardrails</c>
+
+00:02:01.990 --> 00:02:02.000 align:start position:0%
+persistence. And it provides guardrails
+ 
+
+00:02:02.000 --> 00:02:04.789 align:start position:0%
+persistence. And it provides guardrails
+to<00:02:02.159><c> keep</c><00:02:02.320><c> things</c><00:02:02.640><c> safe.</c><00:02:03.600><c> They</c><00:02:03.920><c> work</c><00:02:04.079><c> together.</c>
+
+00:02:04.789 --> 00:02:04.799 align:start position:0%
+to keep things safe. They work together.
+ 
+
+00:02:04.799 --> 00:02:07.429 align:start position:0%
+to keep things safe. They work together.
+The<00:02:05.040><c> agent</c><00:02:05.439><c> decides</c><00:02:05.840><c> to</c><00:02:06.079><c> edit</c><00:02:06.320><c> a</c><00:02:06.560><c> file.</c><00:02:07.280><c> The</c>
+
+00:02:07.429 --> 00:02:07.439 align:start position:0%
+The agent decides to edit a file. The
+ 
+
+00:02:07.439 --> 00:02:09.510 align:start position:0%
+The agent decides to edit a file. The
+harness<00:02:07.840><c> checks</c><00:02:08.160><c> permissions,</c><00:02:09.039><c> runs</c><00:02:09.280><c> the</c>
+
+00:02:09.510 --> 00:02:09.520 align:start position:0%
+harness checks permissions, runs the
+ 
+
+00:02:09.520 --> 00:02:11.990 align:start position:0%
+harness checks permissions, runs the
+edit<00:02:09.759><c> in</c><00:02:09.920><c> a</c><00:02:10.080><c> sandbox,</c><00:02:10.800><c> and</c><00:02:11.039><c> asks</c><00:02:11.280><c> the</c><00:02:11.520><c> user</c><00:02:11.760><c> to</c>
+
+00:02:11.990 --> 00:02:12.000 align:start position:0%
+edit in a sandbox, and asks the user to
+ 
+
+00:02:12.000 --> 00:02:14.309 align:start position:0%
+edit in a sandbox, and asks the user to
+approve.<00:02:13.120><c> Let's</c><00:02:13.440><c> go</c><00:02:13.599><c> deep</c><00:02:13.840><c> on</c><00:02:14.000><c> a</c><00:02:14.160><c> real</c>
+
+00:02:14.309 --> 00:02:14.319 align:start position:0%
+approve. Let's go deep on a real
+ 
+
+00:02:14.319 --> 00:02:16.630 align:start position:0%
+approve. Let's go deep on a real
+harness.<00:02:15.200><c> Claude</c><00:02:15.599><c> Code</c><00:02:15.920><c> is</c><00:02:16.080><c> one</c><00:02:16.239><c> of</c><00:02:16.319><c> the</c><00:02:16.480><c> most</c>
+
+00:02:16.630 --> 00:02:16.640 align:start position:0%
+harness. Claude Code is one of the most
+ 
+
+00:02:16.640 --> 00:02:18.550 align:start position:0%
+harness. Claude Code is one of the most
+complete<00:02:17.040><c> agent</c><00:02:17.440><c> harnesses</c><00:02:17.920><c> in</c><00:02:18.160><c> production</c>
+
+00:02:18.550 --> 00:02:18.560 align:start position:0%
+complete agent harnesses in production
+ 
+
+00:02:18.560 --> 00:02:20.550 align:start position:0%
+complete agent harnesses in production
+today.<00:02:19.280><c> At</c><00:02:19.520><c> the</c><00:02:19.599><c> top</c><00:02:19.760><c> is</c><00:02:19.920><c> its</c><00:02:20.160><c> permission</c>
+
+00:02:20.550 --> 00:02:20.560 align:start position:0%
+today. At the top is its permission
+ 
+
+00:02:20.560 --> 00:02:23.430 align:start position:0%
+today. At the top is its permission
+system.<00:02:21.280><c> It</c><00:02:21.440><c> has</c><00:02:21.680><c> three</c><00:02:21.920><c> tiers.</c><00:02:22.800><c> Auto</c><00:02:23.040><c> approve</c>
+
+00:02:23.430 --> 00:02:23.440 align:start position:0%
+system. It has three tiers. Auto approve
+ 
+
+00:02:23.440 --> 00:02:25.670 align:start position:0%
+system. It has three tiers. Auto approve
+for<00:02:23.680><c> safe</c><00:02:23.920><c> reads,</c><00:02:24.720><c> prompt</c><00:02:25.040><c> the</c><00:02:25.280><c> user</c><00:02:25.440><c> for</c>
+
+00:02:25.670 --> 00:02:25.680 align:start position:0%
+for safe reads, prompt the user for
+ 
+
+00:02:25.680 --> 00:02:28.150 align:start position:0%
+for safe reads, prompt the user for
+rights,<00:02:26.319><c> and</c><00:02:26.560><c> a</c><00:02:26.720><c> classifier</c><00:02:27.280><c> for</c><00:02:27.520><c> auto</c><00:02:27.840><c> mode</c>
+
+00:02:28.150 --> 00:02:28.160 align:start position:0%
+rights, and a classifier for auto mode
+ 
+
+00:02:28.160 --> 00:02:30.949 align:start position:0%
+rights, and a classifier for auto mode
+decisions.<00:02:29.120><c> Below</c><00:02:29.440><c> that</c><00:02:29.680><c> is</c><00:02:29.840><c> the</c><00:02:30.000><c> tool</c><00:02:30.480><c> layer.</c>
+
+00:02:30.949 --> 00:02:30.959 align:start position:0%
+decisions. Below that is the tool layer.
+ 
+
+00:02:30.959 --> 00:02:32.869 align:start position:0%
+decisions. Below that is the tool layer.
+About<00:02:31.280><c> 40</c><00:02:31.599><c> tools</c><00:02:32.080><c> including</c><00:02:32.480><c> file</c>
+
+00:02:32.869 --> 00:02:32.879 align:start position:0%
+About 40 tools including file
+ 
+
+00:02:32.879 --> 00:02:35.830 align:start position:0%
+About 40 tools including file
+operations,<00:02:33.840><c> bash,</c><00:02:34.319><c> web</c><00:02:34.640><c> fetch,</c><00:02:35.040><c> lsb,</c><00:02:35.680><c> and</c>
+
+00:02:35.830 --> 00:02:35.840 align:start position:0%
+operations, bash, web fetch, lsb, and
+ 
+
+00:02:35.840 --> 00:02:39.910 align:start position:0%
+operations, bash, web fetch, lsb, and
+git.<00:02:37.040><c> Next</c><00:02:37.280><c> is</c><00:02:37.440><c> the</c><00:02:37.680><c> context</c><00:02:38.160><c> engine,</c><00:02:38.879><c> 46,000</c>
+
+00:02:39.910 --> 00:02:39.920 align:start position:0%
+git. Next is the context engine, 46,000
+ 
+
+00:02:39.920 --> 00:02:42.390 align:start position:0%
+git. Next is the context engine, 46,000
+lines<00:02:40.239><c> of</c><00:02:40.480><c> code</c><00:02:40.720><c> handling</c><00:02:41.200><c> token</c><00:02:41.599><c> caching,</c>
+
+00:02:42.390 --> 00:02:42.400 align:start position:0%
+lines of code handling token caching,
+ 
+
+00:02:42.400 --> 00:02:45.110 align:start position:0%
+lines of code handling token caching,
+retries,<00:02:43.040><c> and</c><00:02:43.280><c> context</c><00:02:43.760><c> window</c><00:02:44.160><c> management.</c>
+
+00:02:45.110 --> 00:02:45.120 align:start position:0%
+retries, and context window management.
+ 
+
+00:02:45.120 --> 00:02:47.509 align:start position:0%
+retries, and context window management.
+and<00:02:45.280><c> at</c><00:02:45.440><c> the</c><00:02:45.599><c> bottom</c><00:02:46.160><c> session</c><00:02:46.560><c> persistence</c>
+
+00:02:47.509 --> 00:02:47.519 align:start position:0%
+and at the bottom session persistence
+ 
+
+00:02:47.519 --> 00:02:50.869 align:start position:0%
+and at the bottom session persistence
+storing<00:02:48.000><c> everything</c><00:02:48.319><c> in</c><00:02:48.640><c> JSL</c><00:02:49.599><c> files.</c><00:02:50.560><c> Other</c>
+
+00:02:50.869 --> 00:02:50.879 align:start position:0%
+storing everything in JSL files. Other
+ 
+
+00:02:50.879 --> 00:02:53.670 align:start position:0%
+storing everything in JSL files. Other
+harnesses<00:02:51.360><c> like</c><00:02:51.680><c> cursor,</c><00:02:52.400><c> windsurf,</c><00:02:53.200><c> clin</c>
+
+00:02:53.670 --> 00:02:53.680 align:start position:0%
+harnesses like cursor, windsurf, clin
+ 
+
+00:02:53.680 --> 00:02:56.710 align:start position:0%
+harnesses like cursor, windsurf, clin
+and<00:02:53.840><c> ader</c><00:02:54.319><c> follow</c><00:02:54.720><c> similar</c><00:02:55.120><c> patterns.</c><00:02:56.480><c> Now</c>
+
+00:02:56.710 --> 00:02:56.720 align:start position:0%
+and ader follow similar patterns. Now
+ 
+
+00:02:56.720 --> 00:02:58.470 align:start position:0%
+and ader follow similar patterns. Now
+let's<00:02:57.040><c> talk</c><00:02:57.200><c> about</c><00:02:57.360><c> the</c><00:02:57.519><c> glue</c><00:02:57.840><c> that</c><00:02:58.080><c> connects</c>
+
+00:02:58.470 --> 00:02:58.480 align:start position:0%
+let's talk about the glue that connects
+ 
+
+00:02:58.480 --> 00:03:01.270 align:start position:0%
+let's talk about the glue that connects
+everything.<00:02:59.440><c> MCP</c><00:03:00.160><c> the</c><00:03:00.400><c> model</c><00:03:00.800><c> context</c>
+
+00:03:01.270 --> 00:03:01.280 align:start position:0%
+everything. MCP the model context
+ 
+
+00:03:01.280 --> 00:03:04.550 align:start position:0%
+everything. MCP the model context
+protocol.<00:03:02.159><c> Think</c><00:03:02.319><c> of</c><00:03:02.480><c> it</c><00:03:02.640><c> as</c><00:03:02.879><c> USBC</c><00:03:03.519><c> for</c><00:03:03.760><c> AI.</c>
+
+00:03:04.550 --> 00:03:04.560 align:start position:0%
+protocol. Think of it as USBC for AI.
+ 
+
+00:03:04.560 --> 00:03:06.550 align:start position:0%
+protocol. Think of it as USBC for AI.
+It's<00:03:04.800><c> an</c><00:03:05.040><c> open</c><00:03:05.360><c> standard</c><00:03:05.680><c> that</c><00:03:06.000><c> connects</c><00:03:06.319><c> any</c>
+
+00:03:06.550 --> 00:03:06.560 align:start position:0%
+It's an open standard that connects any
+ 
+
+00:03:06.560 --> 00:03:09.190 align:start position:0%
+It's an open standard that connects any
+AI<00:03:07.040><c> app</c><00:03:07.280><c> to</c><00:03:07.440><c> any</c><00:03:07.680><c> external</c><00:03:08.080><c> tool.</c><00:03:08.720><c> Here's</c><00:03:09.040><c> how</c>
+
+00:03:09.190 --> 00:03:09.200 align:start position:0%
+AI app to any external tool. Here's how
+ 
+
+00:03:09.200 --> 00:03:11.430 align:start position:0%
+AI app to any external tool. Here's how
+it<00:03:09.440><c> works.</c><00:03:10.159><c> The</c><00:03:10.319><c> host</c><00:03:10.640><c> is</c><00:03:10.800><c> your</c><00:03:10.959><c> AI</c>
+
+00:03:11.430 --> 00:03:11.440 align:start position:0%
+it works. The host is your AI
+ 
+
+00:03:11.440 --> 00:03:14.229 align:start position:0%
+it works. The host is your AI
+application<00:03:12.239><c> like</c><00:03:12.480><c> cloud</c><00:03:12.879><c> code</c><00:03:13.200><c> or</c><00:03:13.440><c> cursor.</c>
+
+00:03:14.229 --> 00:03:14.239 align:start position:0%
+application like cloud code or cursor.
+ 
+
+00:03:14.239 --> 00:03:16.710 align:start position:0%
+application like cloud code or cursor.
+It<00:03:14.560><c> contains</c><00:03:14.879><c> a</c><00:03:15.120><c> client</c><00:03:15.360><c> that</c><00:03:15.599><c> speaks</c><00:03:15.840><c> the</c><00:03:16.080><c> MCP</c>
+
+00:03:16.710 --> 00:03:16.720 align:start position:0%
+It contains a client that speaks the MCP
+ 
+
+00:03:16.720 --> 00:03:19.430 align:start position:0%
+It contains a client that speaks the MCP
+protocol.<00:03:17.680><c> That</c><00:03:18.000><c> client</c><00:03:18.319><c> talks</c><00:03:18.640><c> to</c><00:03:18.800><c> servers</c>
+
+00:03:19.430 --> 00:03:19.440 align:start position:0%
+protocol. That client talks to servers
+ 
+
+00:03:19.440 --> 00:03:21.509 align:start position:0%
+protocol. That client talks to servers
+which<00:03:19.680><c> wrap</c><00:03:20.080><c> external</c><00:03:20.560><c> tools</c><00:03:20.959><c> and</c><00:03:21.200><c> data</c>
+
+00:03:21.509 --> 00:03:21.519 align:start position:0%
+which wrap external tools and data
+ 
+
+00:03:21.519 --> 00:03:24.869 align:start position:0%
+which wrap external tools and data
+sources.<00:03:22.720><c> Under</c><00:03:23.040><c> the</c><00:03:23.120><c> hood,</c><00:03:23.440><c> it's</c><00:03:23.680><c> JSo</c><00:03:24.239><c> NRPC</c>
+
+00:03:24.869 --> 00:03:24.879 align:start position:0%
+sources. Under the hood, it's JSo NRPC
+ 
+
+00:03:24.879 --> 00:03:29.030 align:start position:0%
+sources. Under the hood, it's JSo NRPC
+over<00:03:25.120><c> SDO</c><00:03:25.840><c> or</c><00:03:26.080><c> HTTP.</c><00:03:27.280><c> Simple</c><00:03:27.599><c> and</c><00:03:27.920><c> universal.</c>
+
+00:03:29.030 --> 00:03:29.040 align:start position:0%
+over SDO or HTTP. Simple and universal.
+ 
+
+00:03:29.040 --> 00:03:31.190 align:start position:0%
+over SDO or HTTP. Simple and universal.
+The<00:03:29.280><c> best</c><00:03:29.519><c> part,</c><00:03:30.159><c> it's</c><00:03:30.400><c> been</c><00:03:30.560><c> adopted</c><00:03:30.959><c> by</c>
+
+00:03:31.190 --> 00:03:31.200 align:start position:0%
+The best part, it's been adopted by
+ 
+
+00:03:31.200 --> 00:03:34.070 align:start position:0%
+The best part, it's been adopted by
+Anthropic,<00:03:32.080><c> Google,</c><00:03:32.400><c> and</c><00:03:32.640><c> OpenAI.</c><00:03:33.760><c> One</c>
+
+00:03:34.070 --> 00:03:34.080 align:start position:0%
+Anthropic, Google, and OpenAI. One
+ 
+
+00:03:34.080 --> 00:03:36.789 align:start position:0%
+Anthropic, Google, and OpenAI. One
+protocol<00:03:34.560><c> to</c><00:03:34.799><c> connect</c><00:03:35.040><c> them</c><00:03:35.280><c> all.</c><00:03:36.159><c> Now,</c><00:03:36.480><c> let's</c>
+
+00:03:36.789 --> 00:03:36.799 align:start position:0%
+protocol to connect them all. Now, let's
+ 
+
+00:03:36.799 --> 00:03:39.270 align:start position:0%
+protocol to connect them all. Now, let's
+talk<00:03:36.959><c> about</c><00:03:37.200><c> agent</c><00:03:37.599><c> SDKs</c><00:03:38.159><c> and</c><00:03:38.400><c> frameworks.</c>
+
+00:03:39.270 --> 00:03:39.280 align:start position:0%
+talk about agent SDKs and frameworks.
+ 
+
+00:03:39.280 --> 00:03:40.869 align:start position:0%
+talk about agent SDKs and frameworks.
+These<00:03:39.599><c> are</c><00:03:39.680><c> the</c><00:03:39.840><c> tools</c><00:03:40.080><c> that</c><00:03:40.319><c> help</c><00:03:40.480><c> you</c><00:03:40.640><c> build</c>
+
+00:03:40.869 --> 00:03:40.879 align:start position:0%
+These are the tools that help you build
+ 
+
+00:03:40.879 --> 00:03:43.990 align:start position:0%
+These are the tools that help you build
+agents.<00:03:41.840><c> Claude</c><00:03:42.239><c> agent</c><00:03:42.560><c> SDK</c><00:03:43.120><c> is</c><00:03:43.360><c> minimal</c><00:03:43.760><c> and</c>
+
+00:03:43.990 --> 00:03:44.000 align:start position:0%
+agents. Claude agent SDK is minimal and
+ 
+
+00:03:44.000 --> 00:03:46.869 align:start position:0%
+agents. Claude agent SDK is minimal and
+MCPn<00:03:44.560><c> native.</c><00:03:45.200><c> Its</c><00:03:45.440><c> tool</c><00:03:45.760><c> use</c><00:03:46.080><c> first</c><00:03:46.560><c> built</c>
+
+00:03:46.869 --> 00:03:46.879 align:start position:0%
+MCPn native. Its tool use first built
+ 
+
+00:03:46.879 --> 00:03:49.190 align:start position:0%
+MCPn native. Its tool use first built
+for<00:03:47.120><c> production.</c><00:03:48.000><c> Lang</c><00:03:48.480><c> graph</c><00:03:48.799><c> handles</c>
+
+00:03:49.190 --> 00:03:49.200 align:start position:0%
+for production. Lang graph handles
+ 
+
+00:03:49.200 --> 00:03:51.270 align:start position:0%
+for production. Lang graph handles
+complex<00:03:49.760><c> multi-step</c><00:03:50.480><c> workflows</c><00:03:50.959><c> with</c>
+
+00:03:51.270 --> 00:03:51.280 align:start position:0%
+complex multi-step workflows with
+ 
+
+00:03:51.280 --> 00:03:54.630 align:start position:0%
+complex multi-step workflows with
+graph-based<00:03:51.920><c> orchestration.</c><00:03:53.040><c> It</c><00:03:53.280><c> scored</c><00:03:53.680><c> 87%</c>
+
+00:03:54.630 --> 00:03:54.640 align:start position:0%
+graph-based orchestration. It scored 87%
+ 
+
+00:03:54.640 --> 00:03:57.750 align:start position:0%
+graph-based orchestration. It scored 87%
+on<00:03:54.959><c> swb</c><00:03:55.680><c> bench.</c><00:03:56.239><c> Crewai</c><00:03:56.959><c> makes</c><00:03:57.120><c> it</c><00:03:57.280><c> easy</c><00:03:57.519><c> to</c>
+
+00:03:57.750 --> 00:03:57.760 align:start position:0%
+on swb bench. Crewai makes it easy to
+ 
+
+00:03:57.760 --> 00:03:59.990 align:start position:0%
+on swb bench. Crewai makes it easy to
+prototype<00:03:58.239><c> agent</c><00:03:58.640><c> teams</c><00:03:59.040><c> with</c><00:03:59.280><c> role-based</c>
+
+00:03:59.990 --> 00:04:00.000 align:start position:0%
+prototype agent teams with role-based
+ 
+
+00:04:00.000 --> 00:04:03.589 align:start position:0%
+prototype agent teams with role-based
+collaboration.<00:04:01.280><c> 20</c><00:04:01.519><c> lines</c><00:04:01.920><c> to</c><00:04:02.239><c> start.</c><00:04:03.200><c> Open</c>
+
+00:04:03.589 --> 00:04:03.599 align:start position:0%
+collaboration. 20 lines to start. Open
+ 
+
+00:04:03.599 --> 00:04:06.550 align:start position:0%
+collaboration. 20 lines to start. Open
+AAI<00:04:04.000><c> agents</c><00:04:04.480><c> SDK</c><00:04:05.120><c> focuses</c><00:04:05.680><c> on</c><00:04:06.000><c> context</c>
+
+00:04:06.550 --> 00:04:06.560 align:start position:0%
+AAI agents SDK focuses on context
+ 
+
+00:04:06.560 --> 00:04:09.270 align:start position:0%
+AAI agents SDK focuses on context
+variables<00:04:07.040><c> and</c><00:04:07.280><c> streaming</c><00:04:08.080><c> and</c><00:04:08.400><c> autogen</c><00:04:09.120><c> is</c>
+
+00:04:09.270 --> 00:04:09.280 align:start position:0%
+variables and streaming and autogen is
+ 
+
+00:04:09.280 --> 00:04:11.750 align:start position:0%
+variables and streaming and autogen is
+eventdriven<00:04:09.920><c> and</c><00:04:10.080><c> a</c><00:04:10.319><c> sync</c><00:04:10.560><c> first.</c><00:04:11.280><c> Great</c><00:04:11.519><c> for</c>
+
+00:04:11.750 --> 00:04:11.760 align:start position:0%
+eventdriven and a sync first. Great for
+ 
+
+00:04:11.760 --> 00:04:14.309 align:start position:0%
+eventdriven and a sync first. Great for
+complex<00:04:12.239><c> pipelines.</c><00:04:13.360><c> Pick</c><00:04:13.599><c> the</c><00:04:13.840><c> right</c><00:04:14.000><c> tool</c>
+
+00:04:14.309 --> 00:04:14.319 align:start position:0%
+complex pipelines. Pick the right tool
+ 
+
+00:04:14.319 --> 00:04:16.870 align:start position:0%
+complex pipelines. Pick the right tool
+for<00:04:14.560><c> your</c><00:04:14.720><c> use</c><00:04:14.959><c> case.</c><00:04:16.000><c> Now</c><00:04:16.239><c> let's</c><00:04:16.479><c> zoom</c><00:04:16.720><c> out</c>
+
+00:04:16.870 --> 00:04:16.880 align:start position:0%
+for your use case. Now let's zoom out
+ 
+
+00:04:16.880 --> 00:04:19.110 align:start position:0%
+for your use case. Now let's zoom out
+and<00:04:17.120><c> see</c><00:04:17.199><c> the</c><00:04:17.440><c> full</c><00:04:17.680><c> ecosystem.</c><00:04:18.799><c> At</c><00:04:18.959><c> the</c>
+
+00:04:19.110 --> 00:04:19.120 align:start position:0%
+and see the full ecosystem. At the
+ 
+
+00:04:19.120 --> 00:04:21.030 align:start position:0%
+and see the full ecosystem. At the
+bottom<00:04:19.519><c> layer,</c><00:04:19.759><c> we</c><00:04:19.919><c> have</c><00:04:20.079><c> LLMs,</c><00:04:20.799><c> the</c>
+
+00:04:21.030 --> 00:04:21.040 align:start position:0%
+bottom layer, we have LLMs, the
+ 
+
+00:04:21.040 --> 00:04:23.270 align:start position:0%
+bottom layer, we have LLMs, the
+reasoning<00:04:21.440><c> engines</c><00:04:21.840><c> like</c><00:04:22.079><c> Claude,</c><00:04:22.560><c> GPT,</c><00:04:23.120><c> and</c>
+
+00:04:23.270 --> 00:04:23.280 align:start position:0%
+reasoning engines like Claude, GPT, and
+ 
+
+00:04:23.280 --> 00:04:25.749 align:start position:0%
+reasoning engines like Claude, GPT, and
+Gemini.<00:04:24.080><c> They</c><00:04:24.400><c> provide</c><00:04:24.639><c> the</c><00:04:24.800><c> intelligence.</c>
+
+00:04:25.749 --> 00:04:25.759 align:start position:0%
+Gemini. They provide the intelligence.
+ 
+
+00:04:25.759 --> 00:04:28.070 align:start position:0%
+Gemini. They provide the intelligence.
+One<00:04:26.160><c> layer</c><00:04:26.320><c> up</c><00:04:26.720><c> SDKs</c><00:04:27.280><c> and</c><00:04:27.520><c> frameworks</c><00:04:27.919><c> like</c>
+
+00:04:28.070 --> 00:04:28.080 align:start position:0%
+One layer up SDKs and frameworks like
+ 
+
+00:04:28.080 --> 00:04:30.950 align:start position:0%
+One layer up SDKs and frameworks like
+Lang<00:04:28.479><c> Graph,</c><00:04:28.800><c> Crew</c><00:04:29.120><c> AI,</c><00:04:29.360><c> and</c><00:04:29.520><c> the</c><00:04:29.680><c> agent</c><00:04:30.000><c> SDK.</c>
+
+00:04:30.950 --> 00:04:30.960 align:start position:0%
+Lang Graph, Crew AI, and the agent SDK.
+ 
+
+00:04:30.960 --> 00:04:33.270 align:start position:0%
+Lang Graph, Crew AI, and the agent SDK.
+They<00:04:31.199><c> help</c><00:04:31.360><c> you</c><00:04:31.520><c> build</c><00:04:31.759><c> agents.</c><00:04:32.639><c> At</c><00:04:32.800><c> the</c><00:04:32.960><c> top,</c>
+
+00:04:33.270 --> 00:04:33.280 align:start position:0%
+They help you build agents. At the top,
+ 
+
+00:04:33.280 --> 00:04:35.350 align:start position:0%
+They help you build agents. At the top,
+harnesses<00:04:33.840><c> like</c><00:04:34.080><c> Cloud</c><00:04:34.479><c> Code,</c><00:04:34.800><c> Cursor,</c><00:04:35.199><c> and</c>
+
+00:04:35.350 --> 00:04:35.360 align:start position:0%
+harnesses like Cloud Code, Cursor, and
+ 
+
+00:04:35.360 --> 00:04:38.469 align:start position:0%
+harnesses like Cloud Code, Cursor, and
+Windsurf.<00:04:36.240><c> They</c><00:04:36.479><c> run</c><00:04:36.720><c> agents</c><00:04:37.199><c> reliably.</c><00:04:38.240><c> and</c>
+
+00:04:38.469 --> 00:04:38.479 align:start position:0%
+Windsurf. They run agents reliably. and
+ 
+
+00:04:38.479 --> 00:04:41.110 align:start position:0%
+Windsurf. They run agents reliably. and
+connecting<00:04:38.960><c> everything</c><00:04:39.280><c> on</c><00:04:39.520><c> the</c><00:04:39.680><c> side</c><00:04:39.840><c> is</c><00:04:40.160><c> MCP</c>
+
+00:04:41.110 --> 00:04:41.120 align:start position:0%
+connecting everything on the side is MCP
+ 
+
+00:04:41.120 --> 00:04:43.350 align:start position:0%
+connecting everything on the side is MCP
+plugging<00:04:41.520><c> agents</c><00:04:41.919><c> into</c><00:04:42.240><c> external</c><00:04:42.720><c> tools</c><00:04:43.120><c> and</c>
+
+00:04:43.350 --> 00:04:43.360 align:start position:0%
+plugging agents into external tools and
+ 
+
+00:04:43.360 --> 00:04:47.110 align:start position:0%
+plugging agents into external tools and
+APIs.<00:04:44.800><c> Each</c><00:04:45.199><c> layer</c><00:04:45.360><c> has</c><00:04:45.600><c> a</c><00:04:45.759><c> clear</c><00:04:46.000><c> job.</c><00:04:46.479><c> LLMs</c>
+
+00:04:47.110 --> 00:04:47.120 align:start position:0%
+APIs. Each layer has a clear job. LLMs
+ 
+
+00:04:47.120 --> 00:04:50.629 align:start position:0%
+APIs. Each layer has a clear job. LLMs
+think<00:04:47.600><c> frameworks</c><00:04:48.160><c> build</c><00:04:48.639><c> harnesses</c><00:04:49.280><c> run</c><00:04:49.919><c> MCP</c>
+
+00:04:50.629 --> 00:04:50.639 align:start position:0%
+think frameworks build harnesses run MCP
+ 
+
+00:04:50.639 --> 00:04:53.110 align:start position:0%
+think frameworks build harnesses run MCP
+connects.<00:04:51.759><c> So</c><00:04:52.000><c> here's</c><00:04:52.240><c> your</c><00:04:52.479><c> formula</c><00:04:52.880><c> for</c>
+
+00:04:53.110 --> 00:04:53.120 align:start position:0%
+connects. So here's your formula for
+ 
+
+00:04:53.120 --> 00:04:55.189 align:start position:0%
+connects. So here's your formula for
+building<00:04:53.360><c> a</c><00:04:53.520><c> production</c><00:04:53.919><c> agent.</c><00:04:54.800><c> Start</c><00:04:55.040><c> with</c>
+
+00:04:55.189 --> 00:04:55.199 align:start position:0%
+building a production agent. Start with
+ 
+
+00:04:55.199 --> 00:04:59.189 align:start position:0%
+building a production agent. Start with
+an<00:04:55.440><c> LLM,</c><00:04:56.400><c> add</c><00:04:56.639><c> an</c><00:04:56.880><c> SDK,</c><00:04:57.759><c> run</c><00:04:58.000><c> it</c><00:04:58.080><c> in</c><00:04:58.240><c> a</c><00:04:58.400><c> harness,</c>
+
+00:04:59.189 --> 00:04:59.199 align:start position:0%
+an LLM, add an SDK, run it in a harness,
+ 
+
+00:04:59.199 --> 00:05:01.510 align:start position:0%
+an LLM, add an SDK, run it in a harness,
+connect<00:04:59.520><c> it</c><00:04:59.680><c> with</c><00:04:59.919><c> MCP,</c><00:05:00.880><c> and</c><00:05:01.120><c> you</c><00:05:01.280><c> get</c><00:05:01.360><c> a</c>
+
+00:05:01.510 --> 00:05:01.520 align:start position:0%
+connect it with MCP, and you get a
+ 
+
+00:05:01.520 --> 00:05:03.909 align:start position:0%
+connect it with MCP, and you get a
+production<00:05:01.919><c> agent.</c><00:05:02.639><c> The</c><00:05:02.880><c> age</c><00:05:03.120><c> of</c><00:05:03.280><c> agents</c><00:05:03.680><c> is</c>
+
+00:05:03.909 --> 00:05:03.919 align:start position:0%
+production agent. The age of agents is
+ 
+
+00:05:03.919 --> 00:05:06.950 align:start position:0%
+production agent. The age of agents is
+here.<00:05:04.400><c> Pick</c><00:05:04.639><c> an</c><00:05:04.880><c> LLM.</c><00:05:05.759><c> Choose</c><00:05:06.000><c> a</c><00:05:06.240><c> framework.</c>
+
+00:05:06.950 --> 00:05:06.960 align:start position:0%
+here. Pick an LLM. Choose a framework.
+ 
+
+00:05:06.960 --> 00:05:09.189 align:start position:0%
+here. Pick an LLM. Choose a framework.
+Run<00:05:07.199><c> it</c><00:05:07.360><c> in</c><00:05:07.520><c> a</c><00:05:07.680><c> harness.</c><00:05:08.479><c> Connect</c><00:05:08.800><c> it</c><00:05:08.960><c> with</c>
+
+00:05:09.189 --> 00:05:09.199 align:start position:0%
+Run it in a harness. Connect it with
+ 
+
+00:05:09.199 --> 00:05:12.160 align:start position:0%
+Run it in a harness. Connect it with
+MCP.
+
