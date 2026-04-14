@@ -316,3 +316,50 @@ An AI agent has two distinct parts often conflated:
 **Lower priority:**
 - [ ] 46K-line context engine equivalent — would need significant refactor; not urgent while using mock executor
 
+---
+
+## ✅ New: 11 RAG Strategies Video — Cole (@stack) (April 14, 2026)
+**Video:** https://youtu.be/tLMViADvSNE | **Date:** April 14, 2026
+
+### Video Core Thesis
+Optimal RAG systems combine **3–5 strategies** — not just one. Pure semantic search is insufficient for production accuracy.
+
+**Cole's recommended tactical stack:** `reranking + agentic RAG + context-aware chunking (dockling)`
+
+### KYSM Mapping — All 11 RAG Strategies → Our 5-Pillar Architecture
+
+| # | Strategy | What it is | KYSM Equivalent | Implementation |
+|---|---|---|---|---|
+| 1 | **Reranking** | Pull large candidate pool → cross-encoder reranker → top-K to LLM | Pillar 1.5 (Graph Embedding Search) + Pillar 2 (Schema RAG) | We do dual-retrieval: Qdrant schema hit → Graph structural scoring → re-ranked by composite score |
+| 2 | **Agentic RAG** | Agent chooses search strategy per query (semantic vs full doc) | Phase 0 Meta-Path Match + Orchestrator routing | `meta_path_library.match()` = fast-path (structured JOIN) vs orchestrator full search |
+| 3 | **Knowledge Graphs** | Vector + graph DB for entity relationship traversal | Pillar 3 (Graph RAG) + Pillar 5 (Meta-Path) | `AllPathsExplorer` + `TemporalGraphRAG` + Memgraph (Phase M1 complete) |
+| 4 | **Contextual Retrieval** | LLM prepends document-fit context to every chunk | Pillar 1 (Schema RAG) — chunk enrichment | Not yet implemented — chunk prepending in Qdrant indexing |
+| 5 | **Query Expansion** | LLM rewrites query before search for precision | Phase 0 Meta-Path | `meta_path_library.match()` expands keywords → structured SQL patterns |
+| 6 | **Multi-Query RAG** | LLM generates query variants → parallel search → merge | Pillar 1.5 (Graph Embedding Search) | Graph search runs structural + text in parallel; results fused |
+| 7 | **Context-Aware Chunking** | Embedding detects natural document boundaries | Schema RAG chunking in Qdrant | NOT YET — current chunking is naive (every N chars); should use `dockling` |
+| 8 | **Late Chunking** | Embed full doc → chunk token embeddings (preserves context) | Not implemented | Most complex; low priority |
+| 9 | **Hierarchical RAG** | Small chunk search → parent doc retrieval via metadata | Pillar 5 (Meta-Path) — parent/child table relationships | `graph_store.py` table hierarchy: LFA1 → LFB1 → LFBK → ADRC (parent→child→grandchild) |
+| 10 | **Self-Reflective RAG** | Grade retrieved chunks → retry with refined query if score low | Phase 6 (Self-Healer) + Phase 5.5 (Validation Harness) | `critique_gate()` grades SQL → dry-run → heal if fails → re-test; `validation_summary` tracks retry |
+| 11 | **Fine-Tuned Embeddings** | Domain-specific embedding model (legal, medical, sentiment) | Schema RAG embeddings | Currently using `all-MiniLM-L6-v2`; NOT fine-tuned for SAP DDIC terminology |
+
+### Gaps Identified (Not Yet in KYSM)
+
+1. **Contextual Retrieval not implemented** — chunk enrichment would improve Schema RAG accuracy significantly. Anthropic has strong evidence here. Would require a post-processing step after Qdrant upsert: prepend LLM-generated document context.
+
+
+2. **Context-Aware Chunking not implemented** — current Qdrant indexing uses naive character-split chunks. `dockling` library would find natural SAP DDIC boundaries (segment fields, table groups, domain groupings).
+
+3. **Fine-Tuned Embeddings not implemented** — `all-MiniLM-L6-v2` is generic. A SAP DDIC-specific embedding model fine-tuned on SAP terminology would boost schema lookup accuracy by 5–10%.
+
+4. **Hierarchical RAG metadata in Qdrant** — currently storing table metadata but not parent-document references. Could store at document level (e.g., module-level umbrella) and link to child table chunks.
+
+### Recommended KYSM Updates from This Video
+**Immediate:**
+- [ ] Switch Qdrant chunking from naive char-split to `dockling` context-aware chunking for Schema RAG
+- [ ] Add `Contextual Retrieval` post-processing step: prepend LLM-generated context to each chunk before Qdrant upsert
+
+**Medium term:**
+- [ ] Fine-tune `all-MiniLM-L6-v2` on SAP DDIC terminology (STCD1, LFA1, EKPO, etc.) — or explore `mxbai-embed-large` which is stronger for code/technical domains
+- [ ] Add Hierarchical RAG metadata linking: module-level parent doc → child table chunks in Qdrant
+- [ ] Implement Self-Reflective RAG retry loop with configurable threshold (currently auto-retries on any failure; should grade and decide)
+
