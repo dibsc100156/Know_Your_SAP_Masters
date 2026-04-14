@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.orchestrator import run_agent_loop
 from app.core.security import security_mesh
-from app.workers.celery_app import app as celery_app
+from app.workers.celery_app import celery_app_instance as celery_app
 from app.workers.orchestrator_tasks import (
     run_orchestrator_task,
     get_task_result,

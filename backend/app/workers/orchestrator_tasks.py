@@ -278,7 +278,7 @@ def get_task_result(task_id: str, timeout: float = 0.0) -> dict:
     from celery.result import AsyncResult
     # Lazy import breaks the circular import deadlock:
     # celery_app is imported here at call time, not at module load time.
-    from app.workers.celery_app import app as celery_app
+    from app.workers.celery_app import celery_app_instance as celery_app
     result = AsyncResult(task_id, app=celery_app)
     if timeout > 0:
         return result.get(timeout=timeout)
