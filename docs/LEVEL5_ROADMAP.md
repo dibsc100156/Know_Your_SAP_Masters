@@ -11,12 +11,13 @@ Harness Engineering principles that collectively move the chatbot from a static
 Q&A tool to an autonomous, self-healing, threat-aware, multi-agent enterprise
 assistant.
 
-**Infrastructure Status (April 13, 2026):**
-- Qdrant ✅ ACTIVE — 4 collections seeded (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context)
-- Memgraph ✅ ACTIVE — 114 nodes / 47 edges loaded (docker: sapmasters_memgraph — HEALTHY)
-- ChromaDB ← Legacy — data migrated to Qdrant; retained for local dev fallback
-- RabbitMQ ✅ ACTIVE (docker: sapmasters_rabbitmq — HEALTHY)
-- Redis ✅ ACTIVE (docker: sapmasters_redis — HEALTHY)
+**Infrastructure Status (April 14, 2026):**
+- Qdrant ✅ ACTIVE — 4 collections (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context)
+- Memgraph ✅ ACTIVE — 114 nodes / 47 edges loaded
+- ChromaDB: Retained for local dev fallback only
+- RabbitMQ ✅ ACTIVE — amqp://sapmasters:sapmasters123@localhost:5672//
+- Redis ✅ ACTIVE — localhost:6379/0
+- Celery Worker ✅ ACTIVE — 4 threads, queues: agent + priority
 
 ---
 
@@ -65,10 +66,13 @@ assistant.
 |-------|-------------|--------|
 | M1 | Memgraph 2.12.0 + Lab — Docker Compose | ✅ Complete |
 | M2 | Cypher port — replace NetworkX with Memgraph queries | 🚧 Pending |
+| M1 | Memgraph schema init + load (init_schema.cql) | ✅ COMPLETE |
+| M2 | Native Cypher path queries (find_all_ranked_paths_native) | ✅ COMPLETE |
 | M3 | `use_memgraph` flag in main.py | 🚧 Pending |
-| M4 | Qdrant cluster migration (Schema + Pattern RAG) | 🚧 Pending |
-| M5 | Celery async worker pool | 🚧 Pending |
+| M4 | Qdrant cluster migration (Schema RAG + SQL Pattern RAG + QM + Graph Embeddings) | ✅ COMPLETE |
+| M5 | Celery async worker pool (RabbitMQ + Redis + 4-thread worker) | ✅ COMPLETE |
 | M6 | Load testing + production tuning | 🚧 Pending |
+| M7 | Real SAP HANA connection (hana_pool.py, HANA_MODE=pool) | 🚧 Pending |
 
 > **Note:** Memgraph 2.x Cypher limitations — `LENGTH(path)`, `relationships(path)`, `shortestPath()`, path-list comprehensions are NOT implemented. Native pattern matching used.
 
