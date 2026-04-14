@@ -314,15 +314,29 @@ class QMSemanticSearch:
             except ImportError:
                 self._tfidf = None
 
-        # Try ChromaDB
-        try:
-            import chromadb
-            self._client = chromadb.PersistentClient(
-                path=str(self.chroma_dir),
-            )
-            self._load_or_create_collection()
-        except ImportError:
-            self._client = None
+        # Try backend
+        import os
+        backend = os.environ.get("VECTOR_STORE_BACKEND", "chroma")
+        
+        if backend == "qdrant":
+            try:
+                from app.core.qdrant_qm_wrapper import QdrantCollectionWrapper
+                self._collection = QdrantCollectionWrapper(self.collection_name)
+                self._client = self._collection.client
+            except ImportError as e:
+                print(f"[QM] Qdrant backend failed: {e}")
+                self._client = None
+                self._collection = None
+        else:
+            # Try ChromaDB
+            try:
+                import chromadb
+                self._client = chromadb.PersistentClient(
+                    path=str(self.chroma_dir),
+                )
+                self._load_or_create_collection()
+            except ImportError:
+                self._client = None
 
     def _load_or_create_collection(self):
         if self._client is None:

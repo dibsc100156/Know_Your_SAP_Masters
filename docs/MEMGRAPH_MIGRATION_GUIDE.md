@@ -23,7 +23,7 @@
 | M3 | `smoke_test_memgraph.py` + `load_init_schema.py` scripts | ✅ DONE | |
 | M4 | Celery async workers + circular import fix | ✅ DONE | `celery_app_instance` name change + `@shared_task` migration |
 | M5 | Redis dialog state | ✅ COMPLETE | Hardened: retries, backoff, `REDIS_ENFORCE` fail-loud |
-| M6 | Qdrant cluster migration | ✅ DONE | `vector_store.py` unified manager, `qdrant_vector_store.py` operational, configured via `VECTOR_STORE_BACKEND=qdrant` |
+| M6 | Qdrant cluster migration | ✅ COMPLETE | `vector_store.py`, `graph_embedding_store.py` (Phase 5½), and `qm_semantic_search.py` (Phase 8) all fully operational on Qdrant via `VECTOR_STORE_BACKEND=qdrant`. ChromaDB fallback intact. |
 | M7 | Connection pooling for SAP HANA | ⬜ PENDING | |
 | M8 | Kubernetes HPA — autoscale Celery workers | ✅ COMPLETE | KEDA ScaledObjects configured for RabbitMQ depth |
 | M9 | LeanIX agent governance integration | ✅ WIRED | Middleware registered in main.py; DPO reporting enabled |

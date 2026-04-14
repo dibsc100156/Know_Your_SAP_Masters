@@ -249,15 +249,29 @@ class GraphEmbeddingStore:
         # Structural metrics are always computed fresh (lightweight — O(N+E) NetworkX ops)
         self._compute_structural_metrics()
 
-        # Load Node2Vec embeddings from ChromaDB if not already populated
-        if not self._node_embeddings and self._node_col.count() > 0:
-            print("  [_load_existing] Restoring Node2Vec embeddings from ChromaDB...")
-            stored = self._node_col.get(include=["metadatas", "embeddings"])
-            if stored and stored.get("ids") is not None and stored.get("embeddings") is not None:
-                for i, node_id in enumerate(stored["ids"]):
-                    table = stored["metadatas"][i]["table"]
-                    embedding = stored["embeddings"][i]
-                    self._node_embeddings[table] = np.array(embedding, dtype=np.float32)
+        # Load Node2Vec embeddings from Qdrant if not already populated
+        node_count = self.qdrant_client.get_collection(NODE_EMBEDDINGS_COL).points_count
+        if not self._node_embeddings and node_count > 0:
+            print("  [_load_existing] Restoring Node2Vec embeddings from Qdrant...")
+            try:
+                # We need to fetch all embeddings. Since Qdrant scroll has a limit, we paginate
+                offset = None
+                while True:
+                    stored, offset = self.qdrant_client.scroll(
+                        collection_name=NODE_EMBEDDINGS_COL,
+                        limit=100,
+                        with_payload=True,
+                        with_vectors=True,
+                        offset=offset
+                    )
+                    for record in stored:
+                        if record.payload and "table" in record.payload and record.vector:
+                            table = record.payload["table"]
+                            self._node_embeddings[table] = np.array(record.vector, dtype=np.float32)
+                    if offset is None:
+                        break
+            except Exception as e:
+                print(f"  [_load_existing] Warning: failed to load Node2Vec embeddings from Qdrant: {e}")
 
     # -------------------------------------------------------------------------
     # Step 1: Structural Metrics
