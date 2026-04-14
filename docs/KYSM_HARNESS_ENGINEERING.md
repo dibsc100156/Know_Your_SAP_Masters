@@ -318,6 +318,86 @@ An AI agent has two distinct parts often conflated:
 
 ---
 
+## ✅ New: How to Know If Your AI Agents Actually Work — Cole (@stack) (April 14, 2026)
+**Video:** https://youtu.be/Kleu3ROhpvY | **Date:** April 14, 2026
+
+### Video Core Thesis
+The hardest part of AI agents isn't making them work — it's **knowing whether they actually do**. Traditional testing (unit/integration/E2E) assumes determinism. Agents are probabilistic. Evals = **CI for probabilistic systems**: spectrum scoring, benchmark sets, trend tracking over time.
+
+### Core Framework: Evals ≠ Tests
+
+| Traditional Testing | Agent Evals |
+|---|---|
+| Binary pass/fail | Spectrum scoring (0.0 → 1.0) |
+| Single input | Benchmark set (dozens to hundreds) |
+| Snapshot | Trend tracking over time |
+| Deterministic | Probabilistic |
+
+> *"Think manufacturing QA — you sample the batch and measure the defect rate over time."*
+
+### 3 Things Evals Need: Benchmark Set + Scoring Functions + Trend Tracking
+
+### The 4 Layers (Outside-In Measurement Order)
+
+1. **Outcome** — Final answer correct, helpful, grounded, complete? Hardest. Subjective → use **LLM as Judge**.
+2. **Trajectory** — Right steps, right tools, right parameters, reasonable reasoning chain? An agent getting the right answer in 25 tool calls when 3 would do = trajectory problem.
+3. **Component** — Tools/functions deterministic → standard unit tests work fine.
+4. **System Monitoring** — Patterns across production usage, not individual failures. Evals + observability overlap here.
+
+### 4 Quality Dimensions
+
+| Dimension | Question | KYSM |
+|---|---|---|
+| **Effectiveness** | Did it achieve what the user wanted? | 🔴 No formal eval dataset |
+| **Efficiency** | Right steps/tokens? (25 calls vs 3 = big difference) | 🟡 `tool_trace` + `execution_time_ms` exist |
+| **Robustness** | Holds up under malformed input, API failures, edge cases? | 🟡 Sentinel handles security |
+| **Safety & Alignment** | Stays within bounds, refuses appropriately? | 🟢 Sentinel ENFORCING mode |
+
+### Compounding Flywheel
+
+```
+Production failure surfaces
+  → Annotate as eval case
+  → Eval set grows
+  → Agent improves
+  → New edge cases surface
+  → Repeat
+```
+
+> *"The eval set becomes a living record of everything your agent has struggled with."*
+
+### KYSM Mapping — Evals Layers
+
+| Eval Layer | What to score | KYSM Implementation | Gap |
+|---|---|---|---|
+| **Outcome (Layer 1)** | Correct + helpful + grounded + complete | `validation_summary` (swarm agents pass/fail) | 🟡 Partial — no LLM-as-judge on final answer |
+| **Trajectory (Layer 2)** | Right tools, right params, right step count | `tool_trace` (which tools, how many) | 🟡 Basic — no structured trajectory scoring against optimal path |
+| **Component (Layer 3)** | Deterministic tools (JSON parse, SQL validation) | `sql_executor.py` dry-run validation | ✅ Done — unit-testable |
+| **System Monitoring (Layer 4)** | Patterns across production usage | `sentinel_stats` + `execution_time_ms` | 🟡 Partial — no production trend tracking |
+| **LLM as Judge** | Human defines criteria, model applies at scale | `critique_gate()` (7-point SQL gate) | 🟡 Implemented as SQL critic — not general answer judge |
+| **Eval set compounding** | Production failures → annotated → regression tests | Not implemented | 🔴 No regression test pipeline from production failures |
+
+### Critical Insight: Quality Must Be Designed In
+
+> *"You can only measure what you can see. You can't measure effectiveness if you only see the final answer. You can't measure efficiency if you don't count the steps. You can't diagnose robustness failures if you don't know which API call failed."*
+
+**Most teams:** Build agent → ship it → then ask "how do we test?" ❌
+**Right approach:** Design traces + measurement from day one — same as observability and security.
+
+### Recommended KYSM Updates from This Video
+
+**Immediate:**
+- [ ] Formalize the 50-query benchmark as a **curated eval dataset with reference outputs** — every query should have a known correct SQL + expected table result
+- [ ] Add **trajectory scoring** to `tool_trace`: compare actual steps vs optimal path (optimal = meta-path fast path hit = single step; worst = full orchestrator loop)
+
+**Medium term:**
+- [ ] Build **LLM-as-judge** for outcome layer: define rubric for "good SAP master data answer" → run against eval dataset automatically
+- [ ] Implement **eval set compounding**: production failures → annotated as eval cases → regression tests grow over time
+- [ ] Add **production trend tracking**: token usage, error rates, latency distribution over time (LangSmith or `langfuse`/`phoenix`)
+- [ ] Formalize outside-in measurement order: always evaluate Outcome first → drill into Trajectory only when Outcome passes
+
+---
+
 ## ✅ New: Langchain, LangGraph, LangSmith Explained — Cole (@stack) (April 14, 2026)
 **Video:** https://youtu.be/e-GR3PlEOVU | **Date:** April 14, 2026
 
