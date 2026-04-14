@@ -318,6 +318,69 @@ An AI agent has two distinct parts often conflated:
 
 ---
 
+## ✅ New: RAG vs Long Context — Cole (@stack) (April 14, 2026)
+**Video:** https://youtu.be/UabBYexBD4k | **Date:** April 14, 2026
+
+### Video Core Thesis
+Context injection for LLMs has two competing paradigms — **RAG** (engineering approach) vs **Long Context** (model-native). Neither is dead. The choice depends on dataset size and reasoning complexity.
+
+| Approach | Mechanism | Best for |
+|---|---|---|
+| **RAG** | Chunk → embed → vector DB → semantic search → inject top-K | Infinite enterprise data lakes |
+| **Long Context** | Dump all docs → attention mechanism finds answer | Bounded datasets, complex global reasoning |
+
+### KYSM Mapping
+
+| Concept | Definition | KYSM Relevance |
+|---|---|---|
+| **Retrieval Lottery** | Silent failure — relevant doc exists but vector search doesn't retrieve it | Our dual retrieval (Qdrant + Graph) reduces this risk |
+| **No-Stack Stack** | Long context's minimal architecture — no DB, no embeddings | If SAP schema fit in context window → RAG overhead disappears |
+| **Needle in Haystack** | Model attention degrades in >500K token context; specific facts get lost | Our Schema RAG top-K retrieval is a feature, not a bug |
+| **Whole Book Problem** ⚡ | RAG retrieves snippets only — cannot surface gaps *between* documents | **Critical for KYSM** — cross-module absences (vendor in LFA1 but no PO in EKKO) |
+| **Re-reading Tax** | Long context re-processes full doc on every query; RAG pays once at index | Prompt caching partially mitigates for static data |
+
+### Critical Insight: Whole Book Problem → KYSM Cross-Module Gap Queries
+
+This is the most important KYSM connection from the video:
+
+**The "Whole Book Problem" in SAP terms:**
+- A user asks: *"Which vendors exist in LFA1 but have NEVER created a PO in EKKO?"*
+- Pure Schema RAG (Qdrant chunk retrieval): searches for chunks mentioning "vendor" + "purchase order" → retrieves snippets from LFA1 + EKKO tables
+- **RAG CANNOT retrieve the absence of a relationship** — it can't surface the gap between LFA1 and EKKO
+- Only a full SQL `LEFT JOIN ... WHERE EKKO.LIFNR IS NULL` sees that gap
+
+**This is exactly why our Pillar 3 (Graph RAG) + Pillar 5 (Meta-Path) exist** — they operate at the **JOIN level**, not the document/chunk level. Our Meta-Path library encodes 14 pre-assembled JOIN templates (vendor → PO, material → inspection lot, etc.) that can detect relational *absences*, not just semantic co-occurrence.
+
+### Architecture Decision: RAG + Graph > Pure RAG or Pure Long Context
+
+For SAP enterprise data, pure Long Context fails immediately because:
+- SAP S/4 HANA has **thousands of tables** — far exceeding any context window
+- Cross-module reasoning requires JOINs, not document similarity
+- Relational absence (vendor with no PO) = structural gap RAG cannot surface
+
+**Our hybrid is correct:**
+```
+Long Context (fine for single-table semantic lookup)
+    ↓ fallback when needed
+RAG (Schema RAG — table metadata retrieval)
+    ↓ cross-module / multi-hop
+Graph RAG (AllPathsExplorer — ranked JOIN paths)
+    ↓ pre-assembled JOIN template
+Meta-Path Library (14 fast-path templates, detects relational absences)
+```
+
+### Recommended KYSM Updates from This Video
+
+**Immediate:**
+- [ ] Document in architecture docs that Graph RAG / Meta-Path explicitly solves the "Whole Book Problem" — relational absence queries (LEFT JOIN ... IS NULL) cannot be solved by RAG alone
+- [ ] Add a "RAG vs Long Context" decision note in CLAUDE.md — when query detects absence/completeness intent, skip Schema RAG and go directly to Meta-Path/Graph RAG
+
+**Medium term:**
+- [ ] Implement "absence detection" meta-path: if query pattern = "vendor with no PO" / "material never purchased" / "customer never billed" → trigger `LEFT JOIN ... IS NULL` path in Meta-Path library (not semantic search)
+- [ ] Long Context evaluation: if SAP schema can be represented as structured markdown in <200K tokens, consider a "full schema dump" for bounded single-domain queries (绕过 RAG retrieval lottery for simple cases)
+
+---
+
 ## ✅ New: 11 RAG Strategies Video — Cole (@stack) (April 14, 2026)
 **Video:** https://youtu.be/tLMViADvSNE | **Date:** April 14, 2026
 
