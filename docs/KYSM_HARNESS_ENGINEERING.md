@@ -1,5 +1,5 @@
 # Know Your SAP Masters (KYSM) - Harness Engineering & Agentic AI
-## Session: April 12, 2026 | Status: LIVE (Updated April 13, 2026)
+## Session: April 12, 2026 | Status: LIVE (Updated April 14, 2026)
 
 ---
 
@@ -256,3 +256,63 @@ Query → PlannerAgent.plan()
 
 ### Phase 10 Status
 **LIVE** — Multi-Agent Domain Swarm activated on ports 8001 + 8501.
+
+---
+
+## ✅ New: Agent Harness Video — "What is an AI Agent Harness?" (April 14, 2026)
+**Video:** https://youtu.be/GqA18fVWci0 | **Date:** April 14, 2026
+
+### Video Core Thesis
+An AI agent has two distinct parts often conflated:
+- **Agent** = the LLM brain (reasoning, planning, deciding)
+- **Harness** = the infrastructure around it (tool execution, permissions, sandboxing, context management, human-in-the-loop)
+
+> *"The agent is the engine. It does the thinking. But an engine doesn't drive itself. You need the harness — the entire car, the steering, brakes, and dashboard."*
+
+### KYSM Mapping — Every Concept Mapped to Our Architecture
+
+| Video Concept | Video Definition | KYSM Equivalent |
+|---|---|---|
+| **Agent (LLM brain)** | Reasoning + planning + tool selection + decision-making | Our `orchestrator.py` logic + LLM calls |
+| **Harness** | Tool execution + permissions + sandboxing + context + HITL | Our `orchestrator_tools.py` + `security_sentinel.py` |
+| **REACT Loop** | Think → Act → Observe → repeat | Our orchestrator `while loop` with tool calls + observation parsing |
+| **Claude Code Permission System** | 3 tiers: auto-approve / prompt user / classifier | Our `SAPAuthContext` with `denied_tables` + `masked_fields` + sentinel `ENFORCING` mode |
+| **Claude Code Tool Layer** | ~40 tools: file ops, bash, web fetch, git | Our `TOOL_REGISTRY` (52 tools across 8 domains) |
+| **Claude Code Context Engine** | ~46,000 lines: token caching, retries, context management | Our `graph_embedding_store.py` + ChromaDB + Qdrant context management |
+| **MCP (Model Context Protocol)** | USB-C for AI — JSON-RPC over STDIO/HTTP | Our REST API (`/api/v1/chat/master-data`) acts as MCP-like protocol layer |
+| **LangGraph** | Complex multi-step workflows, graph orchestration, 87% on SWE-bench | Our `planner_agent.py` + `synthesis_agent.py` multi-agent swarm |
+| **CrewAI** | Agent teams with role-based collaboration | Our `DomainAgentContract` system with role-based agent outputs |
+| **Agent-in-Workflow** | Embedding agents inside predefined steps | Our `swarm → planner → domain agent` embedded inside orchestrator |
+| **Context Isolation (Sub-agent)** | Delegate token-heavy task to sub-agent, return result only | Our `DomainAgent` parallel execution via ThreadPoolExecutor |
+
+### New Insights from Video (Not Yet in KYSM)
+
+1. **Harness-as-car metaphor** — Agent = engine, Harness = entire car. Our KYSM architecture gets this right conceptually, but we should formalize the **harness boundary** — what lives inside `orchestrator.py` (agent) vs what lives in `orchestrator_tools.py` (harness) is worth explicit documentation.
+
+
+2. **Claude Code's 46,000-line context engine** — This is the real production harness complexity. Our context management is spread across 3 files. Consider a formal `HarnessContext` class that encapsulates: token tracking, session persistence, retry logic, pruning decisions.
+
+3. **MCP as USB-C for AI** — Our `/api/v1/chat/master-data` endpoint IS a protocol layer (JSON over HTTP). We could formally adopt MCP semantics: `mcp_servers/` directory, `mcp.json` registry, STDIO transport for local tools. This would make our tool bus cross-platform.
+
+
+4. **3-tier permission model (Claude Code)** — Auto-approve / Prompt user / Classifier. Our sentinel has AUDIT + ENFORCING modes but lacks the auto-approve tier. For read-only queries (non-sensitive tables), we could add `PERMISSION_AUTO_APPROVE` flag that bypasses sentinel entirely.
+
+
+5. **Agent SDK comparison chart** — Video ranks LangGraph (87% SWE-b), CrewAI (20 lines to start), AutoGen (async-first). We use vanilla ThreadPoolExecutor. Consider evaluating LangGraph for the planner/synthesis layer — it would replace our custom `planner_agent.py` orchestration with a graph-based workflow.
+
+
+### Recommended KYSM Updates from This Video
+
+**Immediate (could implement today):**
+- [ ] Formalize `HarnessContext` class: wrap token tracking + session persistence + retry logic in one place
+- [ ] Add `PERMISSION_AUTO_APPROVE` tier for safe read-only table queries (bypass sentinel overhead)
+- [ ] Document MCP-like protocol spec for our `/api/v1/chat/master-data` JSON interface
+
+**Medium term:**
+- [ ] Evaluate LangGraph to replace custom planner/swarm orchestration (graph-based, tested at 87% SWE-bench)
+- [ ] MCP server registry: `mcp_servers/sap_schema_server.py`, `mcp_servers/sql_pattern_server.py` with STDIO transport
+- [ ] Session persistence to JSON files (Claude Code pattern) for long-running async queries
+
+**Lower priority:**
+- [ ] 46K-line context engine equivalent — would need significant refactor; not urgent while using mock executor
+
