@@ -19,7 +19,7 @@ import requests
 import pandas as pd
 import time
 
-API_BASE = "http://localhost:8001"
+API_BASE = "http://localhost:8000"
 API_URL = f"{API_BASE}/api/v1/chat/master-data"
 
 # ============================================================================
