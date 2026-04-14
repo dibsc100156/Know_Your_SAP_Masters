@@ -318,6 +318,81 @@ An AI agent has two distinct parts often conflated:
 
 ---
 
+## ✅ New: Langchain, LangGraph, LangSmith Explained — Cole (@stack) (April 14, 2026)
+**Video:** https://youtu.be/e-GR3PlEOVU | **Date:** April 14, 2026
+
+### Video Core Thesis
+The full Langchain ecosystem = 3 distinct layers solving 3 distinct problems:
+
+```
+Langchain  = vocabulary  (building blocks: prompts, chains, tools, RAG)
+LangGraph  = control flow (graph structure + shared state)
+LangSmith  = visibility  (traces, evaluation, production monitoring)
+```
+
+Together they cover the full surface of **production AI systems** — not just API calls.
+
+### KYSM Mapping — All 3 Layers
+
+| Langchain Ecosystem | What it solves | KYSM Implementation | Gap |
+|---|---|---|---|
+| **Prompt Templates** | Reusable, testable, maintainable prompts injecting context at runtime | `meta_path_library.py` — structured SQL JOIN templates | Not templated at prompt level |
+| **Chains** | Linear sequences: output of one step → input of next | Orchestrator phases 0→5 (Schema RAG → SQL Pattern → Graph → Assembly → Critique → Execute) | Linear only |
+| **Tools** | Functions LLM can invoke to act in the world | `TOOL_REGISTRY` — 52 tools, 8 domains | OAuth not needed (internal SAP) |
+| **RAG** | Vector DB retrieval → inject relevant chunks into context | Schema RAG + SQL Pattern RAG (Qdrant dual-collection) | ✅ Working |
+| **LangGraph** | Graph-based orchestration: loops, branching, shared state | `planner_agent` → `domain_agent` → `synthesis_agent` (manual graph) | 🔴 Using custom code — not formal LangGraph |
+| **REACT Loop** | Reason → Act → Observe → Repeat | Orchestrator `while loop` + tool execution + observation parsing | ✅ Working |
+| **LangSmith Traces** | Every step recorded: prompt, response, tools, docs, reasoning | `tool_trace` + `validation_summary` + `sentinel_stats` (manual) | 🔴 Homebrew — no automatic trace UI |
+| **Eval Datasets** | Run system against ground truth, measure accuracy, latency, token usage | Not implemented | 🔴 No eval pipeline |
+| **A/B Prompt Comparison** | Measure prompt variant impact on same dataset | Not implemented | 🔴 No framework |
+
+### Critical Insight: We're Building LangGraph + LangSmith From Scratch
+
+LangGraph's core value:
+- **Graph structure** makes control flow explicit and auditable
+- **Shared state object** — each node reads/writes same state dict
+- **Conditional edges** — branching logic is first-class, not buried in if/else
+- LangGraph scored **87% on SWE-bench** (software engineering benchmark)
+
+LangSmith's core value:
+- **Automatic trace capture** — every step, no manual instrumentation
+- **Evaluation pipelines** — run against datasets, measure degradation
+- **Production monitoring** — latency, error rates, token burn under real traffic
+
+**Our current approach:** All of this is implemented manually in `orchestrator.py` + `synthesis_agent.py`. It works but is custom, fragile, and not reusable.
+
+### Architecture Decision: Evaluate LangGraph for Planner/Synthesis Layer
+
+**LangGraph vs Custom Planner/Synthesis (current state):**
+
+| Criteria | Custom (today) | LangGraph |
+|---|---|---|
+| Control flow visibility | ✅ Traceable in orchestrator.py | ✅ Graph visualization |
+| Conditional branching | if/else chains | First-class conditional edges |
+| State management | Manual dict passing | Built-in shared state object |
+| Evaluation harness | Homebrew `validation_summary` | LangSmith automatic |
+| SWE-bench score | N/A | 87% (tested at scale) |
+| Learning curve | We wrote it — no new learning | New framework to learn |
+| Debugging | Breakpoints + print | LangSmith trace replay |
+
+**Recommended evaluation:**
+- Build one domain agent (e.g., `BP_AGENT`) in LangGraph as a pilot
+- Compare code clarity + debuggability vs current `planner_agent.py`
+- If positive: migrate full swarm orchestration to LangGraph
+- Use LangSmith for evaluation dataset runs on the 50-query benchmark
+
+### Recommended KYSM Updates from This Video
+
+**Immediate:**
+- [ ] Evaluate LangGraph: port `planner_agent.py` routing logic to LangGraph — pilot with single domain agent, assess clarity + debuggability
+
+**Medium term:**
+- [ ] Add LangSmith (or open-source alternative: `langfuse` or `phoenix`) for automatic trace capture replacing manual `tool_trace`
+- [ ] Build 50-query evaluation dataset formally — run benchmark with measurement: accuracy + latency + token usage
+- [ ] A/B prompt comparison: test meta-path SQL templates vs LLM-generated SQL on same queries
+
+---
+
 ## ✅ New: RAG vs Long Context — Cole (@stack) (April 14, 2026)
 **Video:** https://youtu.be/UabBYexBD4k | **Date:** April 14, 2026
 
