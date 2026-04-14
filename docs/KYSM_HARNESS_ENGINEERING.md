@@ -318,6 +318,78 @@ An AI agent has two distinct parts often conflated:
 
 ---
 
+## ✅ New: Agent as a Graph — Cole (@stack) (April 14, 2026)
+**Video:** https://youtu.be/92rj076mh6o | **Date:** April 14, 2026
+
+### Video Core Problem
+When an AI has **thousands of tools**, how does it find the exact right one without paralysis by analysis?
+
+Two flawed historical approaches:
+- **Agent-only search:** Knows the toolbox, misses individual tools inside poorly-named boxes
+- **Tool-only search:** Finds the specific tool, loses all agent/container context
+
+### The Solution: Agent as a Graph
+
+Represent every agent (toolbox) and every tool (individual function) as **nodes in a knowledge graph**, connected by edges.
+- **Tool nodes** = individual functions
+- **Agent nodes** = containers/toolboxes
+- **Edges** = "tool belongs to agent" relationship
+
+**Result:** The AI sees both the specific tool AND its containing agent in one smooth graph traversal — no more lost-in-the-noise failures.
+
+### The 3-Step Process
+
+1. **Initial Scan** — Broad search for both tools AND agents that seem relevant
+2. **Smart Re-Ranking** — Score each candidate: weighted combination of tool specificity + agent context
+3. **Graph Traversal** — Follow edges from best tool → navigate to containing agent → pull full agent context
+
+### The Secret Sauce: 1.5:1 Scoring Ratio
+
+> **Agent (toolbox) : Tool = 1.5 : 1.0**
+
+A modest extra emphasis on agent/container context in scoring keeps the big picture in mind while still zeroing in on niche specific tools. This is what makes the search **stable**.
+
+### Results
+
+| Metric | Result |
+|---|---|
+| Correct agent identification | ~15% improvement |
+| Overall search quality | ~14% improvement |
+| vs. previous best (MCP0) | **70% → 85%** success rate |
+| Consistent across | 8 AI models (Google, Amazon, OpenAI) |
+
+### KYSM Mapping — Tool Registry as a Graph
+
+Our 52-tool `TOOL_REGISTRY` is currently a **flat dictionary** — agents and tools stored without graph structure. "Agent as a Graph" would restructure it:
+
+| Concept | KYSM Application |
+|---|---|
+| Tool nodes | Each of 52 tools as graph nodes |
+| Agent nodes | Domain agents (bp_agent, mm_agent, pur_agent, qm_agent, cross_agent) |
+| Intra-domain edges | Tool belongs to agent edges |
+| Cross-domain edges | Tools bridging domains (cross_module_agent) |
+| Smart re-ranking (1.5:1) | Score = 1.5 × agent_context_relevance + 1.0 × tool_specificity |
+| Graph traversal | From matched tool → containing agent → pull full agent context |
+
+**Direct impact on `planner_agent.py`:**
+- Current: complexity_score computed as flat weighted sum of 7 dimensions → no graph structure
+- Improvement: restructure TOOL_REGISTRY as a graph; graph traversal scores agents and tools jointly; 1.5:1 weighting on agent context over tool specificity
+- Benefit: When query matches multiple domain agents, graph structure lets planner navigate context across agent boundaries rather than flat ranking
+
+**Also relevant to MCP (Model Context Protocol):** MCP is the transport layer connecting AI apps to tool servers. Agent-as-a-graph structures the **semantic layer** on top of MCP — MCP gives tools, the graph gives organizational intelligence.
+
+### Recommended KYSM Updates from This Video
+
+**Immediate:**
+- [ ] Restructure `TOOL_REGISTRY` as a graph: `graph_tools = {agent: {tools: [], cross_domain_edges: []}}` — add agent-tool ownership edges
+- [ ] Update `planner_agent.py` complexity scoring to use 1.5:1 agent:tool weighting — boost agent/container context score in routing decisions
+
+**Medium term:**
+- [ ] Build tool-agent graph visualization — expose the graph structure in debug UI so you can see which agents/tools are being considered for each query
+- [ ] Add cross-domain edge detection: tools used by multiple agents get higher cross-domain bridging scores
+
+---
+
 ## ✅ New: How to Know If Your AI Agents Actually Work — Cole (@stack) (April 14, 2026)
 **Video:** https://youtu.be/Kleu3ROhpvY | **Date:** April 14, 2026
 
