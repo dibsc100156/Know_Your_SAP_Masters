@@ -74,6 +74,7 @@ class DomainAgent(ABC):
         tables_hint: Optional[List[str]] = None,
         verbose: bool = False,
         run_id: Optional[str] = None,
+        plan_path: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Run this agent's domain-specific pipeline.

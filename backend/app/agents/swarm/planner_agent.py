@@ -40,10 +40,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from app.core.security import SAPAuthContext
 from app.agents.orchestrator_tools import call_tool, ToolResult, ToolStatus
-from app.agents.domain_agents import (
-    DomainAgent, BPAgent, MMAgent, PURAgent, SDAgent, QMAgent, WMAgent, CROSSAgent,
-    route_query, list_domain_agents,
-)
+from app.agents.domain_agents import DomainAgent, BPAgent, MMAgent, PURAgent, SDAgent, QMAgent, WMAgent, CROSSAgent
 
 logger = logging.getLogger(__name__)
 
@@ -162,6 +159,85 @@ class QueryComplexityAnalyzer:
 
 
 # ============================================================================
+# Agent as a Graph Routing (1.5:1 Scoring)
+# ============================================================================
+
+AGENT_TOOL_GRAPH = {
+    "bp_agent": {
+        "context": ["customer", "business partner", "bp", "account group", "reconciliation account"],
+        "tools": ["LFA1", "KNA1", "BUT000", "ADRC", "credit limit", "payment terms", "blocked vendor", "tax number", "duns", "vendor master", "customer master"]
+    },
+    "mm_agent": {
+        "context": ["material", "stock", "inventory", "mm", "valuation"],
+        "tools": ["MARA", "MARC", "MARD", "MBEW", "MSKA", "valuation price", "material master", "stock quantity", "material type", "industry sector"]
+    },
+    "pur_agent": {
+        "context": ["vendor", "purchasing", "procurement", "pur", "spend", "po", "purchase order", "open po", "rfq", "quotation", "info record", "contract", "source list"],
+        "tools": ["EKKO", "EKPO", "EINA", "EINE", "EORD", "goods receipt", "invoice verification", "lifetime value", "vendor evaluation"]
+    },
+    "sd_agent": {
+        "context": ["sales", "distribution", "sd", "sell", "order to cash"],
+        "tools": ["VBAK", "VBAP", "LIKP", "KNVL", "KONV", "sales order", "delivery", "billing", "pricing", "discount", "incoterm"]
+    },
+    "qm_agent": {
+        "context": ["quality", "inspection", "qm", "defect", "nonconformance"],
+        "tools": ["QALS", "QMEL", "MAPL", "QAMV", "QAVE", "usage decision", "inspection lot", "control chart", "capability"]
+    },
+    "wm_agent": {
+        "context": ["warehouse", "bin", "wm", "storage", "transfer"],
+        "tools": ["LAGP", "LQUA", "VEKP", "MLGT", "handling unit", "transfer order", "physical inventory", "fifo", "lifo"]
+    },
+    "cross_agent": {
+        "context": ["cross-module", "supply chain", "multi-entity", "consolidation", "procure to pay", "order to cash", "vendor performance", "spend analysis"],
+        "tools": ["procurement analysis", "delivery performance", "material traceability", "material cost rollup", "vendor quality", "customer lifetime value"]
+    }
+}
+
+def graph_route_query(query: str, domain_hint: str, domain_agents: Dict[str, DomainAgent], top_k: int) -> List[tuple[DomainAgent, float]]:
+    """
+    Implements 1.5:1 Agent:Tool scoring from 'Agent as a Graph' research.
+    Restructures tool registry as a graph, scoring Agent Context 1.5x over Tool Specificity.
+    """
+    query_lower = query.lower()
+    scored = []
+    
+    for agent_name, graph_node in AGENT_TOOL_GRAPH.items():
+        # 1. Agent Context Relevance (Weight 1.5)
+        # Use word-boundary matching for short keywords (<=3 chars) to avoid substring false matches
+        agent_context_score = 0.0
+        for kw in graph_node["context"]:
+            if len(kw) <= 3:
+                # Word-boundary match: surround with spaces
+                if f" {kw} " in f" {query_lower} ":
+                    agent_context_score += 0.5
+            elif kw.lower() in query_lower:
+                agent_context_score += 0.5
+        if domain_hint in agent_name or domain_hint in graph_node["context"]:
+            agent_context_score += 0.5
+        agent_context_score = min(1.0, agent_context_score)
+
+        # 2. Tool Specificity Score (Weight 1.0)
+        tool_spec_score = 0.0
+        for tool in graph_node["tools"]:
+            if len(tool) <= 3:
+                if f" {tool} " in f" {query_lower} ":
+                    tool_spec_score += 0.5
+            elif tool.lower() in query_lower:
+                tool_spec_score += 0.5
+        tool_spec_score = min(1.0, tool_spec_score)
+
+        # 3. 1.5:1 Ratio Scoring
+        if agent_context_score > 0 or tool_spec_score > 0:
+            final_score = ((1.5 * agent_context_score) + (1.0 * tool_spec_score)) / 2.5
+            if final_score >= 0.25:
+                agent_instance = domain_agents.get(agent_name)
+                if agent_instance:
+                    scored.append((agent_instance, final_score))
+                    
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return scored[:top_k]
+
+# ============================================================================
 # Planner Agent
 # ============================================================================
 
@@ -212,8 +288,8 @@ class PlannerAgent:
         if verbose:
             print(f"\n[PLANNER] Analyzing: '{query[:80]}'")
 
-        # Step 1: Route to domain agents
-        routed = route_query(query, domain_hint=domain_hint, top_k=self.max_parallel_agents)
+        # Step 1: Route to domain agents — 1.5:1 Agent:Tool graph scoring
+        routed = graph_route_query(query, domain_hint, self._domain_agents, self.max_parallel_agents)
         agent_scores = {name: conf for name, conf in [(n, s) for (a, s) in routed for n in [a.name]]}
 
         # Expand routed to dict format
@@ -325,10 +401,26 @@ class PlannerAgent:
         Dispatch to a single domain agent.
         Used when routing == SINGLE.
         """
+        import json, tempfile, os
+        plan_state = {
+            "query": decision.query,
+            "routing": decision.routing.value,
+            "reasoning": decision.reasoning,
+            "primary_domain": decision.primary_domain,
+            "complexity": decision.complexity_score,
+            "assignments": [{"agent": a.agent_name, "task": a.task} for a in decision.assignments]
+        }
+        fd, plan_path = tempfile.mkstemp(prefix=f"plan_{run_id or 'local'}_", suffix=".json", dir=".")
+        with os.fdopen(fd, 'w') as f:
+            json.dump(plan_state, f)
+
         assignment = decision.assignments[0]
         agent = self._domain_agents.get(assignment.agent_name)
         if not agent:
             return {"error": f"Unknown agent: {assignment.agent_name}"}
+
+        if verbose:
+            print(f"\n[SWARM] Dispatching SINGLE to {agent.display_name} | State file: {plan_path}")
 
         phase_start = time.time()
         result = agent.run(
@@ -337,7 +429,13 @@ class PlannerAgent:
             tables_hint=assignment.tables_hint,
             verbose=verbose,
             run_id=run_id,
+            plan_path=plan_path,
         )
+
+        try:
+            os.remove(plan_path)
+        except Exception:
+            pass
         elapsed = int((time.time() - phase_start) * 1000)
 
         # [Harness] Track single-agent phase
@@ -381,6 +479,22 @@ class PlannerAgent:
         Each agent runs its own Pillar 3+4 pipeline independently.
         Results are collected and passed to the Synthesis Agent.
         """
+        import json, tempfile, os
+        plan_state = {
+            "query": decision.query,
+            "routing": decision.routing.value,
+            "reasoning": decision.reasoning,
+            "primary_domain": decision.primary_domain,
+            "complexity": decision.complexity_score,
+            "assignments": [{"agent": a.agent_name, "task": a.task} for a in decision.assignments]
+        }
+        fd, plan_path = tempfile.mkstemp(prefix=f"plan_{run_id or 'local'}_", suffix=".json", dir=".")
+        with os.fdopen(fd, 'w') as f:
+            json.dump(plan_state, f)
+
+        if verbose:
+            print(f"\n[SWARM] Dispatching {decision.routing.value.upper()} to {len(decision.assignments)} agents | State file: {plan_path}")
+
         start = time.time()
 
         def run_agent(assignment: AgentAssignment) -> Dict[str, Any]:
@@ -394,6 +508,7 @@ class PlannerAgent:
                 tables_hint=assignment.tables_hint,
                 verbose=verbose,
                 run_id=run_id,
+                plan_path=plan_path,
             )
             elapsed = int((time.time() - agent_start) * 1000)
 
@@ -441,6 +556,11 @@ class PlannerAgent:
         # Synthesis
         synthesis = self._synthesize(decision, results, auth_context)
         synth_elapsed = int((time.time() - synth_start) * 1000)
+
+        try:
+            os.remove(plan_path)
+        except Exception:
+            pass
 
         if run_id:
             try:
