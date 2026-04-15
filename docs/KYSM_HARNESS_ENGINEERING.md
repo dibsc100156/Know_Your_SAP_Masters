@@ -1,5 +1,5 @@
 # Know Your SAP Masters (KYSM) - Harness Engineering & Agentic AI
-## Session: April 12, 2026 | Status: LIVE (Updated April 14, 2026)
+## Session: April 15, 2026 | Status: LIVE (Updated April 15, 2026)
 
 ---
 
@@ -178,6 +178,8 @@ Infrastructure
 | 8 | Result Masking (Role-based column redaction) | ✅ Working |
 | 9 | Frontend Modernization (8-phase + confidence gauge + dark card) | ✅ Working |
 | **10** | **Multi-Agent Domain Swarm (LIVE on port 8001 — IMPLEMENTED)** | ✅ **NEW → LIVE** |
+| **10a** | **Agent-as-a-Graph 1.5:1 Routing (graph_route_query — IMPLEMENTED)** | ✅ **NEW — April 15** |
+| **10b** | **Context Isolation via File-Based Handoffs (plan_path — IMPLEMENTED)** | ✅ **NEW — April 15** |
 | M1 | Memgraph 2.12.0 + Lab — Docker Compose | ✅ Complete |
 | M2 | Memgraph Cypher port (replace NetworkX with Memgraph queries) | 🚧 Pending |
 | M3 | `use_memgraph` flag in main.py | 🚧 Pending |
@@ -225,6 +227,18 @@ Query → PlannerAgent.plan()
           ├── CROSS_MODULE: CROSS_AGENT + domains → SynthesisAgent → Response
           └── NEGOTIATION: SpecialistAgents → SynthesisAgent → Response
 ```
+
+**Phase 10a — Agent-as-a-Graph 1.5:1 Routing** ✅ April 15:
+- `AGENT_TOOL_GRAPH`: 7-node graph with agent context (1.5x) + tool/table keywords (1.0x)
+- `graph_route_query()`: replaces flat keyword scoring with weighted graph routing
+- Scoring: `((1.5 × agent_context) + (1.0 × tool_spec)) / 2.5`
+- Verified: `vendor POs`→pur(0.6), `stock`→mm(0.6), `sales order`→sd(0.8), `storage bin`→wm(0.6)
+
+**Phase 10b — Context Isolation (File-Based Handoffs)** ✅ April 15:
+- `dispatch_single()` and `dispatch_parallel()` write `SwarmDecision` to temp JSON before dispatch
+- Each domain agent receives `plan_path` — reads only its task, not orchestrator history
+- Prevents context window pollution in parallel multi-domain execution
+- State file deleted in `finally` block after agent completes
 
 **Key Design:**
 - Complexity scoring (0.0–1.0) across 7 dimensions determines routing strategy

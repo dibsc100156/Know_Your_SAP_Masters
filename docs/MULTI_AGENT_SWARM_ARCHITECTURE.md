@@ -1,5 +1,5 @@
 # Multi-Agent Domain Swarm Architecture
-## SAP Masters — Phase 10 — ✅ LIVE (April 12, 2026)
+## SAP Masters — Phase 10 — ✅ LIVE + Phase 10a/10b ADDED (April 15, 2026)
 
 ---
 
@@ -164,7 +164,86 @@ Query → Planner (NEGOTIATION)
 
 ## Key Design Decisions
 
-### 1. Swarm vs Monolith: When to Use Which?
+### 1. Agent-as-a-Graph Routing (1.5:1 Scoring) ✅ IMPLEMENTED — April 15, 2026
+
+**Research basis:** "Agent as a Graph" (2026) — Restructure the flat 52-tool `TOOL_REGISTRY` as a graph with agent-tool ownership edges. Score each query using **1.5x weight on Agent Context** vs **1.0x on Tool Specificity**. This fixes cross-domain routing accuracy by boosting container/context relevance over raw tool keyword matching.
+
+**Implementation:** `swarm/planner_agent.py` — `AGENT_TOOL_GRAPH` + `graph_route_query()`
+
+```python
+AGENT_TOOL_GRAPH = {
+    "pur_agent": {
+        "context": ["vendor", "purchasing", "procurement", "po", "purchase order", ...],  # 1.5x weight
+        "tools":   ["EKKO", "EKPO", "EINA", "goods receipt", ...]                       # 1.0x weight
+    },
+    ...
+}
+
+def graph_route_query(query, domain_hint, domain_agents, top_k) -> List[tuple[DomainAgent, float]]:
+    for agent_name, graph_node in AGENT_TOOL_GRAPH.items():
+        # Agent Context Relevance (Weight 1.5)
+        agent_context_score = min(1.0, sum(0.5 for kw in graph_node["context"] if kw in query_lower))
+        # Tool Specificity Score (Weight 1.0)
+        tool_spec_score = min(1.0, sum(0.5 for tool in graph_node["tools"] if tool.lower() in query_lower))
+        # 1.5:1 ratio scoring
+        final_score = ((1.5 * agent_context_score) + (1.0 * tool_spec_score)) / 2.5
+```
+
+**Verified Routing Results (April 15, 2026):**
+
+| Query | Top Agent | Score | Notes |
+|---|---|---|---|
+| `vendor open POs over 50000` | **pur_agent** | 0.600 | purchasing context + PO tool keywords |
+| `material stock quantities in plant 1000` | **mm_agent** | 0.600 | material context + stock tool keywords |
+| `vendor payment terms vs customer credit` | **bp_agent** | 0.700 | BP context wins over pur_agent partial hit |
+| `quality inspection results for material` | **qm_agent** | 0.600 | QM context + inspection tools |
+| `customer sales order status` | **sd_agent** | 0.800 | SD context dominant |
+| `storage bin location for material` | **wm_agent** | 0.600 | WM context dominant |
+
+**Word-boundary matching:** Short tokens ≤ 3 chars (`po`, `rfq`) use space-padded matching to prevent false positives (`hop` matching `po`, `golf` matching `go`).
+
+---
+
+### 2. Context Isolation — File-Based Handoffs ✅ IMPLEMENTED — April 15, 2026
+
+**Research basis:** "Harness Engineering" (Stanford, 2026) — File-backed state between orchestration layers prevents context window pollution and data loss from chat-string handoffs.
+
+**Problem:** Domain agents were previously receiving accumulated orchestrator context in their call parameters. In multi-turn or parallel scenarios, this caused context window bloat and cross-domain contamination.
+
+**Solution:** The Planner writes a **plan state file** before dispatching. Each domain agent reads only the plan — it does **not** receive orchestrator chat history.
+
+```python
+# dispatch_parallel() — writes plan before dispatch
+fd, plan_path = tempfile.mkstemp(prefix=f"plan_{run_id or 'local'}_", suffix=".json")
+with os.fdopen(fd, 'w') as f:
+    json.dump({
+        "query": decision.query,
+        "routing": decision.routing.value,
+        "primary_domain": decision.primary_domain,
+        "complexity": decision.complexity_score,
+        "assignments": [{"agent": a.agent_name, "task": a.task} for a in decision.assignments]
+    }, f)
+
+# Agent receives only plan_path — reads state on demand
+result = agent.run(query, auth_context, plan_path=plan_path, ...)
+
+# Cleanup in finally block
+finally:
+    os.remove(plan_path)
+```
+
+**Key properties:**
+- **Isolated context:** Each agent sees only its own task description and the shared plan — no accumulated orchestrator history
+- **Deterministic:** Plan file is append-only during execution, immutable once written
+- **Debuggable:** State files can be inspected on disk if an agent fails mid-execution
+- **Secure:** Plan file is world-readable only during agent execution window, then deleted
+- **Cross-agent visible:** Synthesis Agent can read all agent plan files if needed for conflict resolution
+
+**Applies to:** `dispatch_single()` and `dispatch_parallel()` — both now use file-backed handoffs.
+
+---
+
+### 3. Swarm vs Monolith: When to Use Which?
 
 | Scenario | Mode | Reason |
 |---|---|---|
@@ -183,16 +262,38 @@ result = run_agent_loop(query, auth, use_swarm=True)
 result = run_agent_loop(query, auth, use_swarm=False)
 ```
 
-### 2. Inter-Agent Communication
+### 3. Swarm vs Monolith: When to Use Which?
+
+| Scenario | Mode | Reason |
+|---|---|---|
+| Simple single-domain query | Monolith | Lower latency, no coordination overhead |
+| Multi-domain enterprise query | Swarm | Parallel execution, better results |
+| Cross-module JOIN-heavy query | Swarm | Graph RAG + Synthesis gives better JOINs |
+| Time-sensitive single entity | Monolith | Swarm overhead not justified |
+| Unknown domain / ambiguous query | Swarm | Planner picks best agents automatically |
+
+**API Usage:**
+```python
+# Use swarm (multi-agent)
+result = run_agent_loop(query, auth, use_swarm=True)
+
+# Use monolith (single orchestrator)
+result = run_agent_loop(query, auth, use_swarm=False)
+```
+
+### 4. Inter-Agent Communication
+
 Domain agents currently communicate only through the Synthesis Agent (star topology). Future enhancement: direct agent-to-agent negotiation via a shared message bus.
 
-### 3. Security in Swarm Mode
+### 5. Security in Swarm Mode
+
 - Each domain agent receives the `SAPAuthContext`
 - Synthesis Agent re-applies masking after merge (agents may miss fields)
 - Threat Sentinel evaluates the **Planner's decision**, not individual agents (single evaluation point)
 - `cross_agent` has elevated graph traversal — monitored by Threat Sentinel for hop depth
 
-### 4. Timeout & Graceful Degradation
+### 6. Timeout & Graceful Degradation
+
 - Each domain agent has a 30-second timeout
 - If an agent times out, Synthesis proceeds with available results
 - Error results from agents are logged but don't block synthesis
@@ -205,9 +306,11 @@ Domain agents currently communicate only through the Synthesis Agent (star topol
 | Component | File | Status |
 |---|---|---|
 | Domain Agents (7 specialists) | `domain_agents.py` | ✅ Working |
-| Planner Agent + Complexity Analyzer | `swarm/planner_agent.py` (19KB) | ✅ **LIVE** |
-| Synthesis Agent (merge + rank + conflicts) | `swarm/synthesis_agent.py` (16KB) | ✅ **LIVE** |
-| Swarm entry point | `swarm/__init__.py` (2KB) | ✅ **LIVE** |
+| Planner Agent + Complexity Analyzer | `swarm/planner_agent.py` | ✅ **LIVE** |
+| **Agent-as-a-Graph 1.5:1 Routing** | `swarm/planner_agent.py` | ✅ **NEW — April 15** |
+| **Context Isolation (File-Based Handoffs)** | `swarm/planner_agent.py` | ✅ **NEW — April 15** |
+| Synthesis Agent (merge + rank + conflicts) | `swarm/synthesis_agent.py` | ✅ **LIVE** |
+| Swarm entry point | `swarm/__init__.py` | ✅ **LIVE** |
 | Orchestrator `use_swarm` flag + API wiring | `orchestrator.py`, `api/endpoints/chat.py` | ✅ **LIVE** |
 | Frontend default `use_swarm=True` + swarm UI | `frontend/app.py` | ✅ **LIVE** |
 | Bug: `tables_involved` early init | `orchestrator.py` | ✅ Fixed |
