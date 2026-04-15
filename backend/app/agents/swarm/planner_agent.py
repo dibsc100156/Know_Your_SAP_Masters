@@ -280,6 +280,7 @@ class PlannerAgent:
         auth_context: SAPAuthContext,
         domain_hint: str = "auto",
         verbose: bool = False,
+        harness_run_id: str = None,
     ) -> SwarmDecision:
         """
         Analyze the query and produce a SwarmDecision — the routing plan.
@@ -287,10 +288,13 @@ class PlannerAgent:
         """
         if verbose:
             print(f"\n[PLANNER] Analyzing: '{query[:80]}'")
+            
+        reasoning_log = []
 
         # Step 1: Route to domain agents — 1.5:1 Agent:Tool graph scoring
         routed = graph_route_query(query, domain_hint, self._domain_agents, self.max_parallel_agents)
         agent_scores = {name: conf for name, conf in [(n, s) for (a, s) in routed for n in [a.name]]}
+        reasoning_log.append(f"Domain scoring: {', '.join(f'{k}={v:.2f}' for k, v in agent_scores.items())}")
 
         # Expand routed to dict format
         routed_agents = [(a, s) for a, s in routed]
@@ -298,6 +302,7 @@ class PlannerAgent:
         # Step 2: Complexity analysis
         complexity = QueryComplexityAnalyzer.total_score(query)
         complexity_details = QueryComplexityAnalyzer.analyze(query)
+        reasoning_log.append(f"Complexity: {complexity:.2f}. Details: {complexity_details}")
 
         # Step 3: Check for specialist paths first (these override generic routing)
         requires_negotiation = complexity_details["negotiation"] >= 0.5
@@ -668,11 +673,30 @@ class PlannerAgent:
                     print(f"\n[WARN] Harness unavailable: {e}")
 
         # Plan
-        decision = self.plan(query, auth_context, domain_hint, verbose=verbose)
+        decision = self.plan(query, auth_context, domain_hint, verbose=verbose, harness_run_id=run_id)
 
         if verbose:
             print(f"[PLANNER] Decision: {decision.routing.value}")
             print(f"[PLANNER] Reasoning: {decision.reasoning}")
+
+        # Log planner trajectory event
+        if run_id:
+            try:
+                from app.core.harness_runs import get_harness_runs
+                hr = get_harness_runs()
+                hr.add_trajectory_event(
+                    run_id=run_id,
+                    step="planner_decision",
+                    decision=decision.routing.value,
+                    reasoning=decision.reasoning,
+                    metadata={
+                        "complexity": getattr(decision, "complexity", 0.0),
+                        "agents_selected": [a.agent_name for a in decision.assignments],
+                    }
+                )
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to log planner trajectory for {run_id}: {e}")
 
         # Fallback to orchestrator for escalation
         if decision.routing == RoutingType.ESCALATE:

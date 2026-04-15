@@ -104,6 +104,13 @@ HEALING_RULES: List[HealingRule] = [
         description="Query returns no data — may need relaxed filters",
         apply="relax_where",
     ),
+    HealingRule(
+code="AMBIGUOUS_COLUMN",
+triggers=["ORA-00918", "column ambiguously defined"],
+description="Column reference is ambiguous across multiple JOINed tables",
+apply="qualify_column",
+),
+
 ]
 
 

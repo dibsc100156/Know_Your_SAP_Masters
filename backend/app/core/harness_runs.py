@@ -91,6 +91,7 @@ class HarnessRun:
     execution_time_ms: int = 0
     confidence_score: float = 0.0
     phase_states: List[PhaseState] = field(default_factory=list)
+    trajectory_log: List[Dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -106,6 +107,7 @@ class HarnessRun:
             "execution_time_ms": self.execution_time_ms,
             "confidence_score": self.confidence_score,
             "phase_states": [p.to_dict() for p in self.phase_states],
+            "trajectory_log": self.trajectory_log,
         }
 
     @classmethod
@@ -126,6 +128,7 @@ class HarnessRun:
             execution_time_ms=d.get("execution_time_ms", 0),
             confidence_score=d.get("confidence_score", 0.0),
             phase_states=phases,
+            trajectory_log=d.get("trajectory_log", []),
         )
 
 
@@ -235,6 +238,39 @@ class HarnessRuns:
 
         pipe.execute()
         return run
+
+    def add_trajectory_event(
+        self,
+        run_id: str,
+        step: str,
+        decision: str,
+        reasoning: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """
+        Record a reasoning span/decision point in the run's trajectory log.
+        """
+        now = _iso_now()
+        metadata = metadata or {}
+        
+        hash_key = self.HASH_KEY.format(run_id=run_id)
+        if not self._redis.exists(hash_key):
+            return
+            
+        run = self.get_run(run_id)
+        if not run:
+            return
+            
+        run.trajectory_log.append({
+            "timestamp": now,
+            "step": step,
+            "decision": decision,
+            "reasoning": reasoning,
+            "metadata": metadata,
+        })
+        # Save back the single JSON field without overwriting the whole hash
+        self._redis.hset(hash_key, "trajectory_log", json.dumps(run.trajectory_log))
+
 
     def update_phase(
         self,
@@ -383,6 +419,7 @@ class HarnessRuns:
         """Serialise a HarnessRun to a Redis hash (all values are strings)."""
         d = run.to_dict()
         d["phase_states"] = json.dumps(d["phase_states"])
+        d["trajectory_log"] = json.dumps(d.get("trajectory_log", []))
         # Convert all scalar fields to strings
         return {k: str(v) if not isinstance(v, str) else v for k, v in d.items()}
 
@@ -390,6 +427,8 @@ class HarnessRuns:
         """Deserialise a Redis hash back to a HarnessRun."""
         if "phase_states" in raw:
             raw["phase_states"] = json.loads(raw["phase_states"])
+        if "trajectory_log" in raw:
+            raw["trajectory_log"] = json.loads(raw["trajectory_log"])
         if "complexity_score" in raw:
             raw["complexity_score"] = float(raw["complexity_score"])
         if "confidence_score" in raw:

@@ -9,6 +9,8 @@ router = APIRouter()
 # Import the real 8-phase orchestrator
 from app.agents.orchestrator import run_agent_loop
 from app.core.security import security_mesh
+from app.core.quality_evaluator import QualityEvaluator
+from app.core.harness_runs import get_harness_runs
 
 
 # =============================================================================
@@ -88,6 +90,10 @@ class ChatResponse(BaseModel):
     role_applied: str
     user_id: str
 
+    # Quality Metrics
+    quality_metrics: Optional[Dict[str, float]] = None
+    trajectory_log: Optional[List[Dict[str, Any]]] = None
+
 
 @router.post("/chat/master-data", response_model=ChatResponse)
 async def chat_master_data_endpoint(request: ChatRequest):
@@ -149,6 +155,18 @@ async def chat_master_data_endpoint(request: ChatRequest):
                 "data_quality": neg_brief.data_quality,
             }
 
+        quality_metrics = None
+        run_id = result.get("run_id")
+        if run_id:
+            try:
+                harness_runs = get_harness_runs()
+                run_obj = harness_runs.get_run(run_id)
+                if run_obj:
+                    quality_metrics = QualityEvaluator.evaluate_run(run_obj)
+            except Exception as e:
+                import logging
+                logging.error(f"Failed to compute quality metrics for {run_id}: {e}")
+
         return ChatResponse(
             query=request.query,
             answer=result.get("answer", ""),
@@ -179,6 +197,8 @@ async def chat_master_data_endpoint(request: ChatRequest):
             validation_summary=result.get("validation_summary"),
             role_applied=auth_context.role_id,
             user_id=f"user:{auth_context.role_id.lower()}",
+            quality_metrics=quality_metrics,
+            trajectory_log=result.get("trajectory_log"),
         )
 
     except Exception as e:

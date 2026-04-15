@@ -22,6 +22,67 @@ from enum import Enum
 import json
 
 
+
+
+def meta_harness_propose(params: Dict[str, Any], auth_context: Any) -> Dict[str, Any]:
+    """
+    [Meta-Harness] Automated Meta-Harness Loop.
+    Reads recent HarnessRun failures from Redis, groups by pattern,
+    diagnoses root causes via LLM, and outputs YAML recommendations
+    for human review before applying patches.
+
+    IMPORTANT: Runs in ADVISORY MODE — patches are saved to YAML, not auto-applied.
+    """
+    from app.core.meta_harness_loop import MetaHarnessLoop, RECOMMENDATIONS_DIR
+    import logging
+    logger = logging.getLogger("meta-harness")
+
+    days = params.get("days", 7)
+    limit = params.get("limit", 200)
+
+    try:
+        mh = MetaHarnessLoop()
+        recommendations = mh.analyze_recent_failures(days=days, limit=limit)
+
+        if not recommendations:
+            return {
+                "status": "healthy",
+                "message": "No recent HarnessRun failures found — harness is healthy.",
+                "days_analyzed": days,
+                "recommendations": [],
+            }
+
+        # Format recommendations for the orchestrator
+        rec_summaries = []
+        for rec in sorted(recommendations, key=lambda r: ["P0","P1","P2"].index(r.priority)):
+            rec_summaries.append({
+                "id": rec.id,
+                "priority": rec.priority,
+                "title": rec.title,
+                "category": rec.category,
+                "target_file": rec.target_file,
+                "effort": rec.effort,
+                "risk": rec.risk,
+                "status": rec.status,
+                "evidence": rec.evidence[:200],
+                "patch_lines": rec.patch_lines[:5] if rec.patch_lines else [],
+            })
+
+        latest_file = sorted(RECOMMENDATIONS_DIR.glob("analysis_*.yaml"))[-1] if list(RECOMMENDATIONS_DIR.glob("analysis_*.yaml")) else None
+
+        return {
+            "status": "recommendations_ready",
+            "days_analyzed": days,
+            "failures_collected": limit,
+            "recommendation_count": len(recommendations),
+            "recommendations": rec_summaries,
+            "yaml_file": str(latest_file) if latest_file else None,
+            "advisory_note": "Review YAML before applying. Use approve_and_apply(rec_ids=[...]) to patch.",
+        }
+    except Exception as e:
+        logger.exception("meta_harness_propose failed")
+        return {"status": "error", "message": str(e)}
+
 # =============================================================================
 # Tool Result / Error Types
 # =============================================================================
@@ -1073,6 +1134,27 @@ TOOL_REGISTRY: Dict[str, Tool] = {
         },
         execute=temporal_graph_search,
         pillars=["Pillar 5"],
+    ),
+
+    "meta_harness_propose": Tool(
+        name="meta_harness_propose",
+        description="[Meta-Harness] Automated Meta-Harness Loop. Reads recent HarnessRun "
+                    "failures from Redis, groups by failure pattern, diagnoses root causes "
+                    "via LLM, and outputs YAML recommendations for human review. "
+                    "ADVISORY MODE: never auto-applies patches. "
+                    "Call this tool when the orchestrator detects repeated self-heal failures "
+                    "or when confidence_score drops below threshold for the same query pattern. "
+                    "Parameters: days (default 7), limit (default 200).",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "days": {"type": "integer", "description": "Look back window in days (default: 7)"},
+                "limit": {"type": "integer", "description": "Max failures to collect (default: 200)"},
+            },
+            "required": []
+        },
+        execute=meta_harness_propose,
+        pillars=["Meta-Harness"],
     ),
 }
 

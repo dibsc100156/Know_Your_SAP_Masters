@@ -100,6 +100,7 @@ Standard Orchestrator:
   Step 8:   Synthesis - natural language answer
   Step 8b:  Memory Log - log_query(), log_pattern_success/failure()
              + self_improver.review_and_improve() - autonomous promotion/demotion
+  Step 9:   API Response & Quality Evaluation - `QualityEvaluator` grades trajectory adherence via Redis trace
 ```
 
 ---

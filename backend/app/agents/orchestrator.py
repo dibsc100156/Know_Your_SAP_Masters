@@ -272,6 +272,19 @@ def run_agent_loop(
 
 
     start_time = time.time()
+
+    def _traj(step, decision, reasoning, metadata=None):
+        """Log a trajectory event to the harness run if active."""
+        if not current_run_id:
+            return
+        try:
+            from app.core.harness_runs import get_harness_runs
+            hr = get_harness_runs()
+            hr.add_trajectory_event(current_run_id, step, decision, reasoning, metadata or {})
+        except Exception:
+            pass
+
+
     from app.core.token_tracker import TokenTracker
     token_tracker = TokenTracker(model_name="claude-3-opus")
     # Mock token usage for orchestrator prompt (varies by query length + schema context)
@@ -369,6 +382,7 @@ def run_agent_loop(
         "domain": domain,
     }, auth_context=auth_context)
     trace("meta_path_match", meta_result)
+    _traj("phase_0_meta_path", "hit" if meta_path_used else "miss", "tables set after meta_path")
 
     meta_path_used = False
     base_sql = ""
@@ -567,6 +581,7 @@ def run_agent_loop(
             "n_results": 4,
         }, auth_context=auth_context)
         trace("schema_lookup", schema_result)
+        _traj("phase_1_schema_rag", "success" if schema_result.status.value == "success" else "fail", f"Schema RAG found tables")
 
         if schema_result.status == ToolStatus.ERROR:
             return {
@@ -1505,6 +1520,19 @@ def run_agent_loop(
             if verbose:
                 print(f"  [WARN] [HARNESS] complete_run failed: {e}")
 
+    result_dict["run_id"] = current_run_id
+    # Fetch trajectory log from harness run for API response
+    if current_run_id:
+        try:
+            from app.core.harness_runs import get_harness_runs
+            hr = get_harness_runs()
+            run_obj = hr.get_run(current_run_id)
+            if run_obj:
+                result_dict["trajectory_log"] = run_obj.trajectory_log
+        except Exception:
+            result_dict["trajectory_log"] = []
+    else:
+        result_dict["trajectory_log"] = []
     return result_dict
 
 

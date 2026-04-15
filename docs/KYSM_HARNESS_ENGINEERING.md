@@ -760,7 +760,7 @@ This video is the **defining theoretical foundation** for what we've been buildi
 - [ ] Shift `planner_agent` state passing from chat history to file-backed state (save execution plans to a temporary file/JSON and pass the path to child agents).
 
 **Medium term:**
-- [ ] Build an automated trace-analysis loop: have an LLM periodically review failed `tool_trace` logs to suggest modifications to our orchestration prompts or meta-paths (a basic version of Meta-Harness).
+- [x] **Meta-Harness Loop Built (Phase 11):** An automated `meta_harness_propose` tool runs via cron every 12 hours. It reads failed execution traces from Redis, diagnoses failure patterns using an LLM, outputs YAML recommendations for human review, and autonomously inserts patches (like new `HEALING_RULES` or `meta_paths`) into the codebase once approved.
 
 ---
 

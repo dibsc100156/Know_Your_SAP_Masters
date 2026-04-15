@@ -181,6 +181,57 @@ with st.sidebar:
     st.caption("**8 Phases:** Security → Orchestrator → Schema RAG → SQL Pattern → Graph RAG → Temporal Engine → QM Semantic → Negotiation")
 
 # ============================================================================
+
+# ============================================================================
+
+# ============================================================================
+# HELPER — Trajectory Log Panel
+# ============================================================================
+
+def render_trajectory_log(traj_log: list):
+    """Render the recorded reasoning span log as an expandable timeline."""
+    if not traj_log:
+        return
+
+    st.markdown("#### 🧠 Trajectory Log")
+    for i, event in enumerate(traj_log):
+        step = event.get("step", "?")
+        decision = event.get("decision", "?")
+        reasoning = event.get("reasoning", "?")
+        meta = event.get("metadata", {})
+        ts = event.get("timestamp", "")
+
+        icon = "🔀" if "planner" in step else "⚙️"
+        with st.expander(f"{icon} [{i+1}] {step} → {decision}"):
+            st.caption(f"__{ts}__" if ts else "")
+            st.markdown(f"**Reasoning:** {reasoning}")
+            if meta:
+                st.json(meta)
+
+# HELPER — Quality Metrics Panel
+# ============================================================================
+
+def render_quality_metrics_panel(metrics: dict):
+    """Render the Quality Metrics computed from HarnessRuns execution traces."""
+    if not metrics:
+        return
+        
+    correctness = metrics.get("correctness_score", 0.0)
+    adherence = metrics.get("trajectory_adherence", 0.0)
+    
+    st.markdown("#### 🛡️ Run Quality Metrics")
+    c1, c2 = st.columns(2)
+    
+    with c1:
+        st.metric("Correctness Score", f"{correctness:.2f}")
+        st.progress(correctness)
+        st.caption("Derived from confidence, penalizing sentinel blocks and failed phases.")
+        
+    with c2:
+        st.metric("Trajectory Adherence", f"{adherence:.2f}")
+        st.progress(adherence)
+        st.caption("Measures phase sequence stability (penalizes backtracking/healing).")
+
 # HELPER — Confidence Score Panel
 # ============================================================================
 
@@ -614,6 +665,16 @@ def render_answer(msg: dict):
     # ── Confidence Score ─────────────────────────────────────────────────────
     if conf:
         render_confidence_panel(conf)
+
+    # ── Quality Metrics (Phase 12) ───────────────────────────────────────────
+    q_metrics = payload.get("quality_metrics")
+    if q_metrics:
+        render_quality_metrics_panel(q_metrics)
+
+    # ── Trajectory Log ───────────────────────────────────────────────────────
+    traj = payload.get("trajectory_log")
+    if traj:
+        render_trajectory_log(traj)
 
     # ── Pillar Map ──────────────────────────────────────────────────────────
     with st.expander("🗺️ Pillar Activation Map"):

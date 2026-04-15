@@ -1,17 +1,17 @@
 # KYSM Level-5 Roadmap — Consolidated Implementation Status
-**Last Updated:** April 13, 2026 | Project: Know Your SAP Masters (SAP Masters)
+**Last Updated:** April 15, 2026 | Project: Know Your SAP Masters (SAP Masters)
 
 ---
 
 ## Executive Summary
 
-The KYSM architecture is a 5-Pillar RAG system augmented by 11 execution phases,
+The KYSM architecture is a 5-Pillar RAG system augmented by 12 execution phases,
 2 infrastructure migrations (Memgraph M1–M6, Qdrant cluster), and a suite of
 Harness Engineering principles that collectively move the chatbot from a static
 Q&A tool to an autonomous, self-healing, threat-aware, multi-agent enterprise
 assistant.
 
-**Infrastructure Status (April 14, 2026):**
+**Infrastructure Status (April 15, 2026):**
 - Qdrant ✅ ACTIVE — 4 collections (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context)
 - Memgraph ✅ ACTIVE — 114 nodes / 47 edges loaded
 - ChromaDB: Retained for local dev fallback only
@@ -34,7 +34,7 @@ assistant.
 
 ---
 
-## 11-Phase Execution Roadmap
+## 12-Phase Execution Roadmap
 
 | Phase | Name | Description | Status |
 |-------|------|-------------|--------|
@@ -57,6 +57,9 @@ assistant.
 | 8 | Result Masking | Role-based column redaction (Pillar 1) | ✅ Working |
 | 9 | Frontend Modernization | 8-phase + confidence gauge + signal table + dark card | ✅ Working |
 | **10** | **Multi-Agent Domain Swarm** | Planner + Domain Agents + Synthesis Agent — LIVE port 8001 | ✅ **NEW — LIVE** |
+| **11** | **Automated Meta-Harness** | Agentic proposer loop: trace analysis → YAML recs → auto-patch | ✅ **NEW — LIVE** |
+| **12** | **Quality Metrics Eval** | `QualityEvaluator` computes trajectory adherence and correctness score from Redis traces | ✅ **NEW — LIVE** |
+| **12b** | **Trajectory Log** | Structured reasoning-span log per run: step, decision, reasoning, metadata stored in `HarnessRun.trajectory_log[]` and returned in API | ✅ **NEW — LIVE** |
 
 ---
 
