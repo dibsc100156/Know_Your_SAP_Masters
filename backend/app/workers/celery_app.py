@@ -91,6 +91,32 @@ celery_app_instance.conf.update(
 )
 
 # ── Queue Definitions ─────────────────────────────────────────────────────────
+# Domain queues — each maps to a specific SAP domain agent.
+# Workers can be started per-queue for independent autoscaling:
+#
+#   celery -A app.workers.celery_app worker -Q pur_queue --concurrency=4
+#   celery -A app.workers.celery_app worker -Q bp_queue,mm_queue --concurrency=2
+#   celery -A app.workers.celery_app worker -Q cross_queue --concurrency=1
+#
+# KEDA example for Kubernetes autoscaling:
+#   apiVersion: keda.k8s.io/v1alpha1
+#   kind: ScaledObject
+#   metadata:
+#     name: sapmasters-pur-agent-scaler
+#   spec:
+#     scaleTargetRef:
+#       name: sapmasters-swarm-pur
+#     pollingInterval: 15
+#     cooldownPeriod: 300
+#     minReplicaCount: 1
+#     maxReplicaCount: 10
+#     triggers:
+#       - type: rabbitmq
+#         metadata:
+#           queueName: pur_queue
+#           host: amqp://sapmasters:sapmasters123@rabbitmq:5672/
+#           queueLength: "10"
+
 agent_queue = Queue(
     "agent",
     exchange=Exchange("sap_masters", type="direct"),
@@ -109,7 +135,55 @@ priority_queue = Queue(
     routing_key="priority",
     max_priority=10,
 )
-celery_app_instance.conf.task_queues = (agent_queue, system_queue, priority_queue)
+# Domain agent queues (for swarm autoscaling)
+pur_queue = Queue(
+    "pur_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="pur_queue",
+    max_priority=5,
+)
+bp_queue = Queue(
+    "bp_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="bp_queue",
+    max_priority=5,
+)
+mm_queue = Queue(
+    "mm_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="mm_queue",
+    max_priority=5,
+)
+sd_queue = Queue(
+    "sd_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="sd_queue",
+    max_priority=5,
+)
+qm_queue = Queue(
+    "qm_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="qm_queue",
+    max_priority=5,
+)
+wm_queue = Queue(
+    "wm_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="wm_queue",
+    max_priority=5,
+)
+cross_queue = Queue(
+    "cross_queue",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="cross_queue",
+    max_priority=5,
+)
+
+all_queues = (
+    agent_queue, system_queue, priority_queue,
+    pur_queue, bp_queue, mm_queue, sd_queue, qm_queue, wm_queue, cross_queue,
+)
+celery_app_instance.conf.task_queues = all_queues
 
 # ── Task Routes ───────────────────────────────────────────────────────────────
 celery_app_instance.conf.task_routes = {
@@ -128,7 +202,20 @@ celery_app_instance.conf.task_routes = {
         "routing_key": "priority",
         "priority": 8,
     },
+    # ── Domain agent tasks (swarm autoscaling) ────────────────────────────
+    # Queue is determined by agent_name → queue mapping inside domain_tasks.py
+    # We route the generic run_domain_task to queues based on task args.
+    "app.workers.domain_tasks.run_domain_task": {
+        "queue": "agent",        # Default; overridden by queue param in .delay()
+        "routing_key": "agent",
+        "priority": 4,
+    },
 }
+
+# ── Domain task queue routing via task_apply ────────────────────────────────────
+# Celery doesn't support dynamic routing_key from task args at route config time.
+# We use .apply_async(queue=...) at call site instead. The Kombu queue binding
+# is already declared above. See dispatch_domain_group() in domain_tasks.py.
 
 # ── Beat Schedule (periodic tasks) ───────────────────────────────────────────────
 # Start with: celery -A app.workers.celery_app beat --loglevel=info

@@ -140,7 +140,7 @@ Golden dataset to feed Eval Alerting with real failure signals.
 | `backend/app/agents/orchestrator_tools.py` | Tool registry + 12 tool implementations |
 | `backend/app/agents/swarm/planner_agent.py` | **NEW** — Planner Agent + Complexity Analyzer (19KB) |
 | `backend/app/agents/swarm/synthesis_agent.py` | **NEW** — Synthesis Agent (16KB) |
-| `backend/bolt_load.py` | Neo4j Bolt loader for Memgraph schema |
+| `backend/app/workers/domain_tasks.py` | **NEW —** Per-domain Celery tasks with queue routing (pur/bp/mm/sd/qm/wm/cross queues) |
 | `docs/KYSM_HARNESS_ENGINEERING.md` | Harness Engineering principles + implementation |
 | `docs/MULTI_AGENT_SWARM_ARCHITECTURE.md` | Full swarm architecture documentation |
 | `docs/MEMGRAPH_MIGRATION_GUIDE.md` | Memgraph Phase M1–M6 migration guide |
@@ -163,7 +163,7 @@ Golden dataset to feed Eval Alerting with real failure signals.
 | Inter-Agent Message Bus | `app/core/message_bus.py` | ✅ IMPLEMENTED (Phase 13) |
 | Negotiation Protocol | `app/core/negotiation_protocol.py` | ✅ IMPLEMENTED (Phase 13) |
 | Agent Inbox + Message Dispatcher | `app/agents/swarm/message_dispatcher.py` | ✅ IMPLEMENTED (Phase 13) |
-| Swarm Autoscaling (Celery workers) | — | 🚧 Planned |
+| Swarm Autoscaling (Celery workers) | `app/workers/domain_tasks.py` | ✅ **IMPLEMENTED — SWARM AUTOSCALING** |
 
 ### Bugs Fixed During Swarm Activation
 1. `tables_involved` referenced before initialization → early init added before sentinel evaluation
