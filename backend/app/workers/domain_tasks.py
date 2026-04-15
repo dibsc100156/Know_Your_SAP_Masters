@@ -46,7 +46,7 @@ import logging
 import time
 from typing import Optional, List
 
-from celery import shared_task, Group
+from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded, TimeLimitExceeded
 
 logger = logging.getLogger(__name__)
