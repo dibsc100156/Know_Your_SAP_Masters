@@ -655,6 +655,46 @@ Optimal RAG systems combine **3–5 strategies** — not just one. Pure semantic
 
 ---
 
+## ✅ New: Why 89% of AI Agents Never Reach Production (April 15, 2026)
+**Video:** https://youtu.be/axF-X3nC0OA | **Date:** April 15, 2026
+
+### Video Core Thesis
+Teams that ship agents focus on **architecture**, not models or prompts. The biggest trap is betting on a single monolithic vendor (AWS, Azure, OpenAI). A monolith becomes a single point of failure and guarantees obsolescence. The solution is an **open, 4-layer interoperable stack**.
+
+### The 4-Layer Enterprise Agent Stack & KYSM Mapping
+1. **Context Layer:** Data connectors, vector indexes, knowledge graphs. *Lock-in Danger:* Context is the biggest lock-in point. Separate context from models.
+   - **KYSM Mapping:** Qdrant (Schema/SQL), Memgraph (Graph RAG) — fully decoupled from LLM.
+2. **Model Layer:** Shared infrastructure. Multi-model routing is standard. Match model to specific micro-task.
+   - **KYSM Mapping:** OpenClaw handles multi-model routing (Opus for synthesis, Haiku for fast routing).
+3. **Orchestration Layer:** Coordinates across systems. Orchestration and Context must be tightly coupled.
+   - **KYSM Mapping:** Our `planner_agent.py` + `synthesis_agent.py` horizontal swarm orchestration.
+4. **Security Layer:** Data isolation, encryption, SSO. Cannot tolerate fragmentation. Built-in by default.
+   - **KYSM Mapping:** `security_sentinel.py` + `SAPAuthContext` enforces centralized, granular RBA masking across domains.
+
+**Vertical Experiences:** Sit on top of the 4 layers (e.g., support copilots, engineering tools). Adoption is highest when embedded directly into existing tools (IDE, Slack, SAP).
+
+---
+
+## ✅ New: Agent Orchestration — Copilot & VS Code (April 15, 2026)
+**Video:** https://youtu.be/-BhfcPseWFQ | **Date:** April 15, 2026
+
+### Video Core Thesis
+Shifting from humans orchestrating chats to **AI agents orchestrating AI agents**. Define an "Orchestrator Agent" that breaks down tasks and delegates to specialized "Sub-Agents" (Planner, Coder, Designer) powered by specific LLMs.
+
+### Crucial Architectural Insights
+- **Adversarial Prompting:** Agents want to do everything. You must explicitly tell the Orchestrator: *"Never implement anything yourself. Just delegate."* And tell Sub-Agents: *"Do not let the orchestrator tell you how to do your job. Make your own decisions."*
+- **Context Window Isolation (The Hidden Superpower):** A complex task can generate 2,770 lines of code but only consume 10.8K tokens in the main orchestrator. How? Sub-agents operate in isolated context windows and pass only the final output/summary back to the main thread. This prevents "Context Rot".
+- **File-based Handoffs:** Passing large plans via chat causes data loss. Planners should save plans to a Markdown/JSON file and pass the file path to child agents.
+- **Parallel Execution:** Sub-agents should be sliced and launched simultaneously.
+
+### Recommended KYSM Updates
+**Immediate:**
+- [ ] Implement **Context Isolation**: Ensure domain agents run in isolated threads (via `ThreadPoolExecutor`) so they don't pollute the main orchestrator's prompt history.
+- [ ] Shift from message-based to **File-based State**: When `planner_agent` creates a cross-module execution plan, drop it into a temporary JSON/MD state file rather than passing the raw string into the context window of domain agents.
+- [ ] Configure explicit **Multi-Model Routing**: `planner_agent` = Opus/Sonnet for reasoning; `sql_executor` = Codex/Haiku for strict syntax generation.
+
+---
+
 ## ✅ New: Harness Engineering: The New Science of AI Agents (April 15, 2026)
 **Video:** https://youtu.be/Xxuxg8PcBvc | **Date:** April 15, 2026
 
