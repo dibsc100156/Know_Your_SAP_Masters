@@ -1,0 +1,119 @@
+# Meta-Harness Analysis | 2026-04-15 14:23 UTC
+# Failures analyzed: 9
+# Recommendations: 3
+
+recommendation_id: agent_routing_fix_001
+category: agent_routing
+title: pur_agent undersells on queries containing 'vendor + purchasing' compound intent
+priority: P1
+effort: low
+risk: low
+target_file: backend/app/agents/swarm/planner_agent.py
+examples: [none]
+llm_model: openai/gpt-4o
+created_at: 2026-04-15T14:23:41.731016
+status: pending
+
+evidence: |
+  |
+
+pattern: |
+  |
+
+recommended_fix: |
+  |
+
+patch: |
+  ============================================================
+  FILE: backend/app/agents/swarm/planner_agent.py
+  ============================================================
+  # Compound keyword bonus: 'vendor' + purchasing signal → boost pur_agent
+compound_vendor_purchasing = (
+(any(k in query_lower for k in ["vendor", "supplier"])) and
+(any(k in query_lower for k in ["purchase order", "contract", "rfq", "info record"]))
+)
+if compound_vendor_purchasing:
+agent_context_score = min(1.0, agent_context_score + 0.3)
+if agent_name == "pur_agent":
+final_score = min(1.0, final_score + 0.15)
+
+---
+
+recommendation_id: healing_new_rule_001
+category: healing_rules
+title: Missing rule for ORA-00918 (column ambiguously defined in multi-JOIN)
+priority: P2
+effort: medium
+risk: low
+target_file: backend/app/core/self_healer.py
+examples: [none]
+llm_model: openai/gpt-4o
+created_at: 2026-04-15T14:23:41.731016
+status: pending
+
+evidence: |
+  |
+
+pattern: |
+  |
+
+recommended_fix: |
+  |
+
+patch: |
+  ============================================================
+  FILE: backend/app/core/self_healer.py
+  ============================================================
+  HealingRule(
+code="AMBIGUOUS_COLUMN",
+triggers=["ORA-00918", "column ambiguously defined"],
+description="Column reference is ambiguous across multiple JOINed tables",
+apply="qualify_column",
+),
+
+---
+
+recommendation_id: meta_path_gap_001
+category: meta_paths
+title: Missing meta-path for vendor quality scorecard (QALS → LFA1 → TQ01T)
+priority: P2
+effort: medium
+risk: low
+target_file: backend/app/core/meta_path_library.py
+examples: [seed_fail_001, seed_fail_002, seed_fail_004]
+llm_model: openai/gpt-4o
+created_at: 2026-04-15T14:23:41.731016
+status: pending
+
+evidence: |
+  |
+
+pattern: |
+  |
+
+recommended_fix: |
+  |
+
+patch: |
+  ============================================================
+  FILE: backend/app/core/meta_path_library.py
+  ============================================================
+  {
+"name": "vendor_quality_scorecard",
+"description": "Vendor quality scorecard: LFA1 + QALS inspection results + TQ01T quality codes",
+"table_chain": ["LFA1", "QALS", "TQ01T"],
+"join_conditions": {
+"LFA1": {"QALS": "LFA1~LIFNR = QALS~LIFNR"},
+"QALS": {"TQ01T": "QALS~QSMAT = TQ01T~QSMAT AND TQ01T~SPRAS = 'E'"}
+},
+"select_columns": {
+"LFA1": ["LIFNR", "NAME1", "ORT01"],
+"QALS": ["LIFNR", "ART", "Q Zahlen (lot size)", "UDATE"],
+"TQ01T": ["QSMAT", "QKText"]
+},
+"example_queries": ["vendor quality rating", "supplier inspection results", "top vendors by quality score"],
+"row_count_warning": "LFA1 has ~10000 rows; filter by LIFNR or date range"
+},
+
+---
+

@@ -47,9 +47,25 @@
 - Orchestrator logs key phase transitions (meta-path match, schema RAG, SQL assembly, self-heal) via `_traj()` helper.
 - `trajectory_log` exposed in `ChatResponse` API and rendered in Streamlit frontend as an expandable timeline with step icons, decision labels, reasoning text, and metadata JSON.
 
+## Phase 13: Inter-Agent Message Bus & Negotiation Protocol
+- Built `message_bus.py` — Redis-backed pub/sub + streams for agent-to-agent communication.
+  * `AgentMessage` schema: 6 types (QUERY, RESPONSE, ASSERTION, CHALLENGE, NEGOTIATE, COMMIT).
+  * `publish()`, `broadcast()`, `reply()`, `get_messages()`, `get_inbox()`, `get_conversation()`.
+- Built `negotiation_protocol.py` — 4-phase conflict resolution engine.
+  * Strategies: AUTHORITY, CONFIDENCE, AVERAGE, MERGE, MOST_RECENT, PREFER_SOURCE.
+  * SOURCE_AUTHORITY ranking (EKKO/BSEG=10, LFA1=7, etc.).
+  * Integration test PASSED: EKKO 125K vs LFB1 98.5K → correctly averaged to 111,750 EUR.
+- Built `message_dispatcher.py` — Bus integration layer for the swarm.
+  * `query_agent()` — synchronous inter-agent QUERY with 10s timeout.
+  * `detect_and_negotiate()` — auto-detects field conflicts and runs full Negotiation Protocol.
+  * `AGENT_REGISTRY` — 7 agents with subscriptions, authority rankings, primary tables.
+- Design documented in `docs/INTER_AGENT_MESSAGE_BUS_DESIGN.md`.
+
 ## Phase Status
 | Phase | Component | Status |
 |-------|-----------|--------|
 | 11 | Automated Meta-Harness Loop | ✅ **LIVE** |
 | 12 | Quality Metrics Evaluation | ✅ **LIVE** |
 | 12b | Trajectory Log | ✅ **LIVE** |
+| 13 | Inter-Agent Message Bus | ✅ **IMPLEMENTED** |
+| 13b | Negotiation Protocol | ✅ **IMPLEMENTED** |

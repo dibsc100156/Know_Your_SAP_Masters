@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import os
+from dotenv import load_dotenv
+
+# Load .env file from backend/ directory (sets MEMGRAPH_URI, QDRANT_URL, etc.)
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 from app.api.api import api_router
 from app.api.middleware.session_middleware import SessionMiddleware, check_redis_health
@@ -91,6 +95,73 @@ def health():
 def redis_health():
     """Dedicated Redis health endpoint for load balancer probes."""
     return check_redis_health()
+
+
+@app.get("/debug/graph-backend")
+def graph_backend_debug():
+    """
+    Diagnostic endpoint for Graph RAG backend.
+    Reports which backend is active, connection status, and schema stats.
+    """
+    from app.core.graph_store import graph_store
+    import time as _time
+
+    result = {"backend": "unknown", "timestamp": _time.time()}
+
+    # Detect backend type
+    backend_type = type(graph_store).__name__
+    result["backend_type"] = backend_type
+    result["is_memgraph"] = backend_type == "MemgraphShim"
+    result["is_networkx"] = backend_type in ("GraphRAGManager", "GraphStore")
+
+    # NetworkX stats (always available as mirror)
+    try:
+        nx_meta = getattr(graph_store, "_node_meta", None) or []
+        edge_meta = getattr(graph_store, "_edge_meta", None) or []
+        result["networkx"] = {
+            "nodes": len(nx_meta),
+            "edges": len(edge_meta),
+        }
+    except Exception as e:
+        result["networkx"] = {"error": str(e)}
+
+    # Memgraph stats (if active)
+    if result["is_memgraph"]:
+        try:
+            mg = graph_store._mg
+            node_result = list(mg.execute_and_fetch("MATCH (n:SAPTable) RETURN count(n) AS cnt"))
+            edge_result = list(mg.execute_and_fetch("MATCH ()-[r:FOREIGN_KEY]->() RETURN count(r) AS cnt"))
+
+            result["memgraph"] = {
+                "connected": True,
+                "nodes": node_result[0]["cnt"] if node_result else 0,
+                "edges": edge_result[0]["cnt"] if edge_result else 0,
+            }
+
+            # Sample traversal with timing
+            start = _time.time()
+            sample = list(mg.execute_and_fetch(
+                "MATCH path = (a:SAPTable {table_name: 'LFA1'})-[r:FOREIGN_KEY*1..2]-(b:SAPTable) "
+                "RETURN a.table_name AS src, b.table_name AS dst LIMIT 5"
+            ))
+            elapsed = round((_time.time() - start) * 1000, 1)
+            result["memgraph"]["traversal_ms"] = elapsed
+            result["memgraph"]["sample_paths"] = [
+                {"src": str(r["src"]), "dst": str(r["dst"])} for r in sample
+            ]
+
+            # Sync status
+            if hasattr(graph_store, "_edge_meta"):
+                result["sync"] = {
+                    "nx_edges": len(graph_store._edge_meta),
+                    "mg_edges": result["memgraph"]["edges"],
+                    "in_sync": len(graph_store._edge_meta) == result["memgraph"]["edges"],
+                }
+
+        except Exception as e:
+            result["memgraph"] = {"connected": False, "error": str(e)}
+
+    return result
 
 
 # ── Startup ───────────────────────────────────────────────────────────────────

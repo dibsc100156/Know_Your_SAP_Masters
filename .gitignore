@@ -1,4 +1,4 @@
-# Virtual environments
+﻿# Virtual environments
 backend/.venv/
 .venv/
 venv/
@@ -34,3 +34,6 @@ Thumbs.db
 *.pyc
 *.pyo
 .venv/
+
+# Environment
+.env

@@ -5,16 +5,16 @@
 
 ## Executive Summary
 
-The KYSM architecture is a 5-Pillar RAG system augmented by 12 execution phases,
+The KYSM architecture is a 5-Pillar RAG system augmented by 13 execution phases,
 2 infrastructure migrations (Memgraph M1–M6, Qdrant cluster), and a suite of
 Harness Engineering principles that collectively move the chatbot from a static
 Q&A tool to an autonomous, self-healing, threat-aware, multi-agent enterprise
 assistant.
 
-**Infrastructure Status (April 15, 2026):**
+**Infrastructure Status (April 15, 2026 — updated 18:00 IST):**
 - Qdrant ✅ ACTIVE — 4 collections (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context)
-- Memgraph ✅ ACTIVE — 114 nodes / 47 edges loaded
-- ChromaDB: Retained for local dev fallback only
+- Memgraph ✅ ACTIVE — 114 nodes / **137 edges** (all NetworkX edges synced via `sync_nx_to_memgraph.py`; 151 total including bidirectional duplicates)
+- ChromaDB: Retired — all collections migrated to Qdrant (Schema RAG, Pattern RAG, QM, Graph Embeddings)
 - RabbitMQ ✅ ACTIVE — amqp://sapmasters:sapmasters123@localhost:5672//
 - Redis ✅ ACTIVE — localhost:6379/0
 - Celery Worker ✅ ACTIVE — 4 threads, queues: agent + priority
@@ -34,7 +34,7 @@ assistant.
 
 ---
 
-## 12-Phase Execution Roadmap
+## 13-Phase Execution Roadmap
 
 | Phase | Name | Description | Status |
 |-------|------|-------------|--------|
@@ -60,6 +60,7 @@ assistant.
 | **11** | **Automated Meta-Harness** | Agentic proposer loop: trace analysis → YAML recs → auto-patch | ✅ **NEW — LIVE** |
 | **12** | **Quality Metrics Eval** | `QualityEvaluator` computes trajectory adherence and correctness score from Redis traces | ✅ **NEW — LIVE** |
 | **12b** | **Trajectory Log** | Structured reasoning-span log per run: step, decision, reasoning, metadata stored in `HarnessRun.trajectory_log[]` and returned in API | ✅ **NEW — LIVE** |
+| **13** | **Inter-Agent Message Bus** | Redis pub/sub + streams: agent QUERY/RESPONSE/ASSERTION/CHALLENGE/NEGOTIATE/COMMIT messaging | ✅ **NEW — IMPLEMENTED** |
 
 ---
 
@@ -71,7 +72,7 @@ assistant.
 | M2 | Cypher port — replace NetworkX with Memgraph queries | 🚧 Pending |
 | M1 | Memgraph schema init + load (init_schema.cql) | ✅ COMPLETE |
 | M2 | Native Cypher path queries (find_all_ranked_paths_native) | ✅ COMPLETE |
-| M3 | `use_memgraph` flag in main.py | 🚧 Pending |
+| M3 | `use_memgraph` flag in main.py + auto-sync on startup | ✅ COMPLETE |
 | M4 | Qdrant cluster migration (Schema RAG + SQL Pattern RAG + QM + Graph Embeddings) | ✅ COMPLETE |
 | M5 | Celery async worker pool (RabbitMQ + Redis + 4-thread worker) | ✅ COMPLETE |
 | M6 | Load testing + production tuning | 🚧 Pending |
@@ -115,7 +116,7 @@ Build transaction tool harness for autonomous SAP writes:
 - `BAPI_SALESORDER_CHANGE` — Modify sales orders
 
 ### P2 — Multi-Agent Domain Swarms — Inter-Agent Message Bus
-Break domain agents out of star-topology via a shared message bus for direct agent-to-agent negotiation.
+Break domain agents out of star-topology via a shared message bus for direct agent-to-agent negotiation. ✅ **COMPLETED (Phase 13)**
 
 ### P3 — 50-Query Benchmark Suite
 Golden dataset to feed Eval Alerting with real failure signals.
@@ -159,8 +160,9 @@ Golden dataset to feed Eval Alerting with real failure signals.
 | Bug: `tables_involved` early init | `orchestrator.py` | ✅ Fixed |
 | Bug: `cross_agent` empty guard | `domain_agents.py` | ✅ Fixed |
 | Bug: `abs(min(vals), 0.01)` syntax | `synthesis_agent.py` | ✅ Fixed |
-| Inter-Agent Message Bus | — | 🚧 Planned |
-| Agent-to-Agent Negotiation Protocol | — | 🚧 Planned |
+| Inter-Agent Message Bus | `app/core/message_bus.py` | ✅ IMPLEMENTED (Phase 13) |
+| Negotiation Protocol | `app/core/negotiation_protocol.py` | ✅ IMPLEMENTED (Phase 13) |
+| Agent Inbox + Message Dispatcher | `app/agents/swarm/message_dispatcher.py` | ✅ IMPLEMENTED (Phase 13) |
 | Swarm Autoscaling (Celery workers) | — | 🚧 Planned |
 
 ### Bugs Fixed During Swarm Activation

@@ -662,6 +662,56 @@ class MemgraphGraphRAGManager:
 
     # ─── Traversal APIs ───────────────────────────────────────────────────────
 
+
+    def _sync_nx_edges_to_memgraph(self):
+        """
+        Add any NetworkX edges that are missing from Memgraph.
+        Called automatically after mirroring in use_memgraph().
+        Ensures Memgraph has all 137 edges from GraphRAGManager._edge_meta,
+        not just the ~47 in init_schema.cql.
+        """
+        if self._mg is None:
+            return
+
+        existing = set()
+        try:
+            result = self._mg.execute_and_fetch(
+                "MATCH (a:SAPTable)-[r:FOREIGN_KEY]->(b:SAPTable) "
+                "RETURN a.table_name AS src, b.table_name AS tgt"
+            )
+            existing = {(row["src"], row["tgt"]) for row in result}
+        except Exception as e:
+            logger.warning(f"[Memgraph] edge sync check failed: {e}")
+            return
+
+        synced = 0
+        for (t1, t2), meta in self._edge_meta.items():
+            if (t1, t2) in existing:
+                continue
+            try:
+                self._mg.execute(
+                    "MATCH (a:SAPTable:{table_name: $t1}),"
+                    "(b:SAPTable:{table_name: $t2}) "
+                    "MERGE (a)-[r:FOREIGN_KEY]->(b) "
+                    "SET r.condition=$condition, r.cardinality=$cardinality, "
+                    "r.bridge_type=$bridge_type, r.notes=$notes",
+                    params={
+                        "t1": t1, "t2": t2,
+                        "condition": meta.condition,
+                        "cardinality": meta.cardinality,
+                        "bridge_type": meta.bridge_type,
+                        "notes": meta.notes,
+                    },
+                )
+                synced += 1
+            except Exception as e:
+                logger.debug(f"[Memgraph] edge sync ({t1}->{t2}) failed: {e}")
+
+        if synced:
+            logger.info(f"[Memgraph] Edge sync: {synced} missing edges added.")
+        else:
+            logger.info("[Memgraph] Edge sync: all NetworkX edges already in Memgraph.")
+
     def traverse_graph(self, start_table: str, end_table: str) -> str:
         """
         Finds the shortest JOIN path using BFS on the NetworkX mirror.
@@ -1143,6 +1193,12 @@ def use_memgraph(
                     bridge_type=meta.get("bridge_type", "internal"),
                     notes=meta.get("notes", ""),
                 )
+
+            # ── Sync all NetworkX edges → Memgraph ────────────────────────────
+            # init_schema.cql only has ~47 edges; the remaining 90+ are in
+            # GraphRAGManager._edge_meta but were never loaded into Memgraph.
+            # Sync them now so find_all_ranked_paths_native has the full graph.
+            self._sync_nx_edges_to_memgraph()
 
     # Replace the module-level instance's class with the shim and initialize it
     gs.__class__ = MemgraphShim
