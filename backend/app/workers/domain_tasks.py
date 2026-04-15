@@ -310,7 +310,7 @@ def dispatch_domain_group(
 
 # ── Result collection helper ──────────────────────────────────────────────────
 
-def collect_group_results(async_results: list, assignments: list, timeout: float = 300.0) -> list:
+def collect_group_results(async_results: list, assignments: list, run_id: str = None, timeout: float = 300.0) -> list:
     """
     Collect and verify results from a dispatched Celery Group.
 
@@ -354,7 +354,7 @@ def collect_group_results(async_results: list, assignments: list, timeout: float
     success_count = len([r for r in results if r.get("status") != "celery_error"])
     logger.info(
         f"[CollectGroup] {success_count}/{len(results)} agents succeeded, "
-        f"{len(failed)} failed — run_id={assignments[0].run_id if assignments else 'N/A'}"
+        f"{len(failed)} failed — run_id={run_id or 'N/A'}"
     )
 
     return results

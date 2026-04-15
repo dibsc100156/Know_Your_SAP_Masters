@@ -1473,8 +1473,6 @@ class PlannerAgent:
 
         import json, tempfile, os
 
-        from app.workers.domain_tasks import dispatch_domain_group, collect_group_results
-
 
 
         plan_state = {
@@ -1525,33 +1523,52 @@ class PlannerAgent:
 
 
 
-        # -- Celery dispatch: each domain agent goes to its own queue ----------
+                # -- ThreadPoolExecutor dispatch (reliable, cross-platform) ----------
+        # On Windows + Celery solo pool, async result communication is broken.
+        # Fall back to ThreadPoolExecutor for in-process parallel execution.
+        # Swarm autoscaling via Celery workers remains available for Linux/production.
+        from concurrent.futures import ThreadPoolExecutor, as_completed
 
-        # Replaces ThreadPoolExecutor. Each task lands in a dedicated queue;
+        def _run_agent_task(assignment):
+            """Run one domain agent in a thread."""
+            agent = self._domain_agents.get(assignment.agent_name)
+            if not agent:
+                return {
+                    "error": f"Unknown agent: {assignment.agent_name}",
+                    "status": "agent_not_found",
+                    "agent_name": assignment.agent_name,
+                }
+            try:
+                result = agent.run(
+                    query=decision.query,
+                    auth_context=auth_context,
+                    tables_hint=assignment.tables_hint,
+                    run_id=run_id,
+                    plan_path=plan_path,
+                    verbose=False,
+                )
+                result["status"] = result.get("status", "success")
+                result["agent_name"] = assignment.agent_name
+                return result
+            except Exception as e:
+                logger.exception(f"[_run_agent_task] {assignment.agent_name} error: {e}")
+                return {
+                    "error": str(e),
+                    "status": "error",
+                    "agent_name": assignment.agent_name,
+                }
 
-        # workers on that queue pick it up. No in-process threading.
+        start = time.time()
+        raw_results = []
+        with ThreadPoolExecutor(max_workers=min(len(decision.assignments), max_workers)) as pool:
+            futures = {
+                pool.submit(_run_agent_task, assignment): assignment
+                for assignment in decision.assignments
+            }
+            for future in as_completed(futures):
+                raw_results.append(future.result())
 
-        async_results = dispatch_domain_group(
-
-            assignments=decision.assignments,
-
-            query=decision.query,
-
-            user_role=auth_context.role_id,
-
-            run_id=run_id,
-
-            plan_path=plan_path,
-
-        )
-
-
-
-        # -- Collect results (wait for all agents) ----------------------------
-
-        # Per-domain task has 240s hard limit. Overall group timeout = 300s.
-
-        raw_results = collect_group_results(async_results, decision.assignments, timeout=300.0)
+# -- Results already collected via ThreadPoolExecutor (above)
 
 
 

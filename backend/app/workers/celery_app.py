@@ -84,6 +84,9 @@ celery_app_instance.conf.update(
     task_default_routing_key="agent",
     # Performance
     worker_prefetch_multiplier=1,
+    # NOTE: On Windows, prefork (billiard) pool crashes with
+    # PermissionError on semaphore handles. Force solo pool on Windows.
+    worker_pool = "solo" if os.name == "nt" else "prefork",
     worker_concurrency=4,          # Reduce from 8 for stability; tune per workload
     # Monitoring
     worker_send_task_events=True,
@@ -240,6 +243,7 @@ celery_app_instance.conf.beat_schedule = {
 # IMPORTANT: All celery_app_instance.conf.* calls MUST come BEFORE this import.
 # See docstring at top of file for explanation of the naming convention.
 import app.workers.orchestrator_tasks  # noqa: F401
+import app.workers.domain_tasks             # noqa: F401 — registers run_domain_task with the Celery app
 
 # ── Health check for startup / k8s readiness probe ───────────────────────────
 @celery_app_instance.task(name="health_check_task", queue="system")
