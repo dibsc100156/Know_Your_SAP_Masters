@@ -653,3 +653,58 @@ Optimal RAG systems combine **3–5 strategies** — not just one. Pure semantic
 - [ ] Add Hierarchical RAG metadata linking: module-level parent doc → child table chunks in Qdrant
 - [ ] Implement Self-Reflective RAG retry loop with configurable threshold (currently auto-retries on any failure; should grade and decide)
 
+---
+
+## ✅ New: Harness Engineering: The New Science of AI Agents (April 15, 2026)
+**Video:** https://youtu.be/Xxuxg8PcBvc | **Date:** April 15, 2026
+
+### Video Core Thesis
+**Same model, same benchmark, 6x performance difference.** Research proves that the orchestration code wrapping an LLM (the harness) now drives more performance variation than the model itself.
+> *"Agent = model + harness. If you're not the model, you're the harness."*
+
+We've evolved: Prompt Engineering → Context Engineering → **Harness Engineering**.
+
+### The Operating System Analogy
+- **CPU:** Raw LLM (powerful but inert)
+- **RAM:** Context window (fast but limited)
+- **Disk:** External vector/SQL databases
+- **Device Drivers:** Tool integrations (search, bash, APIs)
+- **Operating System:** The **Harness** (coordinating what the CPU sees and when)
+
+The harness is everything that isn't model weights: system prompts, tool definitions, orchestration logic, memory management, verification loops, safety guardrails.
+
+### The Breakthrough: Natural Language Harnesses (NLH)
+A new framework called **Tingua** separates the harness into 3 explicit layers:
+1. **Backend Infrastructure:** Tools runtime.
+2. **Charter (Universal Physics):** State persistence, child agent management.
+3. **NLH (Natural Language Harness):** Task-specific control logic, failure taxonomies, roles written in structured natural language.
+
+**Why this matters:** Allows for **controlled ablation experiments**. Migrating a native Python harness into an NLH representation jumped performance from 30.4% to 47.2%, dropped runtime by 60%, and collapsed LLM calls from 1,200 to 34. *The representation itself drove the gain.*
+
+### Meta-Harness: AI Optimizing Its Own Harness
+Stanford researchers introduced **Meta Harness**. An "agentic proposer" reads raw execution traces of failed runs, diagnoses what broke, and writes a completely new harness topology.
+- It was the **only automatically optimized system** on Terminal Bench 2 leaderboards, beating hand-engineered entries.
+- **Golden finding:** A harness optimized on one model successfully transferred to five other models, improving all of them. *The reusable asset isn't the model, it's the harness.*
+
+### The Craft of Subtraction
+**More structure is not always better.** In ablation studies, adding verifiers and multi-candidate search actively *hurt* performance. The only module that consistently helped was one that narrowed the agent's attempt loop.
+> *"Mature harness work looks less like building structure up and more like pruning it down. A craft of subtraction as much as addition."*
+
+### KYSM Parallel — How This Applies to Our Architecture
+
+This video is the **defining theoretical foundation** for what we've been building in KYSM.
+
+1. **The Reusable Asset:** Our 5-Pillar RAG and multi-agent swarm *is* our OS. Even if we swap from Gemini to Claude to MiniMax, our orchestration logic (the harness) is our actual enterprise IP.
+2. **File-Backed State:** The video emphasizes moving memory out of the context window and into "path-addressable files." This confirms our plan to prevent context pollution in our `planner_agent` by saving execution plans to files instead of passing them in chat.
+3. **Craft of Subtraction:** Our `TOOL_REGISTRY` has 52 tools. We should review if pruning tools could yield better routing accuracy, especially paired with the 1.5:1 Agent-as-a-Graph scoring.
+4. **Trace Analysis:** "Meta Harness" relies heavily on reading *raw execution traces* of failures. This proves that our `tool_trace` and `validation_summary` logs are our most valuable assets for future automated optimization.
+
+### Recommended KYSM Updates from This Video
+
+**Immediate:**
+- [ ] Review `TOOL_REGISTRY` to see if tools can be pruned or consolidated ("Craft of Subtraction") to improve agent routing accuracy.
+- [ ] Shift `planner_agent` state passing from chat history to file-backed state (save execution plans to a temporary file/JSON and pass the path to child agents).
+
+**Medium term:**
+- [ ] Build an automated trace-analysis loop: have an LLM periodically review failed `tool_trace` logs to suggest modifications to our orchestration prompts or meta-paths (a basic version of Meta-Harness).
+
