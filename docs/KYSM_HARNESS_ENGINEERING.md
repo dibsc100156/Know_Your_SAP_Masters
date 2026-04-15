@@ -762,3 +762,103 @@ This video is the **defining theoretical foundation** for what we've been buildi
 **Medium term:**
 - [ ] Build an automated trace-analysis loop: have an LLM periodically review failed `tool_trace` logs to suggest modifications to our orchestration prompts or meta-paths (a basic version of Meta-Harness).
 
+---
+
+## 🎬 Video #13: The Observability Layer Your AI Agent Is Missing
+**Date:** April 15, 2026 | **Channel:** Damian Galarza
+**Link:** https://youtu.be/JZsJ_BX1Vew
+
+### Core Thesis
+AI agents make *decisions*, not just execute instructions. Traditional APM tools (logs, metrics) don't transfer cleanly to agents. You need an **observability stack built around decision-making**, not just execution. The three pillars are: **Logs**, **Traces**, and **Metrics** — each answering a different question.
+
+---
+
+### Pillar 1: Logs — The Raw Record
+
+Every event, tool call, model response — timestamped and stored.
+
+**Critical limitation:** A log entry is *isolated* — it tells you what happened at that moment, not *why* one step led to the next, what context the agent was carrying, or what made a particular tool call the logical next move.
+
+> *"Logs give you individual moments. What you're missing is the thread that connects them."*
+
+---
+
+### Pillar 2: Traces — The Story (vs. Archaeology)
+
+A trace is a **tree** (not a feed):
+- **Root** = top-level task (what the user asked for)
+- Every decision, tool call, sub-agent delegation = a **span** (named, timed unit of work with inputs, outputs, status)
+- Parent-child relationships show **why**, not just what
+
+**Key insight — Missing calls are invisible in logs, visible in traces:**
+
+Damian's real debugging story (Emma the invoicing agent):
+- Task: "Draft an invoice, have me review it, then send it."
+- Emma: pulled CRM contacts → delegated to Stripe ledger → returned "clean draft" → user approved → Emma marked task "sent successfully" in Slack
+- **Bug discovered 3 hours later:** Invoice was *finalized* in Stripe (draft → open) but **never emailed** to the client. In Stripe, `finalize` ≠ `send`.
+- Log analysis: Every individual tool call was logged. **No errors, no 500s.** System metrics all green. HTTP 200 from Slack API.
+- Trace analysis: Walked the tree → ledger called `finalize_invoice` (succeeded) → **no `send_invoice` span existed** → Emma read "open" status as "complete" → Slack response "invoice sent successfully" was misleading
+
+**The model reasoning span** (input → interpretation → output) exists in traces but **never in logs**.
+
+> *"The logs had the data. The trace had the story. One is an archaeology project; the other is a narrative you can read."*
+
+**OpenTelemetry applies directly:** Spans, trace IDs, parent-child relationships — same vocabulary, different object. Tracing a task as executed by an agent is structurally identical to tracing a request through microservices.
+
+**Tools:** Arize Phoenix, LangFuse, BrainTrust, Mastra — all speak OpenTelemetry.
+
+---
+
+### Pillar 3: Metrics — The Aggregate Story
+
+Two distinct categories:
+
+| Metric Type | What It Watches | Emma Failure Status |
+|---|---|---|
+| **System metrics** | The *server* hosting the agent (latency, error rate, token cost, uptime) | All green — no signal |
+| **Quality metrics** | Whether the *agent* is doing its job correctly (correctness, trajectory adherence, output-vs-task match) | Would flag the silent failure |
+
+Quality metrics are **second-order**: computed by running evals against trace data. They catch **pattern failures across thousands of runs**, not just the one a human stumbles onto.
+
+> *"If you're only watching system metrics, you're not watching the agent. You're watching the server the agent runs on."*
+
+---
+
+### The Measurement Loop
+
+```
+Traces (tree of spans)
+  → Quality Metrics (computed via evals against trace data)
+  → Agent Improvement Signal
+  → New harness configuration
+```
+
+Evals run on quality metrics. The entire measurement loop depends on the observability layer underneath. **You can only measure what you can see. Traces are how you see it.**
+
+---
+
+### KYSM Parallel — How This Applies to Our Architecture
+
+| KYSM Component | Observability Gap | This Video's Fix |
+|---|---|---|
+| **Harness Runs (Redis)** | Flat phase events — no decision-tree view of Pillar 1→8 execution | Would benefit from trace tree visualization of 8-phase orchestrator flow |
+| **planner_agent.py** (Phase 10a) | No span-level visibility into Agent-as-a-Graph routing decisions | Traces would expose why pur_agent was chosen over bp_agent with full reasoning spans |
+| **Self-Healer** | No recording of heal → re-execute trajectory | Traces would capture before/after SQL for every heal cycle as child spans |
+| **Threat Sentinel** (Phase 6c) | Alerts fire but no trace of *why* the sentinel escalated a session | Quality metrics + traces would show pattern of denied-table probe trajectories |
+| **Multi-Agent Swarm** (Phase 10) | Silent failures possible — agent reads ambiguous state as completion | Trace tree would show missing `send_invoice` equivalent span in parallel dispatch |
+| **Memgraph** (Phase M2) | No observability into which Cypher paths AllPathsExplorer actually traversed | Trace spans would record each traversal branch explored and abandoned |
+
+---
+
+### Recommended KYSM Updates from This Video
+
+**Immediate:**
+- [ ] Instrument `planner_agent.py` with OpenTelemetry spans: one span per agent dispatch, per synthesis step, per tool call — export to Arize Phoenix or LangFuse for visualization.
+- [ ] Add a `trajectory_log` array to harness runs: record the *reasoning span* (why the agent made each routing decision) as structured JSON, not just tool names.
+- [ ] Add **Quality Metrics** to the API response: `correctness_score`, `trajectory_adherence`, computed by running evals against stored trace data.
+
+**Medium term:**
+- [ ] Integrate LangFuse or Arize Phoenix as the trace backend (replacing or augmenting Redis harness runs).
+- [ ] Instrument Self-Healer as a trace span: record `heal_attempt → healed_sql → re_execution → result` as a child span of the parent SQL execution span.
+- [ ] Build a "silent failure detector": quality metric that flags when an agent reports success but a critical downstream tool call is absent from the trace tree (the `finalize ≠ send` pattern).
+
