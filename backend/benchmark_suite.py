@@ -835,12 +835,11 @@ class BenchmarkRunner:
             else:
                 # Live mode — import and call run_agent_loop
                 from app.agents.orchestrator import run_agent_loop
-                from app.core.security import SAPAuthContext
-                auth_context = SAPAuthContext(role_id=self.role)
+                from app.core.security import security_mesh
+                auth_context = security_mesh.get_context(self.role)
 
-                result = await run_agent_loop(
+                result = run_agent_loop(
                     query=gq.query,
-                    role_id=self.role,
                     auth_context=auth_context,
                 )
                 actual_tables = result.get("tables_used", [])
@@ -1096,7 +1095,7 @@ def _run_benchmark_with_alerts(runner: BenchmarkRunner, args) -> Dict[str, Any]:
         print("  🚨 EVAL ALERTS FIRED")
         print("=" * 80)
         for a in new_alerts:
-            sev = a.severity.value.upper()
+            sev = str(a.severity).upper()
             print(f"  [{sev}] {a.title}")
             print(f"         {a.message}")
         print()

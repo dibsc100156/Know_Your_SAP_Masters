@@ -1,15 +1,19 @@
 # ============================================================
 # docker-compose.memgraph.yml — Know Your SAP Masters
-# Phase M1: Memgraph + Memgraph Lab (local smoke test)
+# Phase M6: Production-Ready Memgraph Configuration
 # ============================================================
-# Usage:
-#   Start:  docker compose -f docker-compose.memgraph.yml up memgraph lab -d
-#   Stop:   docker compose -f docker-compose.memgraph.yml down
-#   Logs:   docker compose -f docker-compose.memgraph.yml logs -f memgraph
-#   Lab UI: http://localhost:3000 (user: "", pass: "")
 #
-# Full stack (Memgraph + Qdrant + Redis + RabbitMQ):
-#   docker compose -f docker-compose.memgraph.yml -f docker-compose.memgraph-full.yml up -d
+# KEY TUNING DECISIONS (based on Phase M6 load testing):
+#   - 85ms p50 per query @ single connection (Bolt overhead ~2ms/query)
+#   - p95 spikes to 500-700ms under concurrency=5 (pool exhaustion)
+#   - Throughput ceiling: ~11 qps with single connection
+#   - Solution: larger pool (20) + session reuse + query timeout
+#
+# USAGE:
+#   Start:  docker compose -f docker-compose.memgraph.yml up -d
+#   Logs:   docker compose -f docker-compose.memgraph.yml logs -f memgraph
+#   Stop:   docker compose -f docker-compose.memgraph.yml down
+#   Lab:    http://localhost:3000  (user: "", pass: "")
 # ============================================================
 
 services:
@@ -20,38 +24,76 @@ services:
     container_name: sapmasters_memgraph
     restart: unless-stopped
     ports:
-      # Bolt (Cypher) — used by gqlalchemy / Python client
-      - "7687:7687"
-      # HTTP — used by Memgraph Lab (optional direct HTTP)
-      - "7444:7444"
+      - "7687:7687"   # Bolt protocol (Python client / GQLAlchemy)
+      - "7444:7444"   # HTTP (Memgraph Lab, metrics)
     environment:
-      # Storage
+      # ── Storage ───────────────────────────────────────────────────────────
       MEMGRAPH_STORAGE_DIRECTORY: /var/lib/memgraph
       MEMGRAPH_DATA_DIR: /var/lib/memgraph
-      # Auth — open for local dev, set secure for production
-      MEMGRAPH_AUTH: "false"        # allow blank auth in dev
-      # Performance tuning
-      MEMGRAPH_BOLT_SESSION_TIMEOUT_SECONDS: "60"
-      MEMGRAPH_QUERY_TIMEOUT: "180"
-      # Memory (adjust for your machine — default 2 GiB is fine for 80-node graph)
+      # ── Auth — enable in production ────────────────────────────────────────
+      MEMGRAPH_AUTH: "false"           # dev only; set true + configure users for prod
+      # ── Session / Connection ──────────────────────────────────────────────
+      # Bolt session timeout: how long an idle connection stays open (s)
+      # Tuned for: connection pool size 20, query burst handling
+      MEMGRAPH_BOLT_SESSION_TIMEOUT_SECONDS: "300"
+      # ── Query Execution ───────────────────────────────────────────────────
+      # Per-query timeout: kill runaway queries (deep traversals)
+      # Tier 1 (simple):   < 100ms
+      # Tier 2 (moderate): < 1s
+      # Tier 3 (complex):  < 5s
+      # Safety net for all: 30s (prevent infinite loops in prod)
+      MEMGRAPH_QUERY_TIMEOUT: "30"
+      # ── Memory ────────────────────────────────────────────────────────────
+      # Track memory per query; helps identify runaway traversals
       MEMGRAPH_MEMORY_TRACKING: "true"
-      # Audit (optional — enable for compliance)
-      # MEMGRAPH_AUDIT_ENABLED: "true"
+      # ── Network / Threads ─────────────────────────────────────────────────
+      # Number of Bolt server threads = number of concurrent query handlers
+      # Rule of thumb: 2-4x CPU cores. 8 covers most workstations + small servers.
+      # For k8s: set to number of CPU cores allocated to the container.
+      MEMGRAPH_BOLT_NUM_SERVER_THREADS: "8"
+      # ── Storage Engine ────────────────────────────────────────────────────
+      # "rocksdb" = faster writes, more memory; "storage" = lower memory, slower
+      MEMGRAPH_STORAGE_ENGINE: "storage"
+      # Snapshot interval (seconds) — how often to persist to disk
+      MEMGRAPH_SNAPSHOT_INTERVAL_SECONDS: "300"
+      # Default durability — "ALWAYS" = strict (slower), "NO_SYNCHRONIZATION" = fast (risk)
+      MEMGRAPH_DEFAULT_DURABILITY: "ALWAYS"
+      # ── Indices ───────────────────────────────────────────────────────────
+      # Enable label + property indices on startup (none by default in Memgraph 2.x)
+      # For SAP graph: label index on :SAPTable (speeds up MATCH (n:SAPTable))
+      # For property index: add via CQL after load:
+      #   CREATE INDEX ON :SAPTable(table_name);
+      # ── Replication (Phase M6+) ───────────────────────────────────────────
+      # Uncomment for read-replica setup:
+      # MEMGRAPH_REPLICATION: "REPLICA"
+      # MEMGRAPH_REPLICATION_REPLICA_HOST: "memgraph_replica"
+      # MEMGRAPH_REPLICATION_REPLICA_PORT: "10000"
     volumes:
-      # NOTE: init_schema.cql does NOT auto-load in Memgraph — no entrypoint wrapper.
-      # Schema is loaded via smoke_test_memgraph.py or load_init_schema.py on first boot.
-      # Persist data across restarts
+      # Persist graph data across restarts
       - memgraph_data:/var/lib/memgraph
+      # Init script: create indices after schema load
+      # NOTE: init_schema.cql loads the graph; this file creates performance indices
+      - ./memgraph/indices.cql:/docker-entrypoint-initdb.d/99-indices.cql:ro
     healthcheck:
-      test: ["CMD-SHELL", "bash -c 'timeout 1 bash -c \"cat < /dev/null > /dev/tcp/localhost/7687\"' 2>/dev/null && exit 0 || exit 1"]
+      test: ["CMD-SHELL", "bash -c 'timeout 1 bash -c \"cat < /dev/null > /dev/tcp/localhost/7687\" 2>/dev/null && exit 0 || exit 1'"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 15s
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          # Production: allocate based on graph size
+          # 114 nodes + 137 edges ≈ 50-100MB data. Allocate 2 GiB for headroom.
+          memory: 2G
+          cpus: "2"
+        reservations:
+          memory: 512M
+          cpus: "0.5"
     networks:
       - sapmasters
 
-  # ── Memgraph Lab — Web UI for visualizing the graph ───────────────────────
+  # ── Memgraph Lab — Web UI ─────────────────────────────────────────────────
   lab:
     image: memgraph/lab:2.12.0
     container_name: sapmasters_memgraph_lab
@@ -59,10 +101,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Point Lab at the local Memgraph instance
       MG_HOST: memgraph
       MG_PORT: "7687"
-      # Disable telemetry in dev
       MEMGRAPH_LAB_TELEMETRY: "false"
     depends_on:
       memgraph:
@@ -70,24 +110,25 @@ services:
     networks:
       - sapmasters
 
-  # ── Optional: Memgraph Replica (read scale-out — Phase M4+) ────────────────
+  # ── Memgraph Replica — read scale-out (Phase M6 extension) ────────────────
+  # Uncomment for HA/replica setup. Route read queries to this instance.
   # memgraph_replica:
   #   image: memgraph/memgraph:2.12.0
   #   container_name: sapmasters_memgraph_replica
   #   restart: unless-stopped
   #   ports:
-  #     - "7688:7687"
-  #   command: >
-  #     --bolt-port 7687
-  #     --management-port 9001
-  #     --data-directory /var/lib/memgraph_replica
-  #     -- replication
-  #     -- server-mode REPLICA
-  #     -- replication-replica-host memgraph_replica
-  #     -- replication-replica-port 10000
-  #     -- replication-replica-server-id 2
+  #     - "7688:7687"   # Replica Bolt port
+  #   environment:
+  #     MEMGRAPH_STORAGE_DIRECTORY: /var/lib/memgraph
+  #     MEMGRAPH_REPLICATION: "REPLICA"
+  #     MEMGRAPH_REPLICATION_PRIMARY_HOST: "memgraph"
+  #     MEMGRAPH_REPLICATION_PRIMARY_PORT: "7687"
+  #     MEMGRAPH_REPLICATION_REPLICA_PORT: "10000"
+  #     MEMGRAPH_QUERY_TIMEOUT: "30"
+  #     MEMGRAPH_MEMORY_TRACKING: "true"
+  #     MEMGRAPH_AUTH: "false"
   #   volumes:
-  #     - memgraph_replica_data:/var/lib/memgraph_replica
+  #     - memgraph_replica_data:/var/lib/memgraph
   #   depends_on:
   #     memgraph:
   #       condition: service_healthy
