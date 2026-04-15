@@ -1446,11 +1446,12 @@ def run_agent_loop(
 
             print(f"    Distance: {top_pattern.get('distance', 0):.3f}")
 
-        else:
-
+        elif tables_involved:
             print("    [WARN] No pattern found. Generating SELECT * FROM primary table.")
-
             base_sql = f"SELECT * FROM {tables_involved[0]} "
+        else:
+            print("    [WARN] No tables found. Skipping SQL generation.")
+            base_sql = ""
 
 
 
