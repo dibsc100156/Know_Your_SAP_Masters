@@ -3,6 +3,8 @@
 > **For:** SAP Masters / Know Your SAP Masters Chatbot  
 > **Pillar:** 5-Pillar RAG — Pillar 3 (Schema) + Pillar 5 (Graph)  
 > **Scope:** Techniques, methods, and extension points for the NetworkX-based FK relationship graph
+>
+> **Last Reviewed:** April 16, 2026 | Status: Phase 5½ (Graph Embeddings) ✅ | TemporalGraphRAG ✅ | Meta-Path ✅ | AllPathsExplorer ✅
 
 ---
 
@@ -981,21 +983,21 @@ class GraphRAGQueryPipeline:
 
 | Priority | Technique | Complexity | Impact | Effort |
 |----------|-----------|-----------|--------|--------|
-| **P0** | All-simple-paths enumeration | Medium | High — enables better path selection | 2 hrs |
-| **P0** | Meta-path library (20 common paths) | Low | Very High — bypasses graph search for common queries | 4 hrs |
-| **P0** | Graph embedding index (Qdrant) | Medium | High — semantic table discovery | 6 hrs |
-| **P1** | Steiner tree for multi-terminal queries | High | Medium — rare but complex cases | 8 hrs |
-| **P1** | BOM explosion (recursive CTE) | Medium | High — PP/MM core use cases | 4 hrs |
+| ~~P0~~ → ✅ DONE | ~~All-simple-paths enumeration~~ | Medium | High | ~~2 hrs~~ → ✅ |
+| ~~P0~~ → ✅ DONE | ~~Meta-path library (20 common paths)~~ | Low | Very High | ~~4 hrs~~ → ✅ |
+| ~~P0~~ → ✅ DONE | ~~Graph embedding index (Qdrant)~~ | Medium | High | ~~6 hrs~~ → ✅ |
+| ~~P1~~ → ✅ DONE | ~~Steiner tree for multi-terminal queries~~ | High | Medium | ~~8 hrs~~ → ✅ |
+| ~~P1~~ → ✅ DONE | ~~BOM explosion (recursive CTE)~~ | Medium | High | ~~4 hrs~~ → ✅ |
 | **P1** | Cross-module bridge auto-detection | Medium | Medium — reduces manual edge definition | 6 hrs |
-| **P2** | Temporal-aware traversal | Medium | Medium — CFO/Controller use cases | 8 hrs |
-| **P2** | CDS view equivalents mapping | Low | Medium — enables S/4 Cloud support | 4 hrs |
+| ~~P2~~ → ✅ DONE | ~~Temporal-aware traversal~~ | Medium | Medium | ~~8 hrs~~ → ✅ |
+| ~~P2~~ -> ✅ DONE | ~~CDS view equivalents mapping~~ | Low | Medium | ~~4 hrs~~ -> ✅ |
 | **P2** | DDIC auto-population script | High | High — eliminates manual graph building | 10 hrs |
 | **P3** | HANA Graph Engine native adapter | High | High — production performance at scale | 20 hrs |
 | **P3** | Federated cross-system path detection | High | Medium — enterprise landscapes | 12 hrs |
 
 ---
 
-## 11. Implementation Status (as of April 2, 2026)
+## 11. Implementation Status (as of April 16, 2026)
 
 | Component | Status | File | Notes |
 |-----------|--------|------|-------|
@@ -1013,11 +1015,11 @@ class GraphRAGQueryPipeline:
 | Weighted path scoring (Edge Weights) | ✅ DONE | `AllPathsExplorer` | cardinality_1:1=1.0, 1:N=3.0, huge=5.0, cross_module=0.8 |
 | Meta-path library CLI demo | ✅ DONE | `meta_path_library.py` `__main__` | Demo queries + full library listing |
 | Community detection (Louvain) | 🔲 TODO | — | `louvain_communities()` ready to add to graph_store |
-| Graph embeddings (Qdrant) | 🔲 TODO | — | `sentence-transformers` + Qdrant for semantic table search |
-| Steiner tree (multi-terminal) | 🔲 TODO | — | Dreyfus-Wagner approximation for 4+ table queries |
-| BOM explosion (recursive CTE) | 🔲 TODO | — | `WITH RECURSIVE` template in meta-path library |
+| Graph embeddings (Qdrant + Node2Vec) | ✅ DONE | `graph_embedding_store.py` (38KB) | Phase 5½ — Node2Vec 64-dim + text hybrid in Qdrant |
+| Steiner tree (multi-terminal) | ✅ DONE | `graph_store.py` → `GraphRAGQueryPipeline.find_steiner_tree()` | BFS approximation for multi-terminal queries |
+| BOM explosion (recursive CTE) | ✅ DONE | `meta_path_library.py` (91KB) | `material_cost_rollup` meta-path: STKO->STPO BOM explosion + CRHD/PLPO routing |
 | DDIC auto-population | 🔲 TODO | — | Script to read DD08L and auto-build graph edges |
-| CDS view equivalents | 🔲 TODO | — | `CDS_NAVIGATION_PATHS` mapping in techniques doc |
+| CDS view equivalents | ✅ DONE | `core/cds_mapping.py` (3KB) | 34 table->CDS view mappings (I_BusinessPartner, I_Supplier, I_Product, I_PurchaseOrder, etc.) |
 | HANA Graph Engine native adapter | 🔲 TODO | — | Replace NetworkX with HANA native graph at production scale |
 | Federated cross-system paths | 🔲 TODO | — | Detect RFC/OData boundaries in JOIN paths |
 
@@ -1042,7 +1044,7 @@ class GraphRAGQueryPipeline:
 
 ---
 
-## 10. Example — Full Query Resolution
+## 10. Example — Full Query Resolution  *(April 2, 2026 — historical session)*
 
 **Query:** *"Show me the last 3 purchase orders for vendor Lincoln Electronics, including material description, quantity ordered, and plant"*
 

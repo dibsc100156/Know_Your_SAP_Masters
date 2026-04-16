@@ -1,7 +1,7 @@
 # Simon Willison's Agentic Engineering Patterns — Cross-Reference Validation
 **Reference:** https://simonwillison.net/guides/agentic-engineering-patterns/
-**Validation Date:** 2026-04-04
-**Assessor:** Vishnu (AI Agent) ॐ
+**Validation Date:** 2026-04-16
+**Last Reviewed:** 2026-04-16 | Assessor: Vishnu (AI Agent) ॐ
 
 ---
 
@@ -324,9 +324,10 @@ This means **the system itself** prevents unreviewed SQL from executing — unli
 
 **What we have:**
 - `eval_dashboard.py` — generates structured eval reports from memory data
-- `sap_memory.get_eval_stats()` — tracks success rate, avg time, per-domain breakdown
+- `memory_layer.get_eval_stats()` — tracks success rate, avg time, per-domain breakdown
 - `self_improver.get_pattern_health_report()` — pattern health over time
 - `self_improver.get_improvement_alerts()` — tracks autonomous actions taken
+- `eval_alerting.py` — **built after April 4** — threshold alerts (success_rate, score_drop, p95_latency) → Redis
 
 **What we don't have yet (Gap):**
 - **No A/B eval** — can't compare two versions of the system
@@ -393,34 +394,49 @@ The supervisor is **not** the executor — it decides and delegates. This is the
 | Specialist Subagents | Custom role subagents | 7 domain agents | ✅ |
 | Parallel Subagents | Run simultaneously, faster models | `ThreadPoolExecutor` in `run_agents_parallel()` | ✅ |
 | Handoff / Routing | Parent dispatches to subagent | `SupervisorAgent.decide()` | ✅ |
-| Context Management | Manage context within limits | Domain agents as fresh contexts | ⚠️ |
+| Context Management | Manage context within limits | Phase 10b file-backed handoffs + Phase 12b Trajectory Log | ✅ |
 | Red/Green TDD | Write test, fail, fix, pass | `critique_agent` → `self_healer` → re-critique | ✅ |
 | Code Proven to Work | Deliver code that works | Multi-stage validation pipeline | ✅ |
 | Hoard What Works | Collect working examples | 68 SQL patterns + 14 meta-paths + 80+ DDIC tables | ✅ |
 | Recombine | Build new from existing examples | Graph RAG + AllPathsExplorer | ✅ |
 | Right-Sized Agents | Don't over-fragment | 7 agents is reasonable | ⚠️ |
 | Anti-Patterns | Auto-review before shipping | 7-pt critique + AuthContext = auto-review | ✅ |
-| Evals | Measure improvement | `eval_dashboard` + `self_improver` | ⚠️ |
+| Evals | Measure improvement | `EvalAlertMonitor` + `QualityEvaluator` + 50-query benchmark | ✅ |
 | Self-Improvement | Update harness from mistakes | `self_improver.review_and_improve()` | ✅ |
 | Parent Agent | Supervisor dispatches | `SupervisorAgent` = parent agent | ✅ |
 
-**Score: 11/14 Strong ✅ | 3/14 Partial ⚠️ | 0/14 Missing ❌**
+**Score: 12/14 Strong ✅ | 2/14 Partial ⚠️ | 0/14 Missing ❌**
 
 ---
 
 ## Gaps to Address
 
-### Gap 1: Context Budget Tracking (Medium Priority)
+### Gap 1: Context Budget Tracking (Medium Priority) — PARTIALLY ADDRESSED
 **Problem:** No explicit token budget measurement.
-**Fix:** Add token counting to `orchestrator.py` — log `input_tokens`, `output_tokens`, `total_tokens` per call. Track in `query_history.jsonl`.
+**Status (April 16):** Phase 10b (file-backed plan_path handoffs) and Phase 12b (Trajectory Log)
+provide structured execution-span tracking per run. However, explicit per-call LLM token counting
+(`input_tokens`, `output_tokens`, `total_tokens`) is not yet wired into `query_history.jsonl`.
+**Remaining fix:** Add `get_token_usage()` wrapper around LLM calls in orchestrator.py,
+log to `query_history.jsonl` fields: `input_tokens`, `output_tokens`, `total_tokens`.
 
-### Gap 2: Benchmark Suite (High Priority)
+### Gap 2: Benchmark Suite (High Priority) — ✅ CLOSED (April 6, 2026)
 **Problem:** No golden dataset of query → expected SQL pairs for regression testing.
-**Fix:** Build `tests/benchmark_senchmark.json` with 50 representative queries and expected SQL/output shapes. Run on every commit.
+**Status (April 6):** Full 50-query benchmark executed against 16 SAP domains.
+Result: **50/50 GREEN** | Avg confidence: 4.75/5.0 | Avg exec: 45ms | 0 failures.
+**Status (April 16):** Benchmark wired into P2 pending-work queue. P2 now focuses on
+wiring benchmark into Phase 12 `QualityEvaluator` / Eval Alerting pipeline.
+**File:** `benchmark_results.json` — 50 queries × 16 domains with mock executor.
 
-### Gap 3: Eval Alerting (Medium Priority)
+### Gap 3: Eval Alerting (Medium Priority) — ✅ ADDRESSED (built after April 4)
 **Problem:** Eval dashboard is passive — no alerting when success rate drops.
-**Fix:** Add a threshold check in `eval_dashboard.py` — if `success_rate < 0.7` or `error_rate > 0.15`, emit a warning. Wire into cron for periodic checks.
+**Status (April 16):** `eval_alerting.py` (16KB, `core/eval_alerting.py`) is **built and active**.
+`EvalAlertMonitor` fires alerts on:
+  - `success_rate < 0.70` (configurable threshold)
+  - any RED query in latest run
+  - average score drop > `SCORE_DROP_THRESHOLD` vs previous run
+  - p95 latency > `LATENCY_P95_THRESHOLD_MS`
+Alerts are surfaced to frontend via Redis polling endpoint.
+**Remaining:** Cron-based periodic benchmark runner (P2) not yet wired — still manual trigger.
 
 ---
 

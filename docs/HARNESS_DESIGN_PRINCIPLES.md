@@ -1,5 +1,5 @@
 # Harness Engineering  --  Design Principles
-## Video Summary: "Andrej Karpathy's Math Proves Agent Skills Will Fail. Here's What to Build Instead."
+## Video Summary Series | Status: LIVE | Last Reviewed: April 16, 2026
 **Channel:** The AI Automators | **Published:** March 21, 2026 | **Views:** 70K+ | **Likes:** 2,329
 **URL:** https://youtu.be/I2K81s0OQto
 
@@ -228,7 +228,7 @@ Every failure added a new harness gate. The final framework was not more capable
 
 ---
 
-### KYSM Gap Analysis (Updated)
+### KYSM Gap Analysis (Updated: April 16, 2026)
 
 | Principle | Implementation | Status |
 |---|---|---|
@@ -238,8 +238,15 @@ Every failure added a new harness gate. The final framework was not more capable
 | Tool Audit | Vercel proof: cut 80% of tools → 100% accuracy | ✅ Design validated |
 | Validation Gates | `validate_contract()`  --  domain agents validated before synthesis | ✅ Wired |
 | Failure Attribution | `PhaseState.validator_fired` + `validator_errors` in Redis | ✅ |
-| Context Freshness | Each domain agent gets isolated run context | 🚧 Domain agent run_id wiring done |
-| Typed Contracts at Merge | `validate_contract()` called in `synthesis_agent.synthesize()` before `_merge_results()`  --  failures flag but never block | ✅ Wired (April 13, 2026) |
+| Context Freshness | Each domain agent gets isolated run context via file-backed plan_path handoffs | ✅ Complete (April 15) |
+| Typed Contracts at Merge | `validate_contract()` called in `synthesis_agent.synthesize()` before `_merge_results()` | ✅ Wired (April 13, 2026) |
+| Meta-Harness Loop | `meta_harness_propose` tool + YAML auto-patch in orchestrator | ✅ LIVE (April 15) |
+| Quality Metrics Eval | `QualityEvaluator` computes trajectory adherence from Redis traces | ✅ LIVE (April 15) |
+| Trajectory Log | `HarnessRun.trajectory_log[]` in API response | ✅ LIVE (April 15) |
+| Inter-Agent Message Bus | Redis pub/sub + streams: 6 message types | ✅ IMPLEMENTED (April 15) |
+| Negotiation Protocol | 4-phase (ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED), 6 strategies | ✅ IMPLEMENTED (April 15) |
+| Swarm Autoscaling | Per-domain Celery queues + ThreadPoolExecutor on Windows | ✅ IMPLEMENTED (April 15) |
+| Agent-as-a-Graph Routing | `graph_route_query()` with 1.5:1 agent:tool scoring | ✅ IMPLEMENTED (April 15) |
 
 ---
 

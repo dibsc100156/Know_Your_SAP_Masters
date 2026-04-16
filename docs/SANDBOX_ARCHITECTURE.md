@@ -1,6 +1,7 @@
 # 🏗️ SAP Masters: AI Code Execution & Sandboxing Architecture
 
 **Reference:** Based on the "Why, and how you need to sandbox AI-Generated Code" framework (Harshil Agrawal, Cloudflare).
+**Last Reviewed:** April 16, 2026 | Status: LIVE — Phases 5.5 + 6c fully implemented.
 
 ## The Core Philosophy: LLM Output = Untrusted Code
 
@@ -63,7 +64,7 @@ The SAP Masters sandbox is not a single perimeter wall — it is **7 concentric 
 **Mitigates:** Hallucination (wrong credentials), Over-helpful LLM (reading env vars), Compromised Prompt (credential exfiltration).
 **Mechanism:** The LLM only generates SQL strings. The `HanaPoolManager` holds the actual connection strings securely in the backend. `SAPSQLExecutor` acts as the proxy, receiving the SQL string, validating it through Layers 2-6, and then routing it to HANA. Credentials are injected at the transport layer, far away from LLM context.
 
-### Layer 2: Dry-Run Validation Harness
+### Layer 2: Dry-Run Validation Harness (Phase 5.5 — ✅ IMPLEMENTED April 12)
 **Mitigates:** Hallucination (infinite loops, missing JOINs, Cartesian explosions).
 **Mechanism:** Wraps the generated SQL in a `SELECT COUNT(*) FROM (...)` subquery. HANA native error codes (e.g., `37000` syntax error, `ORA-01476` division by zero) act as the sandbox's feedback loop. If the query fails, the `SelfHealer` rewrites and retries without human intervention.
 
@@ -79,7 +80,7 @@ The SAP Masters sandbox is not a single perimeter wall — it is **7 concentric 
 **Mitigates:** Over-helpful LLM (retrieving sensitive fields allowed at table-level but denied at column-level).
 **Mechanism:** If the LLM successfully queries `LFA1` but pulls the `BANKN` (Bank Account) column, the executor rewrites the values to `***RESTRICTED***` in the resulting DataFrame before the LLM (or user) receives the payload.
 
-### Layer 6: Threat Sentinel (Behavioral Anomaly Detection)
+### Layer 6: Threat Sentinel (Behavioral Anomaly Detection) (Phase 6c — ✅ IMPLEMENTED April 12)
 **Mitigates:** Advanced Compromised Prompts (Schema Enumeration, Lateral Movement).
 **Mechanism:** Operates 6 real-time behavioral engines:
 1. `CROSS_MODULE_ESCALATION`: Role accessing tables outside its domain.
@@ -117,18 +118,18 @@ The SAP Masters sandbox is not a single perimeter wall — it is **7 concentric 
 
 ## Execution Order Reference
 
-From `orchestrator.py` Steps 0–5:
+From `orchestrator.py` Steps 0–5 (covers Phases 0–5, plus Phase 5.5 Validation Harness and Phase 6c Threat Sentinel):
 
 ```text
 STEP 0: Meta-Path Match (Fast-Path)
 STEP 1: Schema RAG (Qdrant)
 STEP 1.5: Graph Embedding Search
 STEP 1.75: QM Semantic Search
-STEP 2: SQL Pattern RAG (ChromaDB)
+STEP 2: SQL Pattern RAG (Qdrant)
 STEP 2b: Temporal Detection
 STEP 2c: Temporal Analysis Engine
 STEP 2d: Negotiation Briefing
 STEP 3: Graph RAG (AllPathsExplorer)
 STEP 4: SQL Assembly (Injects AuthContext filters)
-STEP 5: Validate → Execute → Mask (Layers 1-6 apply here)
+STEP 5: Validate → Execute → Mask (Layers 1-7 apply here)
 ```

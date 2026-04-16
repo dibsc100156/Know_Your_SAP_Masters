@@ -2,7 +2,7 @@
 **From:** In-memory NetworkX Graph  
 **To:** Distributed Memgraph Graph Database  
 **Date:** April 6, 2026 | Author: Vishnu ॐ  
-**Last Updated:** April 9, 2026
+**Last Updated:** April 16, 2026
 
 ---
 
@@ -29,7 +29,7 @@
 | M9 | LeanIX agent governance integration | ✅ WIRED | Middleware registered in main.py; DPO reporting enabled |
 | M10 | Multi-tenant isolation — separate Memgraph subgraphs | ✅ COMPLETE | Cypher nodes labeled per-tenant, `TENANT_ID` env wired |
 
-**Overall:** Phases M1–M6, M8 & M10 ✅ COMPLETE | M7 ⬜ PENDING
+**Overall:** M1–M5 ✅ COMPLETE | M6 ✅ COMPLETE (Qdrant) | M7 ⬜ PENDING | M8 ✅ COMPLETE | M10 ✅ COMPLETE
 
 ---
 
@@ -92,7 +92,7 @@ docker ps --format "{{.Names}} {{.Status}}"
 # sapmasters_memgraph_lab   Up 2 minutes (port 3000)
 # sapmasters_qdrant         Up <time>
 # sapmasters_rabbitmq       Up <time> (ports 5672, 15672)
-# sapmakers_redis           Up <time> (port 6379)
+# sapmasters_redis           Up <time> (port 6379)
 ```
 
 **Services and their endpoints:**
@@ -101,7 +101,7 @@ docker ps --format "{{.Names}} {{.Status}}"
 |---------|-----------|---------|
 | Memgraph | `localhost:7687` | Graph database (Bolt) |
 | Memgraph Lab | `localhost:3000` | Web UI for graph visualization |
-| Qdrant | `localhost:6333` | Vector store (not yet wired — M6) |
+| Qdrant | `localhost:6333` | Vector store — ✅ ACTIVE — 4 collections |
 | Redis | `localhost:6379` | Dialog session store |
 | RabbitMQ | `localhost:5672`, `15672` | Celery message broker |
 
@@ -292,6 +292,52 @@ REDIS_PORT=6379
 
 ---
 
+## Phase M6: Qdrant Cluster Migration
+
+**Goal:** Replace file-based ChromaDB with clustered Qdrant vector store for horizontal scalability.
+
+### Current Status
+
+✅ **COMPLETE (April 7, 2026)**
+✅ `VectorStoreManager` dual-backend in `vector_store.py`
+✅ `qdrant_vector_store.py` operational with gRPC
+✅ 4 collections active: `sap_schema`, `sql_patterns`, `graph_node_embeddings`, `graph_table_context`
+✅ `VECTOR_STORE_BACKEND=qdrant` env var wired into FastAPI startup
+
+### How it works
+
+The `VectorStoreManager` checks `VECTOR_STORE_BACKEND` at startup:
+
+```python
+# backend/app/core/vector_store.py
+backend = os.environ.get("VECTOR_STORE_BACKEND", "chroma")
+if backend == "qdrant":
+    from app.core.qdrant_vector_store import QdrantVectorStore
+    self._qdrant = QdrantVectorStore(...)
+else:
+    self._chroma = ChromaDBVectorStore(...)
+```
+
+### Collections
+
+| Collection | Dimension | Description |
+|---|---|---|
+| `sap_schema` | 384 | DDIC table metadata (DD03L) |
+| `sql_patterns` | 384 | Proven SQL query patterns |
+| `graph_node_embeddings` | 64 | Node2Vec structural embeddings |
+| `graph_table_context` | 384 | Context-rich table descriptions |
+
+### Verify Qdrant is active
+
+```python
+from app.core.vector_store import get_vector_store
+vs = get_vector_store()
+print(vs.stats())
+# → {'backend': 'qdrant', 'collections': 4, 'total_vectors': ...}
+```
+
+---
+
 ## Phase M8: Kubernetes HPA (Auto-Scaling Celery Workers)
 
 **Goal:** Automatically scale the backend Celery agents in a Kubernetes cluster based on workload (RabbitMQ queue depth).
@@ -449,7 +495,9 @@ backend/app/core/
   │   ├── _build_nx_from_local_metadata()  # no Memgraph round-trip
   │   └── _compute_and_store_centrality()  # degree + betweenness → Memgraph
   │
-  └── graph_store.py            # UNCHANGED — pure NetworkX fallback
+  ├── graph_store.py            # UNCHANGED — pure NetworkX fallback
+  ├── vector_store.py           # M6 — dual-backend Qdrant + ChromaDB manager
+  └── qdrant_vector_store.py    # M6 — Qdrant gRPC client (16KB)
 
 backend/app/workers/
   ├── celery_app.py             # celery_app_instance + .conf before imports
@@ -464,7 +512,7 @@ docker/
 
 scripts/
   ├── smoke_test_memgraph.py    # M1 smoke test
-  └── load_init_schema.py       # M2 schema loader
+  └── load_init_schema.py       # M2 schema loader (optional — init_schema.cql loads directly via memgraph_adapter.py)
 
 docs/
   └── MEMGRAPH_MIGRATION_GUIDE.md  # THIS FILE
@@ -508,8 +556,17 @@ docs/
 
 ## Next Steps
 
-1. **M6:** Wire Qdrant as vector store backend (replace ChromaDB)
-2. **M7:** SAP HANA connection pooling (SQLAlchemy async)
-3. **M8:** Kubernetes HPA — autoscale Celery workers based on RabbitMQ queue depth
-4. **M9:** LeanIX agent governance integration
-5. **M10:** Multi-tenant isolation — separate Memgraph subgraphs per BU/company code
+> **Updated April 16, 2026** — M6, M8, M9, M10 are all ✅ COMPLETE.
+> Only M7 remains ⬜ PENDING.
+
+| # | Phase | Status | Owner |
+|---|-------|--------|-------|
+| 1 | **M7:** SAP HANA connection pooling (`hdbcli`, `hana_pool.py`, `HANA_MODE=pool`) | ⬜ PENDING | SAP Infra |
+| 2 | **P2:** 50-query benchmark suite → wire into QualityEvaluator alerting | 🚧 Pending | QA |
+| 3 | **P3:** M6 load test — p95 <= 300ms @ concurrency=10, `pool_size=20` sign-off | 🚧 Pending | Performance |
+
+**Completed Next Steps (can be removed from future revisions):**
+- ~~M6: Wire Qdrant as vector store backend~~ ✅ (April 7)
+- ~~M8: Kubernetes HPA autoscale Celery workers~~ ✅ (April 9)
+- ~~M9: LeanIX agent governance integration~~ ✅ (April 9)
+- ~~M10: Multi-tenant isolation~~ ✅ (April 9)

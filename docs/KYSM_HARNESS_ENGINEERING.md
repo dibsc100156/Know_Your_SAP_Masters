@@ -1,5 +1,5 @@
 # Know Your SAP Masters (KYSM) - Harness Engineering & Agentic AI
-## Session: April 15, 2026 | Status: LIVE (Updated April 15, 2026)
+## Session: April 16, 2026 | Status: LIVE (Updated April 16, 2026)
 
 ---
 
@@ -146,7 +146,7 @@ Infrastructure
   │   ├── sql_patterns          — SQL Pattern RAG
   │   ├── graph_node_embeddings — Node2Vec structural
   │   └── graph_table_context   — Text context
-  ├── Memgraph (localhost:7687) ● 114 nodes / 47 edges — ACTIVE (docker: sapmasters_memgraph — HEALTHY)
+  ├── Memgraph (localhost:7687) ● 114 nodes / 137+ edges (151 total via sync) — ACTIVE (docker: sapmasters_memgraph — HEALTHY)
   │   └── Graph RAG via bolt_load.py (neo4j driver)
   ├── ChromaDB (./chroma_db/)   ← Legacy — Schema + Pattern RAG migrated to Qdrant
   ├── RabbitMQ (localhost:5672) ● ACTIVE (docker: sapmasters_rabbitmq — HEALTHY)
@@ -177,41 +177,50 @@ Infrastructure
 | 7 | Execution (SAP HANA mock — `hdbcli` swap pending) | ✅ Working |
 | 8 | Result Masking (Role-based column redaction) | ✅ Working |
 | 9 | Frontend Modernization (8-phase + confidence gauge + dark card) | ✅ Working |
-| **10** | **Multi-Agent Domain Swarm (LIVE on port 8001 — IMPLEMENTED)** | ✅ **NEW → LIVE** |
+| **10** | **Multi-Agent Domain Swarm** (ThreadPoolExecutor on Windows, backend port 8000) | ✅ **LIVE — Apr 12** |
 | **10a** | **Agent-as-a-Graph 1.5:1 Routing (graph_route_query — IMPLEMENTED)** | ✅ **NEW — April 15** |
 | **10b** | **Context Isolation via File-Based Handoffs (plan_path — IMPLEMENTED)** | ✅ **NEW — April 15** |
 | M1 | Memgraph 2.12.0 + Lab — Docker Compose | ✅ Complete |
-| M2 | Memgraph Cypher port (replace NetworkX with Memgraph queries) | 🚧 Pending |
-| M3 | `use_memgraph` flag in main.py | 🚧 Pending |
-| M4 | Qdrant cluster migration (Schema + Pattern RAG) | 🚧 Pending |
-| M5 | Celery async worker pool | 🚧 Pending |
-| M6 | Load testing + production tuning | 🚧 Pending |
-| — | **BAPI Workflow Harness (Read-to-Write)** | 🚧 Pending |
+| M1a | Memgraph schema init (`init_schema.cql`) | ✅ Complete | 47 edges |
+| M1b | Edge sync from NetworkX (`sync_nx_to_memgraph.py`) | ✅ Complete | 104 missing edges added; 151 total |
+| M2 | Native Cypher paths (`find_all_ranked_paths_native`, variable-length `[*..5]`) | ✅ Complete | Memgraph 2.x compatible |
+| M3 | `use_memgraph` flag + `_sync_nx_edges_to_memgraph()` auto-sync at startup | ✅ Complete | Syncs all 137 NX edges on each start |
+| M4 | Qdrant cluster migration (Schema RAG + SQL Pattern RAG + QM + Graph Embeddings) | ✅ Complete | 4 collections active |
+| M5 | Celery async worker pool (RabbitMQ + Redis + 4-thread solo worker) | ✅ Complete | 9 queues; `solo` pool on Windows |
+| M6 | Load testing + production tuning (`docker-compose.memgraph.yml`, `pool_size >= 20`) | 🚧 Pending | 0% error @ conc=5; p95 773ms |
+| M7 | Real SAP HANA connection (`hdbcli`, `hana_pool.py`, `HANA_MODE=pool`) | 🚧 Pending | Env: HANA_HOST/PORT/USER/PASSWORD |
+| **11** | **Automated Meta-Harness** (trace analysis → YAML → auto-patch) | ✅ **LIVE — Apr 15** |
+| **12** | **Quality Metrics Eval** (`QualityEvaluator` from Redis traces) | ✅ **LIVE — Apr 15** |
+| **12b** | **Trajectory Log** (`HarnessRun.trajectory_log[]`) | ✅ **LIVE — Apr 15** |
+| **13** | **Inter-Agent Message Bus** (Redis pub/sub + streams) | ✅ **IMPLEMENTED — Apr 15** |
+| **13b** | **Negotiation Protocol** (4-phase, 6 strategies) | ✅ **IMPLEMENTED — Apr 15** |
 
 ---
 
-## Next Steps
+## Next Steps (Genuinely Pending)
 
-### 🚧 Pending: BAPI Workflow Harness (Read-to-Write)
-Build a new tool harness for SAP BAPIs to move beyond data retrieval to autonomous transactions:
+### 🚧 P0: Real SAP HANA Connection
+Wire `hdbcli` to replace mock executor. Config via env: `HANA_HOST`, `HANA_PORT`, `HANA_USER`, `HANA_PASSWORD`, `HANA_MODE=pool`.
+
+### 🚧 P1: BAPI Workflow Harness (Read-to-Write)
+Build transaction tool harness for autonomous SAP writes:
 - `BAPI_PO_CHANGE` — Update PO delivery dates
-- `BAPI_VENDOR_CREATE` — Create new vendor master records
-- `BAPI_MATERIAL_SAVEDATA` — Create/update material masters
+- `BAPI_VENDOR_CREATE` — Create vendor master
+- `BAPI_MATERIAL_SAVEDATA` — Create/update materials
 - `BAPI_SALESORDER_CHANGE` — Modify sales orders
+Requires BEGIN/COMMIT/ROLLBACK transaction harness + write-gate sentinel.
 
-The orchestrator would ask the user: *"I see you want to update delivery dates. Can I execute `BAPI_PO_CHANGE` to apply this change directly in SAP?"*
+### 🚧 P2: 50-Query Benchmark Suite (golden dataset)
+Wire the existing 50-query mock result (Apr 6: 50/50 GREEN, 4.75 avg) into the Phase 12 `QualityEvaluator` pipeline so production failures trigger real eval signals.
 
-### 🚧 Pending: Multi-Agent Domain Swarms — Inter-Agent Message Bus
-Break domain agents out of star-topology via a shared message bus for direct agent-to-agent negotiation.
-
-### 🚧 Pending: ChromaDB → Qdrant Cluster Migration
-Migrate Schema + Pattern RAG from local ChromaDB to a production Qdrant cluster for horizontal scalability. *(Note: Qdrant is already ACTIVE and seeded with 4 collections — ChromaDB is now legacy.)*
+### 🚧 P3: M6 Load Testing (production sign-off)
+Complete p95 <= 300ms target @ concurrency=10; verify `pool_size=20` for production.
 
 ---
 
 ## ✅ Implemented: Multi-Agent Domain Swarm Architecture
 
-**Status:** ✅ **LIVE — April 12, 2026** (Port 8001 backend + Port 8501 frontend)
+**Status:** ✅ **LIVE — April 12, 2026** (backend port 8000, frontend port 8501; ThreadPoolExecutor swarm)
 
 **New Files:**
 - `backend/app/agents/swarm/planner_agent.py` (19KB) — Planner Agent + Complexity Analyzer + routing logic
@@ -249,7 +258,7 @@ Query → PlannerAgent.plan()
 
 ---
 
-## Evening Session Update: Swarm LIVE on Port 8001 (April 12, 2026)
+## Evening Session Update: Swarm LIVE on Port 8000 (April 12, 2026)
 
 ### Bugs Fixed During Activation
 1. `tables_involved` referenced before initialization → early init added before sentinel evaluation
@@ -257,7 +266,7 @@ Query → PlannerAgent.plan()
 3. `abs(min(vals), 0.01)` Python syntax error in `synthesis_agent` → fixed to `max(abs(min(vals)), 0.01)`
 
 ### API + Frontend Activation
-- Backend API: **http://localhost:8001** (swarm-enabled via `use_swarm=True`)
+- Backend API: **http://localhost:8000** (swarm-enabled via `use_swarm=True`)
 - Frontend: **http://localhost:8501** (Streamlit, `use_swarm=True` default, swarm badge in header)
 - `use_swarm=True` added to `POST /api/v1/chat/master-data` — new fields: `swarm_routing`, `planner_reasoning`, `agent_summary`, `domain_coverage`, `conflicts`, `complexity_score`
 
@@ -269,7 +278,7 @@ Query → PlannerAgent.plan()
 | quality inspection results + material | `cross_module` | mm + qm + cross | ✅ 3 agents |
 
 ### Phase 10 Status
-**LIVE** — Multi-Agent Domain Swarm activated on ports 8001 + 8501.
+**LIVE** — Multi-Agent Domain Swarm activated on port 8000 (backend) + 8501 (frontend).
 
 ---
 

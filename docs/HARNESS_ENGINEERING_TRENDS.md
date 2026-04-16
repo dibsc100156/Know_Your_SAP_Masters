@@ -1,6 +1,6 @@
 # Harness Engineering in AI Agents  --  Top 10 Trends & Production Use Cases
 
-_Crafted: April 13, 2026 | Based on: Karpathy (AI Automators), Solo Swift Crafter, Cyril Imhof (This is the Year E44 & E45), KYSM Implementation_
+_Crafted: April 16, 2026 | Based on: Karpathy (AI Automators), Solo Swift Crafter, Cyril Imhof (This is the Year E44 & E45), KYSM Implementation_
 
 ---
 
@@ -32,7 +32,7 @@ Phase 1 → [Validator Gate] → Phase 2 → [Validator Gate] → Phase 3 → ..
 
 **Why it wins:** The March of Nines math (Karpathy): a 10-step workflow at 90% per step = only 34.9% end-to-end success. Phase gates with validation close this gap deterministically rather than probabilistically.
 
-**KYSM implementation:** 8-phase orchestrator  --  Phase 0 (Meta-Path) → 1 (Schema RAG) → 2 (SQL Pattern RAG) → 3 (Graph Traversal) → 4 (SQL Assembly) → 5 (Validation Harness) → 6 (Self-Heal) → 7 (Execution) → 8 (Response). Each phase tracked in Redis.
+**KYSM implementation:** 25-phase orchestrator (Phase 0 → Phase 13b) tracked in Redis. Key phases: 0 (Meta-Path) → 1 (Schema RAG) → 2 (SQL Pattern RAG) → 3 (Graph RAG) → 4 (SQL Assembly) → 5 (Critique Gate) → 5.5 (Validation Harness) → 6 (Self-Heal) → 6b (Memory Compounding) → 6c (Threat Sentinel) → 7→13b (Swarm + Message Bus + Negotiation). Each phase tracked in Redis.
 
 ---
 
@@ -42,7 +42,7 @@ Phase 1 → [Validator Gate] → Phase 2 → [Validator Gate] → Phase 3 → ..
 
 **The problem:** As context fills, models degrade  --  they get "anxious" and start wrapping up tasks prematurely, dropping important context. Even 1M token windows (Claude Opus 4.6) have this problem past a threshold.
 
-**KYSM implementation:** Graph embedding search surfaces only top-K tables per phase, not the entire schema. The orchestrator passes a curated context window per phase, not the full conversation history.
+**KYSM implementation:** Graph embedding search surfaces only top-K tables per phase, not the entire schema. Phase 10b (Context Isolation, April 15) adds file-backed handoffs per domain agent  --  plan state written to disk, orchestrator history never shared between agents. The orchestrator passes a curated context window per phase, not the full conversation history.
 
 ---
 
@@ -117,7 +117,7 @@ TTL: 30 days on all keys
 
 **Why it wins:** No single agent can cover all SAP domains deeply. The swarm pattern  --  parallel dispatch + synthesis merge  --  scales to arbitrarily complex queries without the orchestrator becoming a monolith.
 
-**KYSM implementation:** Phase 10  --  `swarm/planner_agent.py` (7-domain complexity analyzer), `swarm/synthesis_agent.py` (merge + rank + conflict resolution). `use_swarm=True` flag on API. ThreadPoolExecutor for parallel dispatch.
+**KYSM implementation:** Phase 10 + 10a + 10b + 11 + 12 + 12b + 13 + 13b  --  `swarm/planner_agent.py` (7-domain complexity analyzer), `swarm/synthesis_agent.py` (merge + rank + conflict resolution), `message_dispatcher.py` (bus + agent registry), `message_bus.py` (Redis pub/sub + streams, 6 message types), `negotiation_protocol.py` (4-phase conflict resolution, 6 strategies), `use_swarm=True` flag on API. ThreadPoolExecutor for parallel dispatch.
 
 **Swarm routing types:** SINGLE | PARALLEL | CROSS_MODULE | NEGOTIATION | ESCALATE
 
@@ -237,14 +237,14 @@ TTL: 30 days on all keys
 | Trend | Core Problem It Solves | KYSM Status |
 |---|---|---|
 | Generator/Evaluator/Planner Architecture | Self-evaluation bias in single-model systems | Synthesis Agent = Evaluator |
-| Phase-Gated Execution with Validation Loops | March of Nines failure cascade | 8-phase orchestrator tracked in Redis |
+| Phase-Gated Execution with Validation Loops | March of Nines failure cascade | 25-phase orchestrator (0→13b) tracked in Redis |
 | Context Budgeting | Context anxiety, performance degradation at high occupancy | Graph embedding → top-K tables per phase |
 | Scoped Tool Sets | Tool bloat → failure proliferation across tools | 52 tools, 8 domains, scoped per agent |
 | Typed Sub-Agent Output Contracts | Unstructured agent output → synthesis failures | contracts.py  --  7 domain contracts wired |
 | Self-Healing SQL with Validation Harness | Syntax errors hard-fail production queries | Phase 5.5  --  dry-run before real execution |
 | Distributed Harness Runs Table | No observability in production runs | Redis  --  harness_runs.py |
 | Proactive Threat Sentinel | Security as post-execution check instead of gate | Phase 6c  --  6 detection engines |
-| Multi-Agent Swarms + Synthesis | Single agent cannot cover all domains deeply | Phase 10  --  planner + synthesis agents |
+| Multi-Agent Swarms + Synthesis | Single agent cannot cover all domains deeply | Phase 10 + 10a + 10b + 11 + 12 + 12b + 13 + 13b  --  planner, synthesis, message bus, negotiation protocol |
 | Co-optimization with Model Upgrades | Over-engineered harnesses add cost on newer models | Ongoing discipline |
 
 ---

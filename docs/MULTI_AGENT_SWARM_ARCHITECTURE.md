@@ -1,5 +1,5 @@
 # Multi-Agent Domain Swarm Architecture
-## SAP Masters — Phase 10 — ✅ LIVE + Phase 10a/10b ADDED (April 15, 2026)
+## SAP Masters — Phase 10 — ✅ LIVE + Phase 10a/10b/13/13b (April 16, 2026)
 
 ---
 
@@ -9,7 +9,7 @@ The current architecture uses a **single monolithic orchestrator** (`run_agent_l
 
 The **Multi-Agent Domain Swarm** replaces the monolith with a collaborative, multi-agent system where specialized domain agents work in parallel, negotiate with each other, and synthesize their findings into a unified response.
 
-> **Status (April 13, 2026):** All components below are IMPLEMENTED and LIVE on port 8001 (backend) + port 8501 (frontend).
+> **Status (April 16, 2026):** All components including Phase 13 (Message Bus) and Phase 13b (Negotiation Protocol) are IMPLEMENTED and LIVE.
 
 ---
 
@@ -283,7 +283,7 @@ result = run_agent_loop(query, auth, use_swarm=False)
 
 ### 4. Inter-Agent Communication
 
-Domain agents currently communicate only through the Synthesis Agent (star topology). Future enhancement: direct agent-to-agent negotiation via a shared message bus.
+Domain agents communicate through the Redis-backed Message Bus (`app/core/message_bus.py`) — Phase 13 IMPLEMENTED. Direct agent-to-agent QUERY/RESPONSE/ASSERTION/CHALLENGE/NEGOTIATE/COMMIT flows are live via Redis pub/sub + streams. The Negotiation Protocol (`app/core/negotiation_protocol.py`) handles 4-phase conflict resolution with 6 strategies.
 
 ### 5. Security in Swarm Mode
 
@@ -316,9 +316,10 @@ Domain agents currently communicate only through the Synthesis Agent (star topol
 | Bug: `tables_involved` early init | `orchestrator.py` | ✅ Fixed |
 | Bug: `cross_agent` empty guard | `domain_agents.py` | ✅ Fixed |
 | Bug: `abs(min(vals), 0.01)` syntax | `synthesis_agent.py` | ✅ Fixed |
-| Inter-Agent Message Bus | — | 🚧 Planned |
-| Agent-to-Agent Negotiation Protocol | — | 🚧 Planned |
-| Swarm Autoscaling (Celery workers) | — | 🚧 Planned |
+| **Inter-Agent Message Bus** | `app/core/message_bus.py` | ✅ **IMPLEMENTED — Apr 15** |
+| **Agent-to-Agent Negotiation Protocol** | `app/core/negotiation_protocol.py` | ✅ **IMPLEMENTED — Apr 15** |
+| **Message Dispatcher + Agent Inbox** | `app/agents/swarm/message_dispatcher.py` | ✅ **IMPLEMENTED — Apr 15** |
+| **Swarm Autoscaling (Celery workers)** | `app/workers/domain_tasks.py` | ✅ **IMPLEMENTED — Apr 15** |
 
 ---
 
@@ -331,3 +332,6 @@ Domain agents currently communicate only through the Synthesis Agent (star topol
 | `swarm/__init__.py` | `run_swarm()` convenience entry point |
 | `domain_agents.py` | Domain Agent base class + 7 concrete agents |
 | `orchestrator.py` | `use_swarm=True/False` flag gates swarm entry |
+| `app/core/message_bus.py` | Redis pub/sub + streams: 6 message types, agent inbox |
+| `app/core/negotiation_protocol.py` | 4-phase Negotiation Engine: ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED |
+| `app/agents/swarm/message_dispatcher.py` | Agent registry, `query_agent()`, `detect_and_negotiate()` |
