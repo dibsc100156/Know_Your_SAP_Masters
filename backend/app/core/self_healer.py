@@ -447,7 +447,7 @@ class SelfHealer:
         """Return count of heals applied per rule code."""
         return dict(self._heal_count)
 
-    def reset_stats(self):
+    def reset_stats(self) -> None:
         self._heal_count.clear()
 
 
