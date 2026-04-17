@@ -1,5 +1,5 @@
 # KYSM Level-5 Roadmap — Consolidated Implementation Status
-**Last Updated:** April 16, 2026 | Project: Know Your SAP Masters (SAP Masters)
+**Last Updated:** April 17, 2026 | Project: Know Your SAP Masters (SAP Masters)
 
 ---
 
@@ -59,11 +59,11 @@ assistant.
 | **10** | **Multi-Agent Domain Swarm** | Planner + Domain Agents + Synthesis Agent — ThreadPoolExecutor on Windows | ✅ **LIVE — Apr 12** |
 | **10a** | **Agent-as-a-Graph 1.5:1 Routing** | AGENT_TOOL_GRAPH with context(1.5x) vs tool(1.0x) scoring | ✅ **IMPLEMENTED — Apr 15** |
 | **10b** | **Context Isolation (File-Backed Handoffs)** | Plan state files per agent — no orchestrator history leakage | ✅ **IMPLEMENTED — Apr 15** |
-| **11** | **Automated Meta-Harness** | Agentic proposer loop: trace analysis → YAML recs → auto-patch | ✅ **LIVE — Apr 15** |
-| **12** | **Quality Metrics Eval** | `QualityEvaluator` computes trajectory adherence + correctness from Redis traces | ✅ **LIVE — Apr 15** |
-| **12b** | **Trajectory Log** | Structured reasoning-span log per run in `HarnessRun.trajectory_log[]` | ✅ **LIVE — Apr 15** |
-| **13** | **Inter-Agent Message Bus** | Redis pub/sub + streams: QUERY/RESPONSE/ASSERTION/CHALLENGE/NEGOTIATE/COMMIT | ✅ **IMPLEMENTED — Apr 15** |
-| **13b** | **Negotiation Protocol** | 4-phase (ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED), 6 strategies, SOURCE_AUTHORITY rankings | ✅ **IMPLEMENTED — Apr 15** |
+| **11** | **Automated Meta-Harness** | `meta_harness_loop.py` (45KB) exists — ADVISORY MODE: collect→analyze→YAML→approve→patch | ✅ **Implemented** — Manual trigger only; NOT auto-wired into orchestrator |
+| **12** | **Quality Metrics Eval** | `QualityEvaluator` (2.8KB) in `app/core/` — computes correctness_score + trajectory_adherence from Redis traces | ✅ **Implemented** — NOT wired into orchestrator; never auto-runs after queries |
+| **12b** | **Trajectory Log** | `HarnessRun.trajectory_log[]` field — 12KB recorded per run in orchestrator.py | ✅ **Recording** — data captured but never analyzed; `QualityEvaluator` never called on it |
+| Phase 13 | Inter-Agent Message Bus | ✅ IMPLEMENTED — `message_bus.py` (16.5KB) exists | Confirmed — Redis pub/sub + streams, 6 message types |
+| Phase 13b | Negotiation Protocol | ✅ IMPLEMENTED — `negotiation_protocol.py` (24KB) exists | Confirmed — 4-phase engine, 6 strategies, SOURCE_AUTHORITY |
 
 ---
 
@@ -111,24 +111,47 @@ assistant.
 
 ---
 
-## Pending Work
+## Priority Build Order (Post-Harness Engineering Review)
 
-### P0 — Real SAP HANA Connection
-Wire `hdbcli` to replace mock executor. This is the final production barrier. Config via env: `HANA_HOST`, `HANA_PORT`, `HANA_USER`, `HANA_PASSWORD`, `HANA_MODE=pool`.
+| # | Priority | Item | Phase | Notes |
+|---|----------|------|-------|-------|
+| 1 | 🔴 P0 | `agent_inbox.py` — agent message inbox + async inbox listener | Phase 13 | ✅ IMPLEMENTED — Apr 17; AgentInbox class + InboxManager |
+| 2 | 🔴 P0 | `message_bus.py` + `negotiation_protocol.py` — verify against `message_dispatcher.py` coverage | Phase 13/13b | Check if dispatcher already covers bus + negotiation |
+| 3 | 🔴 P0 | Ephemeral Task Environments — git worktree clone per task, unique port, log capture, teardown | **NEW** | Needed for 6hr agent runs |
+| 4 | 🔴 P0 | DOM/Screenshot Validation — Chrome DevTools Protocol skills | **NEW** | Needed for full autonomy threshold |
+| 5 | 🔴 P0 | Full Autonomous Pipeline — single prompt: validate→reproduce→fix→PR→merge | **NEW** | The "Ralph Wiggum Loop" end-to-end |
+| 6 | ✅ DONE | Wire Phase 11 (`MetaHarnessLoop`) failure trigger | ✅ **WIRED — Apr 17** | `failure_trigger.py` fires background thread on ≥3 failures/hr (1hr cooldown) |
+| 7 | ✅ DONE | Wire Phase 12 (`QualityEvaluator`) into orchestrator | ✅ **WIRED — Apr 17** | `QualityEvaluator.evaluate_run()` called after `complete_run()`, stores quality_score + trajectory_adherence in Redis via `hset_run_field()` |
+| 8 | 🟡 P1 | `agent_inbox.py` — agent message inbox + async inbox listener | Phase 13 | Pending since Apr 12; unblocks swarm async message handling |
+| 9 | 🟡 P1 | Doc-Gardening Agent — recurring stale doc scanner + fix PR | **NEW** | OpenAI's "doc-gardening" pattern; not yet built |
+| 10 | 🟡 P1 | Ralph Wiggum PR Review Loop — agent self-review → cross-agent → auto-merge | **NEW** | Agent-to-agent PR review chain; not yet built |
+| 11 | 🟡 P1 | Observability Query Interface — LogQL/PromQL agent-accessible | **NEW** | "Ensure startup completes in under 800ms"; not yet built |
+| 12 | 🟡 P1 | Golden Principles Linters — mechanical taste enforcement | **NEW** | Shared utilities, no YOLO data, file size limits; not yet built |
+| 13 | 🟡 P1 | Progressive Disclosure Linter — AGENTS.md ≤150 lines, cross-links valid | **NEW** | "Map, not manual" enforcement; not yet built |
+| 14 | 🟡 P1 | Long-Running Agent Infrastructure — `soft_time_limit` increase, heartbeat | **NEW** | Support 6hr overnight agent runs; not yet built |
+| 15 | 🟢 P2 | BAPI Workflow Harness (Read-to-Write) — `BAPI_PO_CHANGE`, `BAPI_VENDOR_CREATE` | P1 | Requires BEGIN/COMMIT/ROLLBACK + write-gate sentinel |
+| 15 | 🟢 P2 | M6 Load Testing sign-off — p95 ≤ 300ms @ conc=10 | P1 | Current p95 773ms; needs conc=10 sign-off |
+| 16 | 🟢 P2 | Real SAP HANA connection (`hdbcli`) | P0 | Final production barrier |
 
-### P1 — BAPI Workflow Harness (Read-to-Write)
-Build transaction tool harness for autonomous SAP writes:
-- `BAPI_PO_CHANGE` — Update PO delivery dates
-- `BAPI_VENDOR_CREATE` — Create vendor master
-- `BAPI_MATERIAL_SAVEDATA` — Create/update materials
-- `BAPI_SALESORDER_CHANGE` — Modify sales orders
-Requires BEGIN/COMMIT/ROLLBACK transaction harness + write-gate sentinel.
+## Integration Gaps (Wired but Never Called)
 
-### P2 — 50-Query Benchmark Suite (golden dataset)
-Wire the existing 50-query mock result (Apr 6: 50/50 GREEN, 4.75 avg) into the Phase 12 `QualityEvaluator` / Eval Alerting pipeline so production failures trigger real signals.
+The following components exist and are imported but **never automatically invoked** in the orchestrator:
 
-### P3 — M6 Load Testing (production sign-off)
-Complete p95 <= 300ms target @ concurrency=10; verify `pool_size=20` for production. Formal sign-off needed before M6 closure.
+| Component | File | Status | Integration Gap |
+|-----------|------|--------|----------------|
+| MetaHarnessLoop | `meta_harness_loop.py` + `failure_trigger.py` | ✅ WIRED | Background thread fires on ≥3 failures/hr (1hr cooldown); `apply_recommendations()` auto-applies P3/P4 low-risk patches |
+| QualityEvaluator | `quality_evaluator.py` | ✅ WIRED | Called in orchestrator `complete_run()` path; stores correctness_score + trajectory_adherence in Redis; `trajectory_log` analyzed via `_compute_trajectory_adherence()` |
+| Trajectory Log | `HarnessRun.trajectory_log[]` | ✅ ANALYZED | Consumed by `QualityEvaluator._compute_trajectory_adherence()` on every orchestrator run; scored and stored in Redis |
+| Message Bus | `message_bus.py` | ✅ Wired | ✅ Properly integrated via `message_dispatcher.py` |
+| Negotiation Protocol | `negotiation_protocol.py` | ✅ Wired | ✅ Properly integrated via `message_dispatcher.py` |
+
+### Actions Required:
+- **Phase 11 Integration:** ✅ COMPLETE — `failure_trigger.py` (12.6KB) non-blocking background thread on cascade; cooldown prevents re-trigger within 1hr
+- **Phase 12 Integration:** ✅ COMPLETE — `QualityEvaluator.evaluate_run()` called after `complete_run()`; stores score + adherence via `hset_run_field()` in Redis
+- **Phase 12b:** ✅ COMPLETE — `trajectory_log` passed to `_compute_trajectory_adherence()` on every run; sequence penalties for backtracking applied
+
+### Full Harness Engineering Gap Analysis
+See: `docs/HARNESS_ENGINEERING_GAP_ANALYSIS.md` — Full comparison of OpenAI's 14-point capability checklist against KYSM implementation.
 
 ---
 
@@ -149,6 +172,10 @@ Complete p95 <= 300ms target @ concurrency=10; verify `pool_size=20` for product
 | `backend/app/core/eval_alerting.py` | Eval Alerting — threshold alerts (success_rate, latency, score drop) wired to Redis |
 | `backend/app/core/self_improver.py` | Autonomous Self-Improvement — pattern promotion/demotion + ghost injection (Phase 6) |
 | `backend/app/core/harness_runs.py` | Harness Runs Table — Redis flight recorder for every query (Phase 7+) |
+
+| `backend/app/core/agent_inbox.py` | AgentInbox per-agent inbox listener + InboxManager (19.7KB) — Phase 13 async messaging |
+| `backend/app/core/failure_trigger.py` | Phase 11 failure trigger — non-blocking MetaHarnessLoop on ≥3 failures/hr (12.6KB) |
+| `backend/app/core/quality_evaluator.py` | QualityEvaluator — computes correctness_score + trajectory_adherence from HarnessRun traces (2.8KB) |
 | `backend/app/agents/swarm/contracts.py` | Typed Sub-Agent Output Contracts — 9 contracts (7 domain + base + SWARM), `validate_contract()` before merge |
 | `backend/app/core/message_bus.py` | Redis pub/sub + streams MessageBus — 6 message types (Phase 13) |
 | `backend/app/core/negotiation_protocol.py` | 4-phase Negotiation Engine — ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED (Phase 13b) |
@@ -182,7 +209,7 @@ Complete p95 <= 300ms target @ concurrency=10; verify `pool_size=20` for product
 | Inter-Agent Message Bus | `app/core/message_bus.py` | ✅ IMPLEMENTED (Phase 13) |
 | Negotiation Protocol | `app/core/negotiation_protocol.py` | ✅ IMPLEMENTED (Phase 13) |
 | Message Dispatcher + Agent Registry | `app/agents/swarm/message_dispatcher.py` | ✅ IMPLEMENTED (Phase 13) |
-| Agent Inbox (`agent_inbox.py`) | `app/core/agent_inbox.py` | 🚧 Pending |
+| Agent Inbox (`agent_inbox.py`) | `app/core/agent_inbox.py` | ✅ **IMPLEMENTED — Apr 17** | 19.7KB — AgentInbox per-agent inbox + InboxManager swarm lifecycle
 | Swarm Autoscaling (Celery workers) | `app/workers/domain_tasks.py` | ✅ **IMPLEMENTED — SWARM AUTOSCALING** |
 
 ### Bugs Fixed During Swarm Activation

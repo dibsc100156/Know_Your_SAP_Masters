@@ -272,6 +272,15 @@ class HarnessRuns:
         self._redis.hset(hash_key, "trajectory_log", json.dumps(run.trajectory_log))
 
 
+
+    def hset_run_field(self, run_id: str, field: str, value: str) -> None:
+        """Set a single field on a run hash without overwriting the whole hash."""
+        hash_key = self.HASH_KEY.format(run_id=run_id)
+        if not self._redis.exists(hash_key):
+            return
+        self._redis.hset(hash_key, field, value)
+        self._redis.expire(hash_key, self.TTL_SECONDS)
+
     def update_phase(
         self,
         run_id: str,

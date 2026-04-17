@@ -101,6 +101,7 @@ from app.core.temporal_engine import TemporalEngine
 from app.core.security import SAPAuthContext
 
 from app.core.harness_runs import get_harness_runs
+from app.core.quality_evaluator import QualityEvaluator
 
 
 
@@ -2983,6 +2984,22 @@ def run_agent_loop(
 
         )
 
+        # [Phase 11] Failure trigger — non-blocking, async MetaHarnessLoop on cascade
+        if heal_info.get("applied", False) is False:
+            try:
+                from app.core.failure_trigger import check_and_trigger_meta_harness
+                check_and_trigger_meta_harness(
+                    run_id=current_run_id or "",
+                    query=query,
+                    error_message=exec_result.message or validate_result.message or "",
+                    error_code="",
+                    tables_involved=tables_involved,
+                    generated_sql=generated_sql,
+                    async_mode=True,
+                )
+            except Exception:
+                pass
+
     else:
 
         result_status = "empty"
@@ -3066,6 +3083,38 @@ def run_agent_loop(
             if verbose:
 
                 print(f"  [WARN] [HARNESS] complete_run failed: {e}")
+
+
+
+    # [Phase 12] QualityEvaluator — compute and store quality metrics from trajectory
+
+    if current_run_id:
+
+        try:
+
+            hr = get_harness_runs()
+
+            run_obj = hr.get_run(current_run_id)
+
+            if run_obj:
+
+                eval_result = QualityEvaluator.evaluate_run(run_obj)
+
+                result_dict["quality_metrics"] = eval_result
+
+                hr.hset_run_field(current_run_id, "quality_score", str(eval_result["correctness_score"]))
+
+                hr.hset_run_field(current_run_id, "trajectory_adherence", str(eval_result["trajectory_adherence"]))
+
+                if verbose:
+
+                    print(f"  [HARNESS] QualityEvaluator => correctness={eval_result['correctness_score']} adherence={eval_result['trajectory_adherence']}")
+
+        except Exception as e:
+
+            if verbose:
+
+                print(f"  [WARN] [HARNESS] QualityEvaluator failed: {e}")
 
 
 
