@@ -617,7 +617,7 @@ class SecuritySentinel:
     # Alert Dispatch
     # =========================================================================
 
-    def register_alert_callback(self, callback: Callable[[ThreatVerdict, str], None]):
+    def register_alert_callback(self, callback: Callable[[ThreatVerdict, str], None]) -> None:
         """Register a callback to be called when a HIGH/CRITICAL threat is detected."""
         self._alert_callbacks.append(callback)
 
@@ -635,7 +635,7 @@ class SecuritySentinel:
         verdict: ThreatVerdict,
         session_id: str,
         role_id: str = None,
-    ):
+    ) -> None:
         """
         Default alert handler — logs to console + generates a security audit record.
         Replace or extend via register_alert_callback().
@@ -686,7 +686,7 @@ class SecuritySentinel:
     def get_session_profile(self, session_id: str) -> Optional[SessionThreatProfile]:
         return self._profiles.get(session_id)
 
-    def clear_session(self, session_id: str):
+    def clear_session(self, session_id: str) -> None:
         """Remove a session profile (called on session end/timeout)."""
         with self._profile_lock:
             if session_id in self._profiles:
@@ -750,7 +750,7 @@ def get_sentinel() -> SecuritySentinel:
     return _sentinel
 
 
-def set_sentinel_mode(mode: str):
+def set_sentinel_mode(mode: str) -> None:
     """Switch sentinel mode at runtime: DISABLED | AUDIT | ENFORCING"""
     global _sentinel
     if _sentinel is None:
