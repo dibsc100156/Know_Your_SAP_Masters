@@ -103,7 +103,9 @@ from app.core.security import SAPAuthContext
 from app.core.harness_runs import get_harness_runs
 from app.core.quality_evaluator import QualityEvaluator
 
+import logging
 
+logger = logging.getLogger(__name__)
 
 
 
@@ -163,13 +165,13 @@ def _update_harness_phase(
 
             icon = "[OK]" if status == "completed" else "[FAIL]" if status == "failed" else "[SKIP]"
 
-            print(f"  {icon} [HARNESS] phase={phase} status={status} dur={duration_ms}ms")
+            logger.debug(f"  {icon} [HARNESS] phase={phase} status={status} dur={duration_ms}ms")
 
     except Exception as e:
 
         if verbose:
 
-            print(f"  [WARN] [HARNESS] phase={phase} update failed: {e}")
+            logger.warning(f"  [WARN] [HARNESS] phase={phase} update failed: {e}")
 
 
 
@@ -495,12 +497,12 @@ def run_agent_loop(
         )
         swarm_run_id = hr_run.run_id
         if verbose:
-            print(f"\n[HARNESS] Starting swarm run {swarm_run_id}")
+            logger.debug(f"\n[HARNESS] Starting swarm run {swarm_run_id}")
     except Exception as e:
         hr_run = None
         swarm_run_id = None
         if verbose:
-            print(f"[HARNESS] Swarm run tracking unavailable: {e}")
+            logger.debug(f"[HARNESS] Swarm run tracking unavailable: {e}")
 
     # ============================================================================
     # [Phase 6] SWARM GATE - Delegate to Multi-Agent Domain Swarm if enabled
@@ -557,7 +559,7 @@ def run_agent_loop(
 
         if verbose:
 
-            print(f"\n[HARNESS] Starting run {current_run_id}")
+            logger.debug(f"\n[HARNESS] Starting run {current_run_id}")
 
     except Exception as e:
 
@@ -567,7 +569,7 @@ def run_agent_loop(
 
         if verbose:
 
-            print(f"\n[WARN] Harness tracking unavailable: {e}")
+            logger.warning(f"\n[WARN] Harness tracking unavailable: {e}")
 
 
 
@@ -655,11 +657,11 @@ def run_agent_loop(
 
         sev_label = sentinel_verdict.severity.value.upper()
 
-        print(f"\n[!!] SECURITY SENTINEL [{sev_label}]: {sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else 'unknown'} detected!")
+        logger.info(f"\n[!!] SECURITY SENTINEL [{sev_label}]: {sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else 'unknown'} detected!")
 
         for ev in sentinel_verdict.evidence[:3]:
 
-            print(f"    Evidence: {ev}")
+            logger.info(f"    Evidence: {ev}")
 
         if sentinel_verdict.severity in (ThreatSeverity.HIGH, ThreatSeverity.CRITICAL):
 
@@ -671,7 +673,7 @@ def run_agent_loop(
 
             sentinel.apply_tightening_to_auth_context(sentinel_verdict, auth_context)
 
-            print(f"    [!!] AuthContext tightened for role {auth_context.role_id}. Denied tables expanded.")
+            logger.info(f"    [!!] AuthContext tightened for role {auth_context.role_id}. Denied tables expanded.")
 
 
 
@@ -707,9 +709,9 @@ def run_agent_loop(
 
                 if verbose:
 
-                    print(f"\n[SUPERVISOR] Routing to {decision.decision.value.upper()} path")
+                    logger.debug(f"\n[SUPERVISOR] Routing to {decision.decision.value.upper()} path")
 
-                    print(f"  Reasoning: {decision.reasoning}")
+                    logger.debug(f"  Reasoning: {decision.reasoning}")
 
                 supervisor_result = supervisor.execute(decision, query, auth_context, verbose=verbose)
 
@@ -731,15 +733,15 @@ def run_agent_loop(
 
             elif verbose:
 
-                print(f"\n[SUPERVISOR] Falling through to standard orchestrator")
+                logger.info(f"\n[SUPERVISOR] Falling through to standard orchestrator")
 
-                print(f"  Reasoning: {decision.reasoning}")
+                logger.info(f"  Reasoning: {decision.reasoning}")
 
         except Exception as e:
 
             if verbose:
 
-                print(f"\n[SUPERVISOR] Error — falling back to standard orchestrator: {e}")
+                logger.debug(f"\n[SUPERVISOR] Error — falling back to standard orchestrator: {e}")
 
 
 
@@ -755,7 +757,7 @@ def run_agent_loop(
 
             icon = "[OK]" if result.status == ToolStatus.SUCCESS else "[ERROR]" if result.status == ToolStatus.ERROR else "[PARTIAL]"
 
-            print(f"  {icon} {tool}: {result.message}")
+            logger.debug(f"  {icon} {tool}: {result.message}")
 
 
 
@@ -767,9 +769,9 @@ def run_agent_loop(
 
     if verbose:
 
-        print(f"\n[*] Orchestrator starting for: '{query}'")
+        logger.debug(f"\n[*] Orchestrator starting for: '{query}'")
 
-        print(f"[*] Role: {auth_context.role_id} | Domain: {domain}")
+        logger.debug(f"[*] Role: {auth_context.role_id} | Domain: {domain}")
 
 
 
@@ -781,7 +783,7 @@ def run_agent_loop(
 
     phase_0_start = time.time()
 
-    print("\n[0/5] [Pillar 5] Meta-Path Match — meta_path_match()")
+    logger.info("\n[0/5] [Pillar 5] Meta-Path Match — meta_path_match()")
 
     meta_result = call_tool("meta_path_match", {
 
@@ -815,7 +817,7 @@ def run_agent_loop(
 
         match_data = meta_result.data["match"]
 
-        print(f"    HIT: '{match_data['name']}' (Score: {match_data['match_score']})")
+        logger.info(f"    HIT: '{match_data['name']}' (Score: {match_data['match_score']})")
 
         base_sql = match_data["sql_template"]
 
@@ -825,7 +827,7 @@ def run_agent_loop(
 
 
 
-        print("    [FAST PATH] Skipping Schema & SQL RAG — using Meta-Path template.")
+        logger.info("    [FAST PATH] Skipping Schema & SQL RAG — using Meta-Path template.")
 
 
 
@@ -849,11 +851,11 @@ def run_agent_loop(
 
                 temporal_mode = temporal_result.data.get("temporal_mode", "key_date")
 
-                print(f"    [TEMPORAL] Fast-path resolved: {temporal_result.data.get('resolved')} | Mode: {temporal_mode}")
+                logger.info(f"    [TEMPORAL] Fast-path resolved: {temporal_result.data.get('resolved')} | Mode: {temporal_mode}")
 
     else:
 
-        print("    MISS: No strong meta-path found. Proceeding to dynamic RAG.")
+        logger.info("    MISS: No strong meta-path found. Proceeding to dynamic RAG.")
 
 
 
@@ -953,7 +955,7 @@ def run_agent_loop(
 
 
 
-        print(f"\n[1.75/5] [Phase 8] QM Semantic Search — searching 20yr of mechanic notes")
+        logger.info(f"\n[1.75/5] [Phase 8] QM Semantic Search — searching 20yr of mechanic notes")
 
 
 
@@ -1023,7 +1025,7 @@ def run_agent_loop(
 
 
 
-                print(f"    [QM] Found {len(qm_results)} relevant QM notification chunk(s)")
+                logger.info(f"    [QM] Found {len(qm_results)} relevant QM notification chunk(s)")
 
 
 
@@ -1031,7 +1033,7 @@ def run_agent_loop(
 
 
 
-                print(f"    Top match: [{top_qm['year']}] {top_qm['equipment']} — "
+                logger.info(f"    Top match: [{top_qm['year']}] {top_qm['equipment']} — "
 
 
 
@@ -1039,7 +1041,7 @@ def run_agent_loop(
 
 
 
-                print(f"    Text: {top_qm['text'][:100]}...")
+                logger.info(f"    Text: {top_qm['text'][:100]}...")
 
 
 
@@ -1071,7 +1073,7 @@ def run_agent_loop(
 
 
 
-                print(f"    [QM] No QM semantic matches (index may be empty)")
+                logger.info(f"    [QM] No QM semantic matches (index may be empty)")
 
 
 
@@ -1103,7 +1105,7 @@ def run_agent_loop(
 
 
 
-            print(f"    [QM] Semantic search error (non-fatal): {e}")
+            logger.info(f"    [QM] Semantic search error (non-fatal): {e}")
 
 
 
@@ -1177,7 +1179,7 @@ def run_agent_loop(
 
         phase_1_start = time.time()
 
-        print("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
+        logger.info("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
 
         schema_result = call_tool("schema_lookup", {
 
@@ -1219,7 +1221,7 @@ def run_agent_loop(
 
         tables_involved = schema_result.data["tables_used"]
 
-        print(f"    Tables found: {tables_involved}")
+        logger.info(f"    Tables found: {tables_involved}")
 
         if current_run_id:
 
@@ -1243,7 +1245,7 @@ def run_agent_loop(
 
         if not tables_involved:
 
-            print("\n[1b/5] [Phase 5] Schema Auto-Discovery — DDIC fallback")
+            logger.info("\n[1b/5] [Phase 5] Schema Auto-Discovery — DDIC fallback")
 
             try:
 
@@ -1265,13 +1267,13 @@ def run_agent_loop(
 
                     tables_involved = [top_result["table"]]
 
-                    print(f"    [DDIC] Discovered: {top_result['table']} "
+                    logger.info(f"    [DDIC] Discovered: {top_result['table']} "
 
                           f"({top_result['description']}) "
 
                           f"confidence={top_result['confidence']}")
 
-                    print(f"    [DDIC] Fields: {', '.join(top_result['fields'][:4])}...")
+                    logger.info(f"    [DDIC] Fields: {', '.join(top_result['fields'][:4])}...")
 
                     # Build SQL from discovered table
 
@@ -1285,7 +1287,7 @@ def run_agent_loop(
 
                     )
 
-                    print(f"    [DDIC] Generated SQL: {base_sql[:80]}...")
+                    logger.info(f"    [DDIC] Generated SQL: {base_sql[:80]}...")
 
                     trace("schema_auto_discover", ToolResult(
 
@@ -1301,13 +1303,13 @@ def run_agent_loop(
 
                 else:
 
-                    print("    [DDIC] No tables found in DDIC mirror. Falling back to SELECT *.")
+                    logger.info("    [DDIC] No tables found in DDIC mirror. Falling back to SELECT *.")
 
                     tables_involved = ["LFA1"]  # ultimate fallback
 
             except Exception as e:
 
-                print(f"    [DDIC] Auto-discovery failed: {e}")
+                logger.info(f"    [DDIC] Auto-discovery failed: {e}")
 
                 tables_involved = ["LFA1"]
 
@@ -1327,7 +1329,7 @@ def run_agent_loop(
 
         phase_1b_start = time.time()
 
-        print("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
+        logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
 
         graph_result = call_tool("graph_enhanced_schema_discovery", {
 
@@ -1365,7 +1367,7 @@ def run_agent_loop(
 
             if merged_count > 0:
 
-                print(f"    [MERGE] Added {merged_count} graph-discovered table(s): "
+                logger.info(f"    [MERGE] Added {merged_count} graph-discovered table(s): "
 
                       f"{[t for t in graph_tables if t not in schema_result.data['tables_used']]}")
 
@@ -1375,7 +1377,7 @@ def run_agent_loop(
 
             top_graph = graph_result.data["tables"][0]
 
-            print(f"    Top result: {top_graph['table']} [{top_graph['domain']}] "
+            logger.info(f"    Top result: {top_graph['table']} [{top_graph['domain']}] "
 
                   f"role={top_graph['structural_role']} "
 
@@ -1387,7 +1389,7 @@ def run_agent_loop(
 
         else:
 
-            print(f"    [WARN] Graph embedding search returned no results: {graph_result.message}")
+            logger.info(f"    [WARN] Graph embedding search returned no results: {graph_result.message}")
 
 
 
@@ -1401,7 +1403,7 @@ def run_agent_loop(
 
         phase_2_start = time.time()
 
-        print("\n[2/5] [Pillar 4] SQL RAG — sql_pattern_lookup()")
+        logger.info("\n[2/5] [Pillar 4] SQL RAG — sql_pattern_lookup()")
 
         
 
@@ -1411,7 +1413,7 @@ def run_agent_loop(
 
         if boosted:
 
-            print(f"    [MEMORY] Found {len(boosted)} boosted pattern(s) for '{domain}': "
+            logger.info(f"    [MEMORY] Found {len(boosted)} boosted pattern(s) for '{domain}': "
 
                   f"{', '.join(p['pattern_name'] for p in boosted[:3])}")
 
@@ -1441,17 +1443,17 @@ def run_agent_loop(
 
             base_sql = top_pattern["sql"]
 
-            print(f"    Pattern: {top_pattern['intent']}")
+            logger.info(f"    Pattern: {top_pattern['intent']}")
 
-            print(f"    Tables: {top_pattern['tables']}")
+            logger.info(f"    Tables: {top_pattern['tables']}")
 
-            print(f"    Distance: {top_pattern.get('distance', 0):.3f}")
+            logger.info(f"    Distance: {top_pattern.get('distance', 0):.3f}")
 
         elif tables_involved:
-            print("    [WARN] No pattern found. Generating SELECT * FROM primary table.")
+            logger.info("    [WARN] No pattern found. Generating SELECT * FROM primary table.")
             base_sql = f"SELECT * FROM {tables_involved[0]} "
         else:
-            print("    [WARN] No tables found. Skipping SQL generation.")
+            logger.info("    [WARN] No tables found. Skipping SQL generation.")
             base_sql = ""
 
 
@@ -1464,7 +1466,7 @@ def run_agent_loop(
 
         if len(tables_involved) >= 2:
 
-            print(f"\n[2b/5] [Pillar 5] Temporal Detection — checking for date anchors in query")
+            logger.info(f"\n[2b/5] [Pillar 5] Temporal Detection — checking for date anchors in query")
 
             temporal_result = call_tool("temporal_graph_search", {
 
@@ -1484,13 +1486,13 @@ def run_agent_loop(
 
                 temporal_mode = temporal_result.data.get("temporal_mode", "key_date")
 
-                print(f"    [TEMPORAL] Resolved: {temporal_result.data.get('resolved')} | Mode: {temporal_mode}")
+                logger.info(f"    [TEMPORAL] Resolved: {temporal_result.data.get('resolved')} | Mode: {temporal_mode}")
 
-                print(f"    [TEMPORAL] Filters: {temporal_filters[:4]}")
+                logger.info(f"    [TEMPORAL] Filters: {temporal_filters[:4]}")
 
             else:
 
-                print(f"    [TEMPORAL] No temporal anchor in query — proceeding without temporal filters")
+                logger.info(f"    [TEMPORAL] No temporal anchor in query — proceeding without temporal filters")
 
 
 
@@ -1534,7 +1536,7 @@ def run_agent_loop(
 
         if is_temporal_analysis and len(tables_involved) >= 1:
 
-            print(f"\n[2c/5] [Phase 7] Temporal Analysis Engine — detected temporal analysis query")
+            logger.info(f"\n[2c/5] [Phase 7] Temporal Analysis Engine — detected temporal analysis query")
 
             te = TemporalEngine()
 
@@ -1562,7 +1564,7 @@ def run_agent_loop(
 
                     temporal_sql = spi_result["delivery_sql"]
 
-                    print(f"    [PHASE 7] Supplier Performance Index for {vendor_id}")
+                    logger.info(f"    [PHASE 7] Supplier Performance Index for {vendor_id}")
 
                     temporal_analysis_meta = {"type": "supplier_performance", "vendor_id": vendor_id}
 
@@ -1582,7 +1584,7 @@ def run_agent_loop(
 
                     temporal_sql = clv_result["revenue_sql"]
 
-                    print(f"    [PHASE 7] Customer Lifetime Value for {customer_id}")
+                    logger.info(f"    [PHASE 7] Customer Lifetime Value for {customer_id}")
 
                     temporal_analysis_meta = {"type": "clv", "customer_id": customer_id}
 
@@ -1610,7 +1612,7 @@ def run_agent_loop(
 
                     temporal_sql = econ_result["events"][0]["comparison_sql"] if econ_result["events"] else base_sql
 
-                    print(f"    [PHASE 7] Economic Cycle Analysis — {econ_result['events_found']} event(s) found")
+                    logger.info(f"    [PHASE 7] Economic Cycle Analysis — {econ_result['events_found']} event(s) found")
 
                     temporal_analysis_meta = {"type": "economic_cycle", "events_found": econ_result['events_found']}
 
@@ -1682,7 +1684,7 @@ def run_agent_loop(
 
                     temporal_sql = fy_analysis["aggregation_sql"]
 
-                    print(f"    [PHASE 7] FY Analysis: {fy_analysis['fy_range']['label']} @ {granularity}")
+                    logger.info(f"    [PHASE 7] FY Analysis: {fy_analysis['fy_range']['label']} @ {granularity}")
 
                     temporal_analysis_meta = {"type": "fiscal_year", "fy_range": fy_analysis['fy_range'], "granularity": granularity}
 
@@ -1716,7 +1718,7 @@ def run_agent_loop(
 
                     temporal_analysis_meta = {"type": "fiscal_year", "fy_range": fy_analysis['fy_range']}
 
-                    print(f"    [PHASE 7] Generic FY Analysis: {fy_analysis['fy_range']['label']}")
+                    logger.info(f"    [PHASE 7] Generic FY Analysis: {fy_analysis['fy_range']['label']}")
 
 
 
@@ -1728,7 +1730,7 @@ def run_agent_loop(
 
                     if verbose:
 
-                        print(f"    [PHASE 7] Temporal SQL: {temporal_sql[:120]}...")
+                        logger.debug(f"    [PHASE 7] Temporal SQL: {temporal_sql[:120]}...")
 
                     trace("temporal_analysis_engine", ToolResult(
 
@@ -1746,7 +1748,7 @@ def run_agent_loop(
 
             except Exception as e:
 
-                print(f"    [PHASE 7] Temporal engine error: {e}")
+                logger.info(f"    [PHASE 7] Temporal engine error: {e}")
 
                 trace("temporal_analysis_engine", ToolResult(
 
@@ -1806,7 +1808,7 @@ def run_agent_loop(
 
         if is_negotiation_query:
 
-            print(f"\n[2d/5] [Phase 8] Negotiation Briefing Generator — synthesizing 20yr brief")
+            logger.info(f"\n[2d/5] [Phase 8] Negotiation Briefing Generator — synthesizing 20yr brief")
 
             try:
 
@@ -1930,17 +1932,17 @@ def run_agent_loop(
 
 
 
-                print(f"    [BRIEF] Entity: {brief.entity_name} ({brief.entity_type.value})")
+                logger.info(f"    [BRIEF] Entity: {brief.entity_name} ({brief.entity_type.value})")
 
-                print(f"    [BRIEF] CLV Tier: {brief.clv_tier} | PSI: {brief.price_sensitivity_index}/10")
+                logger.info(f"    [BRIEF] CLV Tier: {brief.clv_tier} | PSI: {brief.price_sensitivity_index}/10")
 
-                print(f"    [BRIEF] Churn Risk: {brief.churn_risk} | BATNA Strength: {brief.batna_strength:.0f}/10")
+                logger.info(f"    [BRIEF] Churn Risk: {brief.churn_risk} | BATNA Strength: {brief.batna_strength:.0f}/10")
 
-                print(f"    [BRIEF] Target: +{brief.recommended_increase_pct:.1f}% increase | "
+                logger.info(f"    [BRIEF] Target: +{brief.recommended_increase_pct:.1f}% increase | "
 
                       f"Accept min: +{brief.max_acceptable_increase_pct:.1f}%")
 
-                print(f"    [BRIEF] Top tactic: {brief.top_tactics[0][:80]}")
+                logger.info(f"    [BRIEF] Top tactic: {brief.top_tactics[0][:80]}")
 
 
 
@@ -1962,7 +1964,7 @@ def run_agent_loop(
 
             except Exception as e:
 
-                print(f"    [BRIEF] Error generating negotiation brief: {e}")
+                logger.info(f"    [BRIEF] Error generating negotiation brief: {e}")
 
                 trace("negotiation_briefing", ToolResult(
 
@@ -2008,7 +2010,7 @@ def run_agent_loop(
 
                 phase_3_start = time.time()
 
-                print(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
+                logger.info(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
 
                 graph_result = call_tool("all_paths_explore", {
 
@@ -2030,11 +2032,11 @@ def run_agent_loop(
 
                     base_sql += f"\n{join_clause}"
 
-                    print(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
+                    logger.info(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
 
                 else:
 
-                    print(f"    [WARN] {graph_result.message}")
+                    logger.info(f"    [WARN] {graph_result.message}")
 
                 if current_run_id:
 
@@ -2054,11 +2056,11 @@ def run_agent_loop(
 
             else:
 
-                print("\n[3/5] [Pillar 5] Graph RAG — Skipped (single table, no traversal needed)")
+                logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (single table, no traversal needed)")
 
         else:
 
-            print("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
+            logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
 
 
 
@@ -2070,7 +2072,7 @@ def run_agent_loop(
 
     phase_4_start = time.time()
 
-    print("\n[4/5] [Pillar 1] SQL Assembly + AuthContext Injection")
+    logger.info("\n[4/5] [Pillar 1] SQL Assembly + AuthContext Injection")
 
 
 
@@ -2100,7 +2102,7 @@ def run_agent_loop(
 
                 where_clauses.append(tf)
 
-        print(f"    [TEMPORAL] Applied {len(temporal_filters)} filter(s): {temporal_mode}")
+        logger.info(f"    [TEMPORAL] Applied {len(temporal_filters)} filter(s): {temporal_mode}")
 
 
 
@@ -2280,7 +2282,7 @@ def run_agent_loop(
 
     if verbose:
 
-        print(f"    Generated SQL: {generated_sql[:100]}...")
+        logger.debug(f"    Generated SQL: {generated_sql[:100]}...")
 
 
 
@@ -2290,7 +2292,7 @@ def run_agent_loop(
 
     # =========================================================================
 
-        print("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
+        logger.info("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
 
     
 
@@ -2352,13 +2354,13 @@ def run_agent_loop(
 
     if not critique_result["passed"]:
 
-        print(f"    [!!] Critique FAILED (score={critique_result['score']})")
+        logger.info(f"    [!!] Critique FAILED (score={critique_result['score']})")
 
         for issue in critique_result["issues"]:
 
-            print(f"        • {issue}")
+            logger.info(f"        • {issue}")
 
-        print("    [!!] Attempting self-heal...")
+        logger.info("    [!!] Attempting self-heal...")
 
         # Use self-healer to auto-correct based on detected issues
 
@@ -2378,7 +2380,7 @@ def run_agent_loop(
 
         if heal_code and corrected_sql != generated_sql:
 
-            print(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
+            logger.info(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
 
             generated_sql = corrected_sql
 
@@ -2410,25 +2412,25 @@ def run_agent_loop(
 
             if re_critique["passed"]:
 
-                print(f"    [OK] Healed SQL passed re-score ({re_critique['score']})")
+                logger.info(f"    [OK] Healed SQL passed re-score ({re_critique['score']})")
 
                 critique_result = re_critique
 
             else:
 
-                print(f"    [WARN] Healed SQL still failing. Proceeding with warning.")
+                logger.info(f"    [WARN] Healed SQL still failing. Proceeding with warning.")
 
-                print(f"    [WARN] Remaining issues: {re_critique['issues']}")
+                logger.info(f"    [WARN] Remaining issues: {re_critique['issues']}")
 
         else:
 
-            print(f"    [WARN] No self-heal rule matched: {heal_reason}")
+            logger.info(f"    [WARN] No self-heal rule matched: {heal_reason}")
 
             heal_info = {"applied": False, "code": None, "reason": heal_reason}
 
     else:
 
-        print(f"    [OK] Critique PASSED (score={critique_result['score']})")
+        logger.info(f"    [OK] Critique PASSED (score={critique_result['score']})")
 
     
 
@@ -2446,7 +2448,7 @@ def run_agent_loop(
 
     phase_5_start = time.time()
 
-    print("\n[5/5] [Security] sql_validate()")
+    logger.info("\n[5/5] [Security] sql_validate()")
 
     validate_result = call_tool("sql_validate", {
 
@@ -2478,9 +2480,9 @@ def run_agent_loop(
 
         if heal_code and healed_sql != generated_sql:
 
-            print(f"    [!!] Validation failed — self-healed ({heal_code}): {heal_reason}")
+            logger.info(f"    [!!] Validation failed — self-healed ({heal_code}): {heal_reason}")
 
-            print(f"    [OK] Retrying with healed SQL...")
+            logger.info(f"    [OK] Retrying with healed SQL...")
 
             generated_sql = healed_sql
 
@@ -2528,7 +2530,7 @@ def run_agent_loop(
 
     if validate_result.data.get("suggestions"):
 
-        print(f"    AuthContext suggestions: {validate_result.data['suggestions']}")
+        logger.info(f"    AuthContext suggestions: {validate_result.data['suggestions']}")
 
 
 
@@ -2540,7 +2542,7 @@ def run_agent_loop(
 
     phase_5b_start = time.time()
 
-    print("\n[5.5/5] [Phase 6] Validation Harness — SELECT COUNT(*) Dry-Run")
+    logger.info("\n[5.5/5] [Phase 6] Validation Harness — SELECT COUNT(*) Dry-Run")
 
     validation_sql = f"SELECT COUNT(*) FROM (\n{generated_sql}\n) AS dry_run_sub"
 
@@ -2562,9 +2564,9 @@ def run_agent_loop(
 
         val_error = val_exec_result.message or "SQL validation execution failed"
 
-        print(f"    [!!] Dry-Run Validation failed: {val_error[:60]}")
+        logger.info(f"    [!!] Dry-Run Validation failed: {val_error[:60]}")
 
-        print(f"    [!!] Attempting autonomous self-heal...")
+        logger.info(f"    [!!] Attempting autonomous self-heal...")
 
         healed_sql, heal_reason, heal_code = self_healer.heal(
 
@@ -2580,7 +2582,7 @@ def run_agent_loop(
 
         if heal_code and healed_sql != generated_sql:
 
-            print(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
+            logger.info(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
 
             generated_sql = healed_sql
 
@@ -2602,15 +2604,15 @@ def run_agent_loop(
 
             if reval_exec_result.status == ToolStatus.SUCCESS:
 
-                print(f"    [OK] Healed SQL passed the Validation Harness!")
+                logger.info(f"    [OK] Healed SQL passed the Validation Harness!")
 
             else:
 
-                print(f"    [WARN] Healed SQL still failing validation dry-run.")
+                logger.info(f"    [WARN] Healed SQL still failing validation dry-run.")
 
         else:
 
-            print(f"    [WARN] No autonomous heal possible: {heal_reason}")
+            logger.info(f"    [WARN] No autonomous heal possible: {heal_reason}")
 
 
 
@@ -2622,7 +2624,7 @@ def run_agent_loop(
 
     phase_exec_start = time.time()
 
-    print("\n[*] Executing Final SQL against SAP HANA (mock)...")
+    logger.info("\n[*] Executing Final SQL against SAP HANA (mock)...")
 
     exec_result = call_tool("sql_execute", {
 
@@ -2644,9 +2646,9 @@ def run_agent_loop(
 
         exec_error = exec_result.message or "SQL execution failed"
 
-        print(f"    [!!] Execution failed: {exec_error[:60]}")
+        logger.info(f"    [!!] Execution failed: {exec_error[:60]}")
 
-        print(f"    [!!] Attempting autonomous self-heal...")
+        logger.info(f"    [!!] Attempting autonomous self-heal...")
 
         healed_sql, heal_reason, heal_code = self_healer.heal(
 
@@ -2662,7 +2664,7 @@ def run_agent_loop(
 
         if heal_code and healed_sql != generated_sql:
 
-            print(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
+            logger.info(f"    [OK] Self-healed ({heal_code}): {heal_reason}")
 
             generated_sql = healed_sql
 
@@ -2672,7 +2674,7 @@ def run_agent_loop(
 
             if revalidate.status == ToolStatus.SUCCESS:
 
-                print(f"    [OK] Retrying execution with healed SQL...")
+                logger.info(f"    [OK] Retrying execution with healed SQL...")
 
                 exec_result = call_tool("sql_execute", {"sql": generated_sql, "dry_run": True, "max_rows": 1000}, auth_context=auth_context)
 
@@ -2680,7 +2682,7 @@ def run_agent_loop(
 
         else:
 
-            print(f"    [WARN] No autonomous heal possible: {heal_reason}")
+            logger.info(f"    [WARN] No autonomous heal possible: {heal_reason}")
 
 
 
@@ -2706,7 +2708,7 @@ def run_agent_loop(
 
         if masked_fields:
 
-            print(f"    [Pillar 1] Masked fields: {masked_fields}")
+            logger.info(f"    [Pillar 1] Masked fields: {masked_fields}")
 
 
 
@@ -2750,11 +2752,11 @@ def run_agent_loop(
 
 
 
-    print(f"\n[DONE] {final_answer}")
+    logger.info(f"\n[DONE] {final_answer}")
 
-    print(f"    Execution time: {execution_time}ms")
+    logger.info(f"    Execution time: {execution_time}ms")
 
-    print(f"    Tools called: {len(tool_trace)}")
+    logger.info(f"    Tools called: {len(tool_trace)}")
 
 
 
@@ -2932,7 +2934,7 @@ def run_agent_loop(
 
         if heal_info.get("applied", False):
 
-            print(f"\n    [MEMORY COMPOUNDING] Vectorizing newly-healed pattern to Qdrant: {pattern_name}")
+            logger.info(f"\n    [MEMORY COMPOUNDING] Vectorizing newly-healed pattern to Qdrant: {pattern_name}")
 
             try:
 
@@ -2956,11 +2958,11 @@ def run_agent_loop(
 
                 )
 
-                print(f"    [MEMORY COMPOUNDING] Healed SQL successfully indexed into '{store_manager.backend_name}' store.")
+                logger.info(f"    [MEMORY COMPOUNDING] Healed SQL successfully indexed into '{store_manager.backend_name}' store.")
 
             except Exception as e:
 
-                print(f"    [WARN] Failed to index healed SQL into vector store: {e}")
+                logger.info(f"    [WARN] Failed to index healed SQL into vector store: {e}")
 
 
 
@@ -3082,7 +3084,7 @@ def run_agent_loop(
 
             if verbose:
 
-                print(f"  [WARN] [HARNESS] complete_run failed: {e}")
+                logger.warning(f"  [WARN] [HARNESS] complete_run failed: {e}")
 
 
 
@@ -3108,13 +3110,13 @@ def run_agent_loop(
 
                 if verbose:
 
-                    print(f"  [HARNESS] QualityEvaluator => correctness={eval_result['correctness_score']} adherence={eval_result['trajectory_adherence']}")
+                    logger.debug(f"  [HARNESS] QualityEvaluator => correctness={eval_result['correctness_score']} adherence={eval_result['trajectory_adherence']}")
 
         except Exception as e:
 
             if verbose:
 
-                print(f"  [WARN] [HARNESS] QualityEvaluator failed: {e}")
+                logger.warning(f"  [WARN] [HARNESS] QualityEvaluator failed: {e}")
 
 
 
@@ -3206,21 +3208,21 @@ def main():
 
 
 
-    print("\n" + "=" * 60)
+    logger.info("\n" + "=" * 60)
 
-    print("  FINAL RESULT")
+    logger.info("  FINAL RESULT")
 
-    print("=" * 60)
+    logger.info("=" * 60)
 
-    print(f"\n  Answer: {result['answer']}")
+    logger.info(f"\n  Answer: {result['answer']}")
 
-    print(f"\n  SQL:\n  {result['executed_sql']}")
+    logger.info(f"\n  SQL:\n  {result['executed_sql']}")
 
     if result["masked_fields"]:
 
-        print(f"\n  Masked: {result['masked_fields']}")
+        logger.info(f"\n  Masked: {result['masked_fields']}")
 
-    print(f"\n  Execution: {result['execution_time_ms']}ms | {len(result['tool_trace'])} tools")
+    logger.info(f"\n  Execution: {result['execution_time_ms']}ms | {len(result['tool_trace'])} tools")
 
 
 

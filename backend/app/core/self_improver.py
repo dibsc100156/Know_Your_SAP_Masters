@@ -28,9 +28,10 @@ Usage (runs automatically after every query):
   # Check if any patterns need replacement
   alerts = improver.get_improvement_alerts()
   for alert in alerts:
-      print(f"ALERT: {alert['action']} — {alert['reason']}")
+      logger.info(f"ALERT: {alert['action']} — {alert['reason']}")
 """
 
+import logging
 import json
 import re
 import time
@@ -48,6 +49,8 @@ from app.core.memory_layer import (
     _load_json,
     _save_json,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------

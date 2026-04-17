@@ -1,6 +1,9 @@
+import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 from app.core.eval_alerting import EvalAlertMonitor
 

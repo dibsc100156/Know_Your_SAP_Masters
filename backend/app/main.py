@@ -1,7 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+import logging
 import os
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load .env file from backend/ directory (sets MEMGRAPH_URI, QDRANT_URL, etc.)
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
@@ -177,22 +180,22 @@ def on_startup():
     try:
         store_manager = init_vector_store(backend=_backend)
         count = store_manager.count()
-        print(f"[STARTUP] Vector store ({_backend}): {count} schema records.")
+        logger.info(f"[STARTUP] Vector store ({_backend}): {count} schema records.")
     except Exception as e:
-        print(f"[STARTUP] Vector store ({_backend}) failed: {e}")
-        print("[STARTUP] Falling back to ChromaDB...")
+        logger.warning(f"[STARTUP] Vector store ({_backend}) failed: {e}")
+        logger.info("[STARTUP] Falling back to ChromaDB...")
         store_manager = init_vector_store(backend="chroma")
         count = store_manager.count()
-        print(f"[STARTUP] ChromaDB fallback: {count} schema records.")
+        logger.info(f"[STARTUP] ChromaDB fallback: {count} schema records.")
 
     # Initialize Redis dialog manager (lazy — connects on first use)
     from app.core.redis_dialog_manager import get_dialog_manager
     try:
         dm = get_dialog_manager()
         stats = dm.stats()
-        print(f"[STARTUP] Redis Dialog Manager: {stats}")
+        logger.info(f"[STARTUP] Redis Dialog Manager: {stats}")
     except Exception as e:
-        print(f"[STARTUP] Redis Dialog Manager: {e}")
+        logger.warning(f"[STARTUP] Redis Dialog Manager: {e}")
 
     # ── Memgraph Phase M3: Wire use_memgraph() into global graph_store ──────────
     # If MEMGRAPH_URI is set, replace the NetworkX graph_store singleton with
@@ -204,11 +207,11 @@ def on_startup():
         try:
             from app.core import use_memgraph, graph_store
             tenant = os.environ.get("TENANT_ID", "default")
-            print(f"[STARTUP] Memgraph: swapping graph_store → Memgraph ({memgraph_uri}) for tenant {tenant}")
+            logger.info(f"[STARTUP] Memgraph: swapping graph_store → Memgraph ({memgraph_uri}) for tenant {tenant}")
             mg_class = use_memgraph(uri=memgraph_uri, tenant_id=tenant)
             import app.core.graph_store as gs
-            print(f"[STARTUP] Memgraph Graph RAG: {gs.stats()}")
+            logger.info(f"[STARTUP] Memgraph Graph RAG: {gs.stats()}")
         except Exception as e:
-            print(f"[STARTUP] Memgraph: {e} — using NetworkX fallback")
+            logger.warning(f"[STARTUP] Memgraph: {e} — using NetworkX fallback")
     else:
-        print("[STARTUP] Memgraph: not configured (MEMGRAPH_URI not set) — using NetworkX")
+        logger.info("[STARTUP] Memgraph: not configured (MEMGRAPH_URI not set) — using NetworkX")

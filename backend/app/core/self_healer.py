@@ -21,12 +21,15 @@ Usage:
   healer = SelfHealer()
   fixed, explanation = healer.heal(sql=sql, error=error, schema_context=ctx)
   if fixed:
-      print(f"Auto-healed: {explanation}")
+      logger.info(f"Auto-healed: {explanation}")
 """
 
+import logging
 import re
 from typing import Dict, Any, List, Optional, Tuple
 from dataclasses import dataclass
+
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
