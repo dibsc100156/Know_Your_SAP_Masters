@@ -128,7 +128,7 @@ class MessageBus:
 
     STREAM_MAXLEN = 10000   # Cap each agent's stream
 
-    def __init__(self, redis_client: Optional[redis.Redis] = None):
+    def __init__(self, redis_client: Optional[redis.Redis] = None) -> None:
         self._redis = redis_client or self._get_redis()
         self._pubsub_threads: Dict[str, Thread] = {}
         self._handlers: Dict[str, callable] = {}
