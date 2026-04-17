@@ -3033,7 +3033,7 @@ def run_agent_loop(
         self_heal_applied=heal_info.get("applied", False),
 
         feedback_applied=False,
-
+        run_id=current_run_id,
     )
 
     

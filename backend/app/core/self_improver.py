@@ -49,6 +49,7 @@ from app.core.memory_layer import (
     _load_json,
     _save_json,
 )
+from app.core.harness_runs import get_harness_runs
 
 logger = logging.getLogger(__name__)
 
@@ -87,11 +88,42 @@ class SelfImprover:
     Designed to run after every query without blocking the response.
     """
 
-    def __init__(self):
+    def __init__(self, harness_runs=None):
         self._lock = Lock()
         self._ad_hoc_sqls: Dict[str, Dict] = {}  # sql_fingerprint → count + metadata
         self._improvement_alerts: List[Dict] = []
         self._last_review = datetime.now(timezone.utc).isoformat()
+        self._harness_runs = harness_runs
+
+    def _log_improvement_event(
+        self,
+        event_type: str,
+        domain: str,
+        action: str,
+        details: Dict[str, Any],
+    ) -> None:
+        """Log improvement event to HarnessRuns trajectory if available."""
+        if self._harness_runs is None:
+            try:
+                self._harness_runs = get_harness_runs()
+            except Exception:
+                pass
+        if self._harness_runs is None:
+            return
+        try:
+            # HarnessRuns.add_trajectory_event(run_id, step, decision, reasoning, metadata)
+            run_id = details.pop("_run_id", "")
+            if not run_id:
+                return
+            self._harness_runs.add_trajectory_event(
+                run_id=run_id,
+                step=f"self_improvement:{event_type}",
+                decision=f"{action}: {domain}",
+                reasoning=details.get("reason", ""),
+                metadata={"domain": domain, "action": action, **details},
+            )
+        except Exception:
+            pass
 
     def review_and_improve(
         self,
@@ -106,12 +138,20 @@ class SelfImprover:
         tables_used: Optional[List[str]] = None,
         self_heal_applied: bool = False,
         feedback_applied: bool = False,
+        run_id: Optional[str] = None,
     ) -> List[ImprovementAction]:
         """
         Main entry point — call after every orchestrator run.
         Returns list of improvement actions taken (may be empty).
+        Pass run_id to log improvement events to HarnessRuns trajectory.
         """
         actions: List[ImprovementAction] = []
+        _had_harness = self._harness_runs is not None
+        if run_id and self._harness_runs is None:
+            try:
+                self._harness_runs = get_harness_runs()
+            except Exception:
+                self._harness_runs = None
         tables = tables_used or []
         sql = sql_executed or sql_generated
 
@@ -172,6 +212,19 @@ class SelfImprover:
         )
 
         with self._lock:
+            # Log to HarnessRuns trajectory
+            self._log_improvement_event(
+                event_type="IMPROVEMENT_FEEDBACK",
+                domain=domain,
+                action="feedback_applied",
+                details={
+                    "feedback_type": feedback_type,
+                    "query": query[:50],
+                    "sql_before": original_sql[:100] if original_sql else "",
+                    "sql_after": corrected_sql[:100] if corrected_sql else "",
+                },
+            )
+
             # Log gotcha
             sap_memory.log_gotcha(
                 pattern=f"feedback:{feedback_type}:{query[:50]}",

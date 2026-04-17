@@ -39,7 +39,7 @@
 
 | File | Issue | Status |
 |---|---|---|
-| `app/core/self_improver.py` | Missing HarnessRuns integration | ⚠️ Not wired — only file in Phase 11 suite without harness tracing |
+| `app/core/self_improver.py` | Missing HarnessRuns integration | ✅ **WIRED — Apr 17** — `get_harness_runs()` wired into `review_and_improve()`; `_log_improvement_event()` logs every pattern promotion/demotion/ghost to HarnessRuns trajectory; `run_id` now passed from orchestrator to `self_improver` |
 | Type hints | 40+ public methods missing return annotations | ⚠️ Pending |
 
 ---
