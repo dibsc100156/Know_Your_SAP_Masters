@@ -45,7 +45,7 @@ import re
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -709,7 +709,7 @@ patch: |
         days: int = 7,
         limit: int = 200,
         save_to=None,
-    ) -> list:
+    ) -> Dict[str, Any]:
         """
         Full pipeline: collect failures -> group by pattern -> LLM diagnosis -> parse.
         Returns list of Recommendation objects saved to:
@@ -742,36 +742,36 @@ patch: |
     def print_recommendations(self, recommendations: list) -> None:
         """Pretty-print recommendations for human review."""
         if not recommendations:
-            print("\n[meta-harness] No recommendations — harness is healthy!")
+            logger.info("\n[meta-harness] No recommendations — harness is healthy!")
             return
 
-        print(f"\n{'='*70}")
-        print(f"  META-HARNESS LOOP — {len(recommendations)} Recommendation(s)")
-        print(f"{'='*70}")
+        logger.info(f"\n{'='*70}")
+        logger.info(f"  META-HARNESS LOOP — {len(recommendations)} Recommendation(s)")
+        logger.info(f"{'='*70}")
         for rec in sorted(
             recommendations,
             key=lambda r: ["P0", "P1", "P2"].index(r.priority)
         ):
             icons = {"low": "OK", "medium": "!!", "high": "!!"}
             icon = icons.get(rec.risk, "?")
-            print(f"\n  [{rec.priority}] [{icon}] {rec.id}")
-            print(f"       {rec.title}")
-            print(f"       category={rec.category} | effort={rec.effort} | risk={rec.risk}")
-            print(f"       target: {rec.target_file}")
-            print(f"  Evidence: {rec.evidence[:150]}")
-            print(f"  Fix:      {rec.recommended_fix[:150]}")
+            logger.info(f"\n  [{rec.priority}] [{icon}] {rec.id}")
+            logger.info(f"       {rec.title}")
+            logger.info(f"       category={rec.category} | effort={rec.effort} | risk={rec.risk}")
+            logger.info(f"       target: {rec.target_file}")
+            logger.info(f"  Evidence: {rec.evidence[:150]}")
+            logger.info(f"  Fix:      {rec.recommended_fix[:150]}")
             if rec.patch_lines:
-                print(f"  Patch ({len(rec.patch_lines)} lines):")
+                logger.info(f"  Patch ({len(rec.patch_lines)} lines):")
                 for line in rec.patch_lines[:6]:
-                    print(f"    + {line[:100]}")
+                    logger.info(f"    + {line[:100]}")
                 if len(rec.patch_lines) > 6:
-                    print(f"    ... +{len(rec.patch_lines)-6} more lines")
+                    logger.info(f"    ... +{len(rec.patch_lines)-6} more lines")
 
     def apply_recommendations(
         self,
         rec_ids: list,
         recommendations: list = None,
-    ) -> dict:
+    ) -> Dict[str, Any]:
         """
         Apply approved recommendations by ID.
         Returns dict of rec_id -> (success: bool, message: str).
@@ -791,7 +791,7 @@ patch: |
                 self._mark_applied(rec)
         return results
 
-    def _load_saved_recommendations(self) -> list:
+    def _load_saved_recommendations(self) -> Dict[str, Any]:
         """Load all saved recommendation YAML files."""
         recs = []
         for yaml_file in sorted(RECOMMENDATIONS_DIR.glob("analysis_*.yaml")):
@@ -817,7 +817,7 @@ patch: |
                     f.write(new_content)
                 break
 
-    def load_recommendations_from_file(self, yaml_path) -> list:
+    def load_recommendations_from_file(self, yaml_path) -> Dict[str, Any]:
         """Load recommendations from a specific YAML file."""
         with open(yaml_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -828,7 +828,7 @@ patch: |
         self,
         yaml_path,
         rec_ids: list = None,
-    ) -> dict:
+    ) -> Dict[str, Any]:
         """
         Load recommendations from YAML, filter by rec_ids (optional),
         mark as approved, then apply.
@@ -850,7 +850,7 @@ patch: |
         days: int = 7,
         limit: int = 200,
         save_to=None,
-    ) -> list:
+    ) -> Dict[str, Any]:
         """
         Full pipeline: collect failures -> group by pattern -> LLM diagnosis -> parse.
         Returns list of Recommendation objects saved to:
@@ -883,30 +883,30 @@ patch: |
     def print_recommendations(self, recommendations: list) -> None:
         """Pretty-print recommendations for human review."""
         if not recommendations:
-            print("\n[meta-harness] No recommendations — harness is healthy!")
+            logger.info("\n[meta-harness] No recommendations — harness is healthy!")
             return
 
-        print(f"\n{'='*70}")
-        print(f"  META-HARNESS LOOP — {len(recommendations)} Recommendation(s)")
-        print(f"{'='*70}")
+        logger.info(f"\n{'='*70}")
+        logger.info(f"  META-HARNESS LOOP — {len(recommendations)} Recommendation(s)")
+        logger.info(f"{'='*70}")
         for rec in sorted(
             recommendations,
             key=lambda r: ["P0", "P1", "P2"].index(r.priority)
         ):
             icons = {"low": "OK", "medium": "!!", "high": "!!"}
             icon = icons.get(rec.risk, "?")
-            print(f"\n  [{rec.priority}] [{icon}] {rec.id}")
-            print(f"       {rec.title}")
-            print(f"       category={rec.category} | effort={rec.effort} | risk={rec.risk}")
-            print(f"       target: {rec.target_file}")
-            print(f"  Evidence: {rec.evidence[:150]}")
-            print(f"  Fix:      {rec.recommended_fix[:150]}")
+            logger.info(f"\n  [{rec.priority}] [{icon}] {rec.id}")
+            logger.info(f"       {rec.title}")
+            logger.info(f"       category={rec.category} | effort={rec.effort} | risk={rec.risk}")
+            logger.info(f"       target: {rec.target_file}")
+            logger.info(f"  Evidence: {rec.evidence[:150]}")
+            logger.info(f"  Fix:      {rec.recommended_fix[:150]}")
             if rec.patch_lines:
-                print(f"  Patch ({len(rec.patch_lines)} lines):")
+                logger.info(f"  Patch ({len(rec.patch_lines)} lines):")
                 for line in rec.patch_lines[:6]:
-                    print(f"    + {line[:100]}")
+                    logger.info(f"    + {line[:100]}")
                 if len(rec.patch_lines) > 6:
-                    print(f"    ... +{len(rec.patch_lines)-6} more lines")
+                    logger.info(f"    ... +{len(rec.patch_lines)-6} more lines")
 
 
 # ---------------------------------------------------------------------------
@@ -975,29 +975,29 @@ def run_harness_analysis(
 def print_recommendations(recommendations: List[Recommendation]) -> None:
     """Pretty-print recommendations for human review."""
     if not recommendations:
-        print("\n[meta-harness] No recommendations — harness is healthy!")
+        logger.info("\n[meta-harness] No recommendations — harness is healthy!")
         return
 
-    print(f"\n{'='*70}")
-    print(f"  META-HARNESS LOOP — {len(recommendations)} Recommendation(s)")
-    print(f"{'='*70}")
+    logger.info(f"\n{'='*70}")
+    logger.info(f"  META-HARNESS LOOP — {len(recommendations)} Recommendation(s)")
+    logger.info(f"{'='*70}")
     for rec in sorted(
         recommendations,
         key=lambda r: ["P0", "P1", "P2"].index(r.priority)
     ):
         risk_icon = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(rec.risk, "⚪")
-        print(f"\n  [{rec.priority}] {risk_icon} {rec.id}")
-        print(f"       {rec.title}")
-        print(f"       category={rec.category} | effort={rec.effort} | risk={rec.risk}")
-        print(f"       target: {rec.target_file}")
-        print(f"  Evidence: {rec.evidence[:150]}")
-        print(f"  Fix:      {rec.recommended_fix[:150]}")
+        logger.info(f"\n  [{rec.priority}] {risk_icon} {rec.id}")
+        logger.info(f"       {rec.title}")
+        logger.info(f"       category={rec.category} | effort={rec.effort} | risk={rec.risk}")
+        logger.info(f"       target: {rec.target_file}")
+        logger.info(f"  Evidence: {rec.evidence[:150]}")
+        logger.info(f"  Fix:      {rec.recommended_fix[:150]}")
         if rec.patch_lines:
-            print(f"  Patch ({len(rec.patch_lines)} lines):")
+            logger.info(f"  Patch ({len(rec.patch_lines)} lines):")
             for line in rec.patch_lines[:6]:
-                print(f"    + {line[:100]}")
+                logger.info(f"    + {line[:100]}")
             if len(rec.patch_lines) > 6:
-                print(f"    ... +{len(rec.patch_lines)-6} more lines")
+                logger.info(f"    ... +{len(rec.patch_lines)-6} more lines")
 
 
 # ---------------------------------------------------------------------------
@@ -1021,15 +1021,15 @@ def main():
     elif args.apply:
         results = mh.apply_recommendations(args.apply)
         for rec_id, (ok, msg) in results.items():
-            print(f"  {'[OK]' if ok else '[FAIL]'} {rec_id}: {msg}")
+            logger.info(f"  {'[OK]' if ok else '[FAIL]'} {rec_id}: {msg}")
     else:
-        print(f"[meta-harness] Analyzing last {args.days} days (max {args.limit} runs)...")
+        logger.info(f"[meta-harness] Analyzing last {args.days} days (max {args.limit} runs)...")
         recs = mh.analyze_recent_failures(days=args.days, limit=args.limit)
         mh.print_recommendations(recs)
         if recs:
             ids = " ".join(r.id for r in recs)
-            print(f"\nTo apply approved recommendations:")
-            print(f"  python -m app.core.meta_harness_loop --apply {ids}")
+            logger.info(f"\nTo apply approved recommendations:")
+            logger.info(f"  python -m app.core.meta_harness_loop --apply {ids}")
 
 
 if __name__ == "__main__":

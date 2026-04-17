@@ -28,7 +28,7 @@ Usage:
       auth_context=ctx,
   )
   if result["applied"]:
-      print(f"Applied: {result['description']}")
+      logger.debug(f"Applied: {result['description']}")
       # Re-run query with corrected SQL
       corrected_sql = result["corrected_sql"]
 """

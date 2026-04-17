@@ -87,7 +87,7 @@ class DomainAgent(ABC):
         self._call_count += 1
 
         if verbose:
-            print(f"\n[{self.name}] Starting — query: '{query[:60]}'")
+            logger.debug(f"\n[{self.name}] Starting — query: '{query[:60]}'")
 
         # Step 1: Schema lookup within this domain
         tables = tables_hint or self._resolve_tables(query)
@@ -140,7 +140,7 @@ class DomainAgent(ABC):
         )
 
         if verbose:
-            print(f"[{self.name}] Done — {len(data)} rows, {elapsed}ms")
+            logger.debug(f"[{self.name}] Done — {len(data)} rows, {elapsed}ms")
 
         return result
 

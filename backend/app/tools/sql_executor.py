@@ -78,7 +78,7 @@ class SAPSQLExecutor:
         """
         from app.tools.hana_pool import CircuitOpenError
 
-        print(f"\n[SAPSQLExecutor] mode={_HANA_MODE}, query={sql[:80]}...")
+        logger.debug(f"\n[SAPSQLExecutor] mode={_HANA_MODE}, query={sql[:80]}...")
 
         # 1. Validate SQL (read-only, no DML/DDL)
         self._validate_sql_safety(sql)
