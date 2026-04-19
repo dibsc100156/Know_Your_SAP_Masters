@@ -2465,6 +2465,23 @@ def run_agent_loop(
 
                 critique_result = re_critique
 
+                # [Phase 16] Store successful heal as production pattern in Qdrant
+                try:
+                    from app.core.healed_pattern_store import store_healed_pattern
+                    store_healed_pattern(
+                        original_sql=generated_sql,
+                        healed_sql=corrected_sql,
+                        heal_code=heal_code,
+                        heal_reason=heal_reason,
+                        error_type=(combined_error[:100] if "combined_error" in dir() else "critique_failed"),
+                        domain=domain,
+                        query_example=query,
+                        tables_used=tables_involved,
+                    )
+                    logger.info("    [Phase 16] Healed pattern stored in Qdrant.")
+                except Exception as exc:
+                    logger.warning("    [Phase 16] Failed to store healed pattern: {}".format(exc))
+
             else:
 
                 logger.info(f"    [WARN] Healed SQL still failing. Proceeding with warning.")
@@ -2784,6 +2801,24 @@ def run_agent_loop(
                 exec_result = call_tool("sql_execute", {"sql": generated_sql, "dry_run": True, "max_rows": 1000}, auth_context=auth_context)
 
                 trace("sql_execute(retry)", exec_result)
+
+                # [Phase 16] Store successful validation-heal as production pattern
+                try:
+                    from app.core.healed_pattern_store import store_healed_pattern
+                    if "heal_code" in dir() and heal_code:
+                        store_healed_pattern(
+                            original_sql=generated_sql,
+                            healed_sql=healed_sql,
+                            heal_code=heal_code,
+                            heal_reason=heal_reason,
+                            error_type="validation_error",
+                            domain=domain,
+                            query_example=query,
+                            tables_used=tables_involved,
+                        )
+                        logger.info("    [Phase 16] Validation-heal stored in Qdrant.")
+                except Exception as exc:
+                    logger.warning("    [Phase 16] Failed to store validation-heal: {}".format(exc))
 
         else:
 

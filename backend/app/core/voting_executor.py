@@ -501,6 +501,101 @@ def _run_path_c_meta_path_fast(
 # Main entry point — run all 3 paths in parallel, then vote
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# PATH_D -- Healed Pattern Fast Path (Phase 16: Qdrant self-healed patterns)
+# ---------------------------------------------------------------------------
+
+def _run_path_d_healed_pattern(
+    query: str, auth_context: Any, domain: str, tables_involved: List[str]
+) -> VotingPathResult:
+    """
+    PATH_D -- Healed Pattern Fast Path (Phase 16).
+    Uses: healed_pattern_store.find_similar_healed() -- prior self-heal solutions
+    as production fast-path candidates. Skips self-heal loop if pattern already exists.
+    Best for: queries that previously failed and were auto-corrected.
+    """
+    start = time.time()
+    try:
+        from app.core.healed_pattern_store import get_heal_store
+
+        heal_store = get_heal_store()
+
+        # Search for a previously healed pattern matching this query
+        matches = heal_store.find_similar_healed(
+            query=query,
+            domain=domain if domain != "auto" else "general",
+            top_k=3,
+            min_score=0.70,
+        )
+
+        if matches:
+            best = matches[0]
+            sql = best.get("sql_template", best.get("sql", ""))
+            if sql:
+                # Apply auth context masking to the healed SQL
+                from app.agents.orchestrator_tools import call_tool, ToolStatus
+                all_tables = best.get("tables_used", tables_involved[:4])
+                mask_result = call_tool(
+                    "result_mask",
+                    {"sql": sql, "tables": all_tables},
+                    auth_context=auth_context,
+                )
+                if mask_result.status == ToolStatus.SUCCESS and isinstance(mask_result.data, dict):
+                    sql = mask_result.data.get("masked_sql", sql)
+
+                heal_store.increment_reuse(best["pattern_id"])
+
+                exec_time_ms = (time.time() - start) * 1000
+                logger.info(
+                    "    [VOTE-P16] PATH_D matched healed pattern %s (score=%.3f, reused=%d)",
+                    best["pattern_id"], best["score"], best.get("times_reused", 0)
+                )
+                return VotingPathResult(
+                    path_name="PATH_D_HEALED_PATTERN",
+                    sql=sql,
+                    tables=[t.upper() for t in best.get("tables_used", [])],
+                    confidence=round(best["score"], 4),
+                    pillar_scores={"Phase16": 1.0},
+                    reasoning=(
+                        "Healed pattern fast path: found prior self-heal solution for this query. "
+                        "heal_code={}, reused {} times.".format(
+                            best.get("heal_code", "?"),
+                            best.get("times_reused", 0)
+                        )
+                    ),
+                    exec_time_ms=round(exec_time_ms, 1),
+                    status="success",
+                )
+
+        # No healed pattern found -- PATH_D abstains
+        exec_time_ms = (time.time() - start) * 1000
+        return VotingPathResult(
+            path_name="PATH_D_HEALED_PATTERN",
+            sql="",
+            tables=[],
+            confidence=0.0,
+            pillar_scores={"Phase16": 1.0},
+            reasoning="Healed pattern store: no prior heal found for this query (abstaining).",
+            exec_time_ms=round(exec_time_ms, 1),
+            status="abstained",
+        )
+
+    except Exception as e:
+        exec_time_ms = (time.time() - start) * 1000
+        logger.warning("    [VOTE-WARN] PATH_D failed: {}".format(e))
+        return VotingPathResult(
+            path_name="PATH_D_HEALED_PATTERN",
+            sql="",
+            tables=[],
+            confidence=0.0,
+            pillar_scores={"Phase16": 1.0},
+            reasoning="PATH_D_HEALED_PATTERN failed: {}".format(str(e)[:100]),
+            exec_time_ms=round(exec_time_ms, 1),
+            status="failed",
+        )
+
+
 def run_voting_sql_generation(
     query: str,
     auth_context: Any,
