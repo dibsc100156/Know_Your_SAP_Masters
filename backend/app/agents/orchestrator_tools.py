@@ -1,4 +1,4 @@
-"""
+﻿"""
 orchestrator_tools.py — Pillar 2 Tool Registry
 ===============================================
 Unified tool registry for the Agentic RAG Orchestrator.
@@ -21,6 +21,7 @@ from typing import Dict, Any, List, Optional, Callable
 from enum import Enum
 import json
 
+from app.core.voting_executor import voting_sql_generate
 
 
 
@@ -1155,6 +1156,27 @@ TOOL_REGISTRY: Dict[str, Tool] = {
         },
         execute=meta_harness_propose,
         pillars=["Meta-Harness"],
+    ),
+    "voting_sql_generate": Tool(
+        name="voting_sql_generate",
+        description="[Phase 14] Voting Executor. Runs 3 parallel SQL generation paths "
+                    "(Graph RAG, SQL Pattern RAG, Meta-Path) and takes majority vote "
+                    "on the result. Fires when confidence < 0.70 or query is compliance_critical. "
+                    "Based on Laurie Voss pattern: 3 LLMs seldom hallucinate to the same wrong answer. "
+                    "Returns consensus SQL, winning path, table votes, and escalation flags.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Natural language user question"},
+                "domain": {"type": "string", "description": "Domain hint (auto, business_partner, etc.)"},
+                "tables_involved": {"type": "array", "items": {"type": "string"}, "description": "Tables already discovered"},
+                "confidence_before_vote": {"type": "number", "description": "Pre-vote confidence score (0-1)"},
+                "compliance_critical": {"type": "boolean", "description": "If True, always run voting"},
+            },
+            "required": ["query"]
+        },
+        execute=voting_sql_generate,
+        pillars=["Phase 14"],
     ),
 }
 

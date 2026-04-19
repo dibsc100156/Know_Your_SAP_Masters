@@ -123,6 +123,14 @@ async def chat_master_data_endpoint(request: ChatRequest):
             use_swarm=request.use_swarm,  # Multi-Agent Domain Swarm vs monolithic orchestrator
         )
 
+        # [Phase L4] Record query metrics for monitoring dashboard
+        # Must be recorded BEFORE enrichment so result_dict has orchestrator's raw fields
+        try:
+            from app.core.monitoring_dashboard import record_query
+            record_query(result)
+        except Exception:
+            pass  # monitoring must never affect API responses
+
         # negotiation_brief can be a NegotiationBrief dataclass or dict
         neg_brief = result.get("negotiation_brief")
         if neg_brief is not None and not isinstance(neg_brief, dict):
