@@ -275,8 +275,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 | File | Purpose |
 |------|---------|
-| `backend/app/agents/orchestrator.py` | Main agentic loop (Pillar 2) — Phase 15/16 patches applied |
-| `backend/app/core/security.py` | AuthContext + SecurityMesh (Pillar 1) |
+| `backend/app/agents/orchestrator.py` | Main agentic loop (Pillar 2) — Phase L5/15/16 patches applied |
+| `backend/app/core/complexity_router.py` | **NEW** — Phase L5 4-tier complexity router (TRIVIAL→EXPERT) + skip guards |
+| `backend/app/core/security.py` | AuthContext + SecurityMesh (Pillar 1)Context + SecurityMesh (Pillar 1) |
 | `backend/app/core/security_sentinel.py` | Proactive Threat Sentinel (32KB) — Phase 6c |
 | `backend/app/core/self_healer.py` | SQL self-healing engine (Phase 6) |
 | `backend/app/core/voting_executor.py` | **NEW** — Phase 14 Voting Executor (4-path, 627 lines) |
