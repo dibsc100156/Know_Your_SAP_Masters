@@ -669,12 +669,61 @@ def run_agent_loop(
 
         if sentinel_verdict.recommended_action in ("tighten", "block"):
 
-            # Dynamically tighten auth context
+            # [Phase 15 CIBA] Handle hard block with async approval flow
+            if sentinel_verdict.recommended_action == "block":
+                from app.core.ciba_approval_store import get_ciba_store
+                ciba = get_ciba_store()
 
-            sentinel.apply_tightening_to_auth_context(sentinel_verdict, auth_context)
-
-            logger.info(f"    [!!] AuthContext tightened for role {auth_context.role_id}. Denied tables expanded.")
-
+                # Check if query was previously approved or denied in this session
+                if ciba.is_query_approved(session_id, query):
+                    logger.info("[CIBA] Query previously approved— proceeding despite sentinel block.")
+                elif ciba.is_query_denied(session_id, query):
+                    logger.warning("[!!] Query previously denied by CIBA— hard rejection.")
+                    return {
+                        "answer": ("Your query was denied by a security approver and cannot be re-submitted for another 30 minutes. Contact your SAP security admin if you believe this is an error."),
+                        "tables_used": tables_involved,
+                        "executed_sql": None,
+                        "masked_fields": [],
+                        "data": [],
+                        "tool_trace": [],
+                        "status": "ciba_denied",
+                        "ciba_request_id": None,
+                        "confidence_score": None,
+                    }
+                else:
+                    # Create CIBA pending approval request
+                    threat_val = sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else "UNKNOWN"
+                    severity_val = sentinel_verdict.severity.value if sentinel_verdict.severity else "HIGH"
+                    evidence_val = (sentinel_verdict.evidence[0] if sentinel_verdict.evidence else "Sentinel blocked this query.")
+                    ciba_req = ciba.create_approval_request(
+                        session_id=session_id,
+                        user_id=(auth_context.user_id if hasattr(auth_context, "user_id") else f"user:{auth_context.role_id.lower()}"),
+                        role_id=auth_context.role_id,
+                        query=query,
+                        generated_sql="",
+                        threat_type=threat_val,
+                        threat_detail=evidence_val,
+                        severity=severity_val,
+                        evidence=sentinel_verdict.evidence,
+                        recommended_action=sentinel_verdict.recommended_action,
+                        tables_requested=tables_involved,
+                    )
+                    logger.warning("[!!] CIBA hard block— approval request {} created. Waiting for approver.".format(ciba_req.request_id))
+                    return {
+                        "answer": ("Your query has been blocked by the Security Sentinel and requires supervisor approval before execution.\n\nThreat: {} | Severity: {}\n\nReason: {}\n\nYour request ID: {}\nUse the CIBA /pending endpoint or your approval inbox to review and act on this request.").format(threat_val, severity_val, evidence_val, ciba_req.request_id),
+                        "tables_used": tables_involved,
+                        "executed_sql": None,
+                        "masked_fields": [],
+                        "data": [],
+                        "tool_trace": [],
+                        "status": "ciba_pending",
+                        "ciba_request_id": ciba_req.request_id,
+                        "confidence_score": None,
+                    }
+            else:
+                # recommended_action == "tighten"— soft block, apply tightening and proceed
+                sentinel.apply_tightening_to_auth_context(sentinel_verdict, auth_context)
+                logger.info("[!!] AuthContext tightened (soft block) for role {}".format(auth_context.role_id))
 
 
     tool_trace = []
