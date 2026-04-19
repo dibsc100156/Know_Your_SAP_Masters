@@ -19,6 +19,8 @@ import requests
 import pandas as pd
 import time
 
+from monitoring_panel import render_monitoring_panel
+
 API_BASE = "http://localhost:8000"
 API_URL = f"{API_BASE}/api/v1/chat/master-data"
 
@@ -814,6 +816,12 @@ if backend_ok:
         pass
 else:
     st.error("🔴 Backend unreachable — is FastAPI running on port 8000?")
+
+# ── Phase L4: Real-Time Operations Monitoring ──────────────────────────────────
+try:
+    render_monitoring_panel()
+except Exception as e:
+    st.caption(f"⚠️ Monitoring unavailable: {e}")
 
 st.divider()
 
