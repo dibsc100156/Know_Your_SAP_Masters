@@ -243,6 +243,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 15 | CIBA Approval | `ciba_approval_store.py` + `ciba.py` | ✅ Apr 19 |
 | 16 | Self-Healing Patterns DB | `healed_pattern_store.py` | ✅ Apr 19 |
 | 17 | Semantic Answer Validation | `semantic_answer_validator.py` | ✅ Apr 19 |
+| L4 | Real-Time Operations Monitoring | `monitoring_dashboard.py` + `eval.py` + `monitoring_panel.py` | ✅ Apr 19 |
 
 ---
 
@@ -252,6 +253,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 |---|----------|------|-------|--------|
 | 1 | 🔴 P0 | Real SAP HANA connection (`hdbcli`) | M8 | 🚧 Pending |
 | 2 | 🔴 P0 | M7 Load Testing sign-off (p95 ≤ 300ms @ conc=10) | M7 | 🚧 Pending |
+| L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Done |
 | 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | 📋 Next |
 | 4 | 🟡 P1 | BAPI Workflow Harness (Read-to-Write) | P1 | 📋 Planned |
 | 5 | 🟡 P1 | Long-Running Agent Infrastructure (6hr runs) | P1 | 📋 Planned |
