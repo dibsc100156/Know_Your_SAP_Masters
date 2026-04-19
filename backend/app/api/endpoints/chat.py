@@ -14,6 +14,7 @@ from app.agents.orchestrator import run_agent_loop
 from app.core.security import security_mesh
 from app.core.quality_evaluator import QualityEvaluator
 from app.core.harness_runs import get_harness_runs
+from app.core.complexity_router import get_routing_decision
 
 
 # =============================================================================
@@ -79,6 +80,10 @@ class ChatResponse(BaseModel):
     conflicts: Optional[List[Dict[str, Any]]] = None  # value conflicts across agents
     complexity_score: Optional[float] = None
 
+    # Phase L5: Complexity Routing intelligence returned to frontend
+    routing_tier: Optional[str] = None    # "trivial" | "simple" | "complex" | "expert"
+    routing_score: Optional[float] = None  # 0.0–1.0 composite score
+
     # Phase 6c: Threat Sentinel
     sentinel: Optional[Dict[str, Any]] = None      # {verdict, flags, session_tightness}
     sentinel_stats: Optional[Dict[str, Any]] = None  # per-engine detection counts
@@ -111,6 +116,12 @@ async def chat_master_data_endpoint(request: ChatRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
+        # [Phase L5] Compute routing before calling orchestrator
+        routing = get_routing_decision(
+            query=request.query,
+            domain_hint=request.domain,
+        )
+
         result = run_agent_loop(
             query=request.query,
             auth_context=auth_context,
@@ -121,6 +132,7 @@ async def chat_master_data_endpoint(request: ChatRequest):
                                    # frontend. Keep disabled until the SupervisorAgent is updated
                                    # to return the full 8-phase result dict.
             use_swarm=request.use_swarm,  # Multi-Agent Domain Swarm vs monolithic orchestrator
+            routing=routing,           # Phase L5: pre-computed complexity routing
         )
 
         # [Phase L4] Record query metrics for monitoring dashboard
@@ -202,6 +214,8 @@ async def chat_master_data_endpoint(request: ChatRequest):
             domain_coverage=result.get("domain_coverage"),
             conflicts=result.get("conflicts"),
             complexity_score=result.get("complexity_score"),
+            routing_tier=routing.tier.value if routing else None,
+            routing_score=routing.score if routing else None,
             sentinel=result.get("sentinel"),
             sentinel_stats=result.get("sentinel_stats"),
             run_id=result.get("run_id"),
