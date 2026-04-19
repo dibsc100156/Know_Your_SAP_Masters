@@ -1,4 +1,4 @@
-"""
+﻿"""
 
 orchestrator.py — Agentic RAG Orchestrator (Pillar 2)
 
@@ -2617,11 +2617,67 @@ def run_agent_loop(
 
 
     # =========================================================================
+    # [Phase 14] VOTING EXECUTOR - 3-path consensus for low-confidence or critical queries
+    # Laurie Voss pattern: 3 LLMs seldom hallucinate to the same wrong answer
+    # Trigger: composite confidence < 0.70 OR compliance_critical domain
+    # =========================================================================
+    phase_voting_start = time.time()
 
-    # STEP 6: EXECUTION
+    _current_confidence = _compute_confidence_score(
+        critique_score=critique_result["score"],
+        data_records=[],
+        meta_path_used=meta_path_used,
+        self_heal_applied=heal_info.get("applied", False) if "heal_info" in dir() else False,
+        temporal_mode=temporal_mode,
+        tables_involved=tables_involved,
+        execution_time_ms=0,
+    ).get("composite", 0.80)
+
+    _compliance_critical = domain.lower() in {
+        "finance", "tax", "treasury", "compliance",
+        "vendor_payment", "customer_credit", "pricing"
+    }
+
+    if _current_confidence < 0.70 or _compliance_critical:
+        logger.info("\n[15/5] [Phase 14] VOTING EXECUTOR triggered (confidence={:.3f}, critical={})".format(_current_confidence, _compliance_critical))
+
+        from app.core.voting_executor import run_voting_sql_generation
+        vote_result = run_voting_sql_generation(
+            query=query,
+            auth_context=auth_context,
+            domain=domain,
+            tables_involved=tables_involved,
+            confidence_before_vote=_current_confidence,
+            compliance_critical=_compliance_critical,
+        )
+
+        logger.info("    [VOTE] outcome={} winning={} delta={:.3f} table_vote={} escalation={}".format(
+            vote_result.vote_outcome,
+            vote_result.winning_path,
+            vote_result.confidence_after_vote - vote_result.confidence_before_vote,
+            vote_result.table_vote,
+            vote_result.escalation_required,
+        ))
+
+        if vote_result.consensus_sql:
+            logger.info("    [VOTE] Consensus found: {} (confidence {:.3f} -> {:.3f})".format(vote_result.winning_path, _current_confidence, vote_result.confidence_after_vote))
+            generated_sql = vote_result.consensus_sql
+        elif vote_result.escalation_required:
+            logger.warning("    [VOTE-ESCALATE] Disagreement across paths - manual review required")
+            result_dict["_voting_escalation"] = {
+                "required": True,
+                "alert": vote_result.disagreement_alert,
+                "votes": [{"path": v.path_name, "sql": v.sql[:80], "status": v.status} for v in vote_result.votes],
+            }
+        voting_time_ms = int((time.time() - phase_voting_start) * 1000)
+        logger.info("    [VOTE] Voting completed in {}ms".format(voting_time_ms))
+    else:
+        vote_result = None
+        logger.info("\n[--] [Phase 14] VOTING EXECUTOR skipped - confidence={:.3f} >= 0.70, non-critical".format(_current_confidence))
 
     # =========================================================================
-
+    # STEP 6: EXECUTION
+    # =========================================================================
     phase_exec_start = time.time()
 
     logger.info("\n[*] Executing Final SQL against SAP HANA (mock)...")
