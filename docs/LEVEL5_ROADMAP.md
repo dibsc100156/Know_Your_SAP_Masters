@@ -56,7 +56,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **6c** | **Proactive Threat Sentinel** | 6 threat engines + dynamic AuthContext tightening | ✅ Apr 12 |
 | **14** | **Voting Executor** | 4-path parallel SQL generation + consensus (Phase 16 — Apr 19) | ✅ **LIVE** |
 | **15** | **CIBA Approval Flow** | Block verdict → async approve/deny via Redis-backed store (Apr 19) | ✅ **LIVE** |
-| **16** | **Self-Healing Patterns DB** | Qdrant-stored healed SQL → PATH_D fast-path (Apr 19) | ✅ **LIVE** |
+| **17** | **Semantic Answer Validation** | Qdrant cross-check + 4-component scoring (semantic_sim, row_plausibility, intent_match, table_match) | ✅ **LIVE — Apr 19** |
 | 7 | Execution | SAP HANA mock executor — swap `hdbcli` for real connection to close P0 | ✅ Working (mock) |
 | 8 | Result Masking | Role-based column redaction (Pillar 1) | ✅ Working |
 | 9 | Frontend Modernization | 8-phase + confidence gauge + signal table + dark card | ✅ Apr 5 |
@@ -242,6 +242,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 14 | Voting Executor | `voting_executor.py` | ✅ Apr 19 |
 | 15 | CIBA Approval | `ciba_approval_store.py` + `ciba.py` | ✅ Apr 19 |
 | 16 | Self-Healing Patterns DB | `healed_pattern_store.py` | ✅ Apr 19 |
+| 17 | Semantic Answer Validation | `semantic_answer_validator.py` | ✅ Apr 19 |
 
 ---
 
