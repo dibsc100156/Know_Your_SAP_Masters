@@ -1,5 +1,5 @@
 # KYSM Level-5 Roadmap — Consolidated Implementation Status
-**Last Updated:** April 19, 2026 | Project: Know Your SAP Masters (SAP Masters)
+**Last Updated:** April 20, 2026 | Project: Know Your SAP Masters (SAP Masters)
 
 ---
 
@@ -12,6 +12,10 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - `c4d087e` — Phase 14 Voting Executor (3-path parallel, consensus boosting)
 - `acb50ea` — Phase 15 CIBA Approval Flow (block/tighten → async approve/deny)
 - `9ef51de` — Phase 16 Self-Healing Patterns DB (Qdrant-stored healed SQL → PATH_D fast-path)
+
+**Tonight's commits (April 20):**
+- `fd038f1` — Phase L5: Complexity-Based Query Routing — 8 patches applied to orchestrator.py (TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing)
+- `f049558` — Phase L5: wire get_routing_decision into chat API, return routing_tier/score in ChatResponse
 
 **Infrastructure (April 19):**
 - Qdrant ✅ — 5 collections (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context, qm_semantic_notifications)
@@ -32,6 +36,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 4 | SQL Pattern RAG | `sql_pattern_lookup()`, 68+ patterns across 18 domains | ✅ Working |
 | 5 | Graph RAG | NetworkX FK graph, `AllPathsExplorer`, `TemporalGraphRAG`, Meta-Path Library | ✅ Working |
 | 5½ | Graph Embedding Search | Node2Vec + text hybrid in Qdrant | ✅ Working |
+| **L5** | **Complexity Routing** | `ComplexityRouter` — 4-tier skip guards + adaptive voting threshold | ✅ **LIVE — Apr 20** |
 
 ---
 
@@ -48,6 +53,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 2c | Phase 7 Temporal Engine | FY analysis, CLV, Supplier SPI, Economic Cycle | ✅ Working |
 | 2d | Phase 8 Negotiation Briefing | CLV, PSI, churn risk, BATNA synthesis | ✅ Working |
 | 3 | Graph RAG | All-ranked-paths → best JOIN via NetworkX + AllPathsExplorer | ✅ Working |
+| **L5** | **Complexity Routing** | TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing — 9-step skip guards + adaptive voting threshold | ✅ **LIVE — Apr 20** |
 | 4 | SQL Assembly | MANDT injection + AuthContext + Temporal filters | ✅ Working |
 | 5 | Critique Gate | 7-point SQL validation (SELECT-only, MANDT, JOIN sanity, LIMIT) | ✅ Working |
 | 5.5 | Validation Harness | `SELECT COUNT(*)` dry-run → syntax validation → autonomous fix | ✅ Apr 12 |
@@ -65,6 +71,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from Redis traces | ✅ WIRED |
 | 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ IMPLEMENTED |
 | 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ IMPLEMENTED |
+| **L5** | **Complexity Routing** | 4-tier complexity router (TRIVIAL/SIMPLE/COMPLEX/EXPERT) — skip guards + adaptive voting | ✅ **LIVE — Apr 20** |
 
 ---
 
@@ -251,6 +258,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 | # | Priority | Item | Phase | Status |
 |---|----------|------|-------|--------|
+| L5 | 🟢 P2 | Phase L5 Complexity Router — tune complexity indicators + add routing debug endpoint | L5 | 📋 In Progress |
 | 1 | 🔴 P0 | Real SAP HANA connection (`hdbcli`) | M8 | 🚧 Pending |
 | 2 | 🔴 P0 | M7 Load Testing sign-off (p95 ≤ 300ms @ conc=10) | M7 | 🚧 Pending |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Done |
@@ -304,6 +312,8 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 ## Recent Commits
 
 ```
+f049558  feat(apr20): Phase L5 - wire get_routing_decision into chat API, return routing_tier/score
+fd038f1  feat(apr20): Phase L5 - Complexity-Based Query Routing, 8 patches, all green
 9ef51de  feat(apr19): Phase 16 - Self-Healing Patterns DB (Qdrant-stored healed SQL)
 acb50ea  feat(apr19): Phase 15 CIBA Approval Flow - block/tighten branching with async approve/deny
 c4d087e  fix(apr19): Phase 14 Voting Executor integration bugs fixed
