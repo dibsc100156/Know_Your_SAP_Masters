@@ -2854,6 +2854,39 @@ def run_agent_loop(
 
     # =========================================================================
 
+    # =========================================================================
+    # [Phase 17] SEMANTIC ANSWER VALIDATION
+    # Cross-check answer against validated Q&A pairs in Qdrant.
+    # Validates: semantic consistency, row plausibility, table accuracy.
+    # =========================================================================
+    semantic_validation: Dict[str, Any] = {"score": None, "trust": "high", "warnings": [], "reference_count": 0}
+
+    if exec_result.status == ToolStatus.SUCCESS and data_records:
+        try:
+            from app.core.semantic_answer_validator import get_semantic_validator
+            validator = get_semantic_validator()
+
+            sem_result = validator.validate(
+                query=query,
+                data_records=data_records,
+                tables_used=tables_involved,
+                generated_sql=generated_sql,
+                domain=domain,
+            )
+
+            semantic_validation = {
+                "score": sem_result.score,
+                "trust": sem_result.trust,
+                "warnings": sem_result.warnings,
+                "reference_count": sem_result.reference_count,
+                "score_components": sem_result.score_components,
+                "intent_tags_found": sem_result.intent_tags_found,
+            }
+        except Exception as exc:
+            logger.warning("    [Phase 17] Semantic validation failed: {}".format(exc))
+            semantic_validation = {"score": 0.5, "trust": "medium", "warnings": ["semantic_validation_error"], "reference_count": 0}
+
+
     # STEP 8: SYNTHESIS
 
     # =========================================================================
@@ -2953,6 +2986,9 @@ def run_agent_loop(
         },
 
         "self_heal": heal_info if 'heal_info' in locals() else {"applied": False},
+
+        # [Phase 17] Semantic Answer Validation result
+        "semantic_validation": semantic_validation,
 
         # [Phase 6] Proactive Threat Sentinel verdict — surfaced in API response
 
