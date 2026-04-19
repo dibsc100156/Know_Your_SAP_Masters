@@ -272,6 +272,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `backend/app/core/security_sentinel.py` | Proactive Threat Sentinel (32KB) — Phase 6c |
 | `backend/app/core/self_healer.py` | SQL self-healing engine (Phase 6) |
 | `backend/app/core/voting_executor.py` | **NEW** — Phase 14 Voting Executor (4-path, 627 lines) |
+| `docs/MONITORING_DASHBOARD.md` | Phase L4 — Real-Time Monitoring Dashboard reference doc |
 | `backend/app/core/healed_pattern_store.py` | **NEW** — Phase 16 Self-Healing Patterns DB (266 lines) |
 | `backend/app/core/ciba_approval_store.py` | **NEW** — Phase 15 CIBA store (391 lines) |
 | `backend/app/api/endpoints/ciba.py` | **NEW** — Phase 15 CIBA endpoints (263 lines) |
