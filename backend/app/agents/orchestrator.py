@@ -43,6 +43,7 @@ Execution flow:
   Step 2d: Negotiation Briefing (Phase 8 — CLV, PSI, churn risk, BATNA, tactics)
 
   Step 3: Graph RAG (all-ranked-paths → best JOIN)
+  Phase L5: Complexity Router (→ TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing)
 
   Step 4: SQL Assembly + AuthContext + Temporal filter injection
 
@@ -95,6 +96,12 @@ from app.core.self_healer import self_healer
 from app.core.schema_auto_discover import schema_auto_discoverer
 
 from app.core.self_improver import self_improver
+from app.core.complexity_router import (
+    get_routing_decision,
+    ComplexityRouter,
+    RoutingDecision,
+    RoutingTier,
+)
 
 from app.core.temporal_engine import TemporalEngine
 
@@ -434,6 +441,7 @@ def run_agent_loop(
     use_supervisor: bool = True,
 
     use_swarm: bool = False,
+    routing: Optional["RoutingDecision"] = None,  # Phase L5: pre-computed complexity routing
 
 ) -> Dict[str, Any]:
 
@@ -503,6 +511,20 @@ def run_agent_loop(
         swarm_run_id = None
         if verbose:
             logger.debug(f"[HARNESS] Swarm run tracking unavailable: {e}")
+
+    # ============================================================================
+    # [Phase L5] Compute Complexity Routing once (TRIVIAL/SIMPLE/COMPLEX/EXPERT tier)
+    # ============================================================================
+    if routing is None:
+        routing = get_routing_decision(
+            query=query,
+            domain=domain,
+            tables_involved=[],
+            meta_path_used=False,
+        )
+        if verbose:
+            tier_icon = {"TRIVIAL": "⚡", "SIMPLE": "🔹", "COMPLEX": "🔶", "EXPERT": "🔴"}[routing.tier.value]
+            logger.debug(f"  [Phase L5] tier={routing.tier.value} score={routing.composite_score:.3f} {tier_icon}")
 
     # ============================================================================
     # [Phase 6] SWARM GATE - Delegate to Multi-Agent Domain Swarm if enabled
@@ -1226,67 +1248,79 @@ def run_agent_loop(
 
         # =========================================================================
 
-        phase_1_start = time.time()
-
-        logger.info("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
-
-        schema_result = call_tool("schema_lookup", {
-
-            "query": query,
-
-            "domain": domain,
-
-            "n_results": 4,
-
-        }, auth_context=auth_context)
-
-        trace("schema_lookup", schema_result)
-
-        _traj("phase_1_schema_rag", "success" if schema_result.status.value == "success" else "fail", f"Schema RAG found tables")
-
-
-
-        if schema_result.status == ToolStatus.ERROR:
-
-            return {
-
-                "answer": schema_result.message,
-
-                "tables_used": [],
-
-                "executed_sql": None,
-
-                "masked_fields": [],
-
-                "data": [],
-
-                "tool_trace": tool_trace,
-
-                "execution_time_ms": int((time.time() - start_time) * 1000),
-
-            }
-
-
-
-        tables_involved = schema_result.data["tables_used"]
-
-        logger.info(f"    Tables found: {tables_involved}")
-
-        if current_run_id:
-
-            _update_harness_phase(hr, current_run_id, "phase_1", "completed",
-
-                artifacts={"tables_found": tables_involved, "domain": domain},
-
-                duration_ms=int((time.time() - phase_1_start) * 1000),
-
-                verbose=verbose)
-
-
-
+        # [Phase L5] Skip schema retrieval for TRIVIAL queries (direct pattern match)
+        if routing.should_skip("schema_discovery"):
+            logger.info("[1/5] [Pillar 3] Schema RAG — SKIPPED (tier={}, score={:.3f})".format(
+                routing.tier.value, routing.composite_score))
+        else:
+                    # STEP 1: SCHEMA RETRIEVAL (Pillar 3)
+            
+                    # =========================================================================
+            
+                    phase_1_start = time.time()
+            
+                    logger.info("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
+            
+                    schema_result = call_tool("schema_lookup", {
+            
+                        "query": query,
+            
+                        "domain": domain,
+            
+                        "n_results": 4,
+            
+                    }, auth_context=auth_context)
+            
+                    trace("schema_lookup", schema_result)
+            
+                    _traj("phase_1_schema_rag", "success" if schema_result.status.value == "success" else "fail", f"Schema RAG found tables")
+            
+            
+            
+                    if schema_result.status == ToolStatus.ERROR:
+            
+                        return {
+            
+                            "answer": schema_result.message,
+            
+                            "tables_used": [],
+            
+                            "executed_sql": None,
+            
+                            "masked_fields": [],
+            
+                            "data": [],
+            
+                            "tool_trace": tool_trace,
+            
+                            "execution_time_ms": int((time.time() - start_time) * 1000),
+            
+                        }
+            
+            
+            
+                    tables_involved = schema_result.data["tables_used"]
+            
+                    logger.info(f"    Tables found: {tables_involved}")
+            
+                    if current_run_id:
+            
+                        _update_harness_phase(hr, current_run_id, "phase_1", "completed",
+            
+                            artifacts={"tables_found": tables_involved, "domain": domain},
+            
+                            duration_ms=int((time.time() - phase_1_start) * 1000),
+            
+                            verbose=verbose)
+            
+            
+            
+                    # =========================================================================
+            
+            
         # =========================================================================
 
-        # STEP 1b: [Phase 5] SCHEMA AUTO-DISCOVERY (DDIC fallback)
+        # STEP 1b:        # STEP 1b: [Phase 5] SCHEMA AUTO-DISCOVERY (DDIC fallback)
 
         # =========================================================================
 
@@ -1371,82 +1405,98 @@ def run_agent_loop(
         # =========================================================================
 
         # Run graph embedding search in parallel with SQL pattern lookup.
-
         # Even if text-schema finds tables, graph embeddings surface cross-module
-
         # bridges and structurally central tables that naive text-match would miss.
 
-        phase_1b_start = time.time()
-
-        logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
-
-        graph_result = call_tool("graph_enhanced_schema_discovery", {
-
-            "query": query,
-
-            "domain": domain,
-
-            "top_k": 5,
-
-            "expand_neighbors": 2,
-
-        }, auth_context=auth_context)
-
-        trace("graph_enhanced_schema_discovery", graph_result)
-
-
-
-        if graph_result.status == ToolStatus.SUCCESS:
-
-            graph_scores_data = graph_result.data.get("tables", [])
-
-            graph_tables = graph_result.data.get("tables_discovered", [])
-
-            # Merge graph-discovered tables into tables_involved if not already present
-
-            merged_count = 0
-
-            for gt in graph_tables:
-
-                if gt not in tables_involved:
-
-                    tables_involved.append(gt)
-
-                    merged_count += 1
-
-            if merged_count > 0:
-
-                logger.info(f"    [MERGE] Added {merged_count} graph-discovered table(s): "
-
-                      f"{[t for t in graph_tables if t not in schema_result.data['tables_used']]}")
-
-
-
-            # Show top structural discovery
-
-            top_graph = graph_result.data["tables"][0]
-
-            logger.info(f"    Top result: {top_graph['table']} [{top_graph['domain']}] "
-
-                  f"role={top_graph['structural_role']} "
-
-                  f"bridge={top_graph['is_cross_module_bridge']} "
-
-                  f"score={top_graph['composite_score']:.3f} "
-
-                  f"(struct={top_graph['structural_score']:.3f}, text={top_graph['text_score']:.3f})")
-
+        # [Phase L5] Skip graph enhanced schema for TRIVIAL/SIMPLE tiers
+        if routing.should_skip("graph_enhanced_schema"):
+            logger.info("[1.5/5] [Pillar 5½] Graph Enhanced Schema — SKIPPED (tier={})".format(
+                routing.tier.value))
         else:
-
-            logger.info(f"    [WARN] Graph embedding search returned no results: {graph_result.message}")
-
-
-
-
-
+                    # STEP 1.5: GRAPH-ENHANCED SCHEMA DISCOVERY (Pillar 5½)
+            
+                    # =========================================================================
+            
+                    # Run graph embedding search in parallel with SQL pattern lookup.
+            
+                    # Even if text-schema finds tables, graph embeddings surface cross-module
+            
+                    # bridges and structurally central tables that naive text-match would miss.
+            
+                    phase_1b_start = time.time()
+            
+                    logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
+            
+                    graph_result = call_tool("graph_enhanced_schema_discovery", {
+            
+                        "query": query,
+            
+                        "domain": domain,
+            
+                        "top_k": 5,
+            
+                        "expand_neighbors": 2,
+            
+                    }, auth_context=auth_context)
+            
+                    trace("graph_enhanced_schema_discovery", graph_result)
+            
+            
+            
+                    if graph_result.status == ToolStatus.SUCCESS:
+            
+                        graph_scores_data = graph_result.data.get("tables", [])
+            
+                        graph_tables = graph_result.data.get("tables_discovered", [])
+            
+                        # Merge graph-discovered tables into tables_involved if not already present
+            
+                        merged_count = 0
+            
+                        for gt in graph_tables:
+            
+                            if gt not in tables_involved:
+            
+                                tables_involved.append(gt)
+            
+                                merged_count += 1
+            
+                        if merged_count > 0:
+            
+                            logger.info(f"    [MERGE] Added {merged_count} graph-discovered table(s): "
+            
+                                  f"{[t for t in graph_tables if t not in schema_result.data['tables_used']]}")
+            
+            
+            
+                        # Show top structural discovery
+            
+                        top_graph = graph_result.data["tables"][0]
+            
+                        logger.info(f"    Top result: {top_graph['table']} [{top_graph['domain']}] "
+            
+                              f"role={top_graph['structural_role']} "
+            
+                              f"bridge={top_graph['is_cross_module_bridge']} "
+            
+                              f"score={top_graph['composite_score']:.3f} "
+            
+                              f"(struct={top_graph['structural_score']:.3f}, text={top_graph['text_score']:.3f})")
+            
+                    else:
+            
+                        logger.info(f"    [WARN] Graph embedding search returned no results: {graph_result.message}")
+            
+            
+            
+            
+            
+                    # =========================================================================
+            
+            
         # =========================================================================
 
-        # STEP 2: SQL PATTERN RETRIEVAL (Pillar 4)
+        # STEP 2: SQL PATTERN RETRIEVAL (Pillar 4)        # STEP 2: SQL PATTERN RETRIEVAL (Pillar 4)
 
         # =========================================================================
 
@@ -2049,73 +2099,85 @@ def run_agent_loop(
 
         # =========================================================================
 
-        join_clause = ""
-
-        if sql_result.status != ToolStatus.SUCCESS or not sql_result.data.get("patterns"):
-
-            # Only use Graph RAG when we have no pattern — build JOIN from scratch
-
-            if len(tables_involved) > 1:
-
-                phase_3_start = time.time()
-
-                logger.info(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
-
-                graph_result = call_tool("all_paths_explore", {
-
-                    "start_table": tables_involved[0],
-
-                    "end_table": tables_involved[1],
-
-                    "max_depth": 5,
-
-                    "top_k": 3
-
-                })
-
-                trace("all_paths_explore", graph_result)
-
-                if graph_result.status == ToolStatus.SUCCESS:
-
-                    join_clause = graph_result.data["best_join_clause"]
-
-                    base_sql += f"\n{join_clause}"
-
-                    logger.info(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
-
-                else:
-
-                    logger.info(f"    [WARN] {graph_result.message}")
-
-                if current_run_id:
-
-                    _update_harness_phase(hr, current_run_id, "phase_3", "completed",
-
-                        artifacts={
-
-                            "tables": tables_involved,
-
-                            "join_clause": join_clause[:200] if join_clause else "",
-
-                        },
-
-                        duration_ms=int((time.time() - phase_3_start) * 1000),
-
-                        verbose=verbose)
-
-            else:
-
-                logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (single table, no traversal needed)")
-
+        # [Phase L5] Skip graph traversal for TRIVIAL/SIMPLE tiers
+        if routing.should_skip("graph_traversal"):
+            logger.info("[3/5] [Pillar 5] Graph RAG — SKIPPED (tier={}, score={:.3f})".format(
+                routing.tier.value, routing.composite_score))
+            join_clause = ""
         else:
+                    # STEP 3: GRAPH TRAVERSAL (Pillar 5) — if multi-table
+            
+                    # =========================================================================
+            
+                    join_clause = ""
+            
+                    if sql_result.status != ToolStatus.SUCCESS or not sql_result.data.get("patterns"):
+            
+                        # Only use Graph RAG when we have no pattern — build JOIN from scratch
+            
+                        if len(tables_involved) > 1:
+            
+                            phase_3_start = time.time()
+            
+                            logger.info(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
+            
+                            graph_result = call_tool("all_paths_explore", {
+            
+                                "start_table": tables_involved[0],
+            
+                                "end_table": tables_involved[1],
+            
+                                "max_depth": 5,
+            
+                                "top_k": 3
+            
+                            })
+            
+                            trace("all_paths_explore", graph_result)
+            
+                            if graph_result.status == ToolStatus.SUCCESS:
+            
+                                join_clause = graph_result.data["best_join_clause"]
+            
+                                base_sql += f"\n{join_clause}"
+            
+                                logger.info(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
+            
+                            else:
+            
+                                logger.info(f"    [WARN] {graph_result.message}")
+            
+                            if current_run_id:
+            
+                                _update_harness_phase(hr, current_run_id, "phase_3", "completed",
+            
+                                    artifacts={
+            
+                                        "tables": tables_involved,
+            
+                                        "join_clause": join_clause[:200] if join_clause else "",
+            
+                                    },
+            
+                                    duration_ms=int((time.time() - phase_3_start) * 1000),
+            
+                                    verbose=verbose)
+            
+                        else:
+            
+                            logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (single table, no traversal needed)")
+            
+                    else:
+            
+                        logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
+            
+            
+            
+                # =========================================================================
+            
+            
 
-            logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
-
-
-
-    # =========================================================================
-
-    # STEP 4: SQL ASSEMBLY + AUTHCONTEXT INJECTION
+    # STEP 4: SQL ASSEMBLY + AUTHCONTEXT INJECTION    # STEP 4: SQL ASSEMBLY + AUTHCONTEXT INJECTION
 
     # =========================================================================
 
@@ -2704,7 +2766,15 @@ def run_agent_loop(
         "vendor_payment", "customer_credit", "pricing"
     }
 
-    if _current_confidence < 0.70 or _compliance_critical:
+    # [Phase L5] Voting threshold override by routing tier
+    _voting_threshold = {
+        RoutingTier.TRIVIAL: 0.80,
+        RoutingTier.SIMPLE: 0.75,
+        RoutingTier.COMPLEX: 0.60,
+        RoutingTier.EXPERT: 0.50,
+    }.get(routing.tier, 0.70)
+
+    if _current_confidence < _voting_threshold or _compliance_critical:
         logger.info("\n[15/5] [Phase 14] VOTING EXECUTOR triggered (confidence={:.3f}, critical={})".format(_current_confidence, _compliance_critical))
 
         from app.core.voting_executor import run_voting_sql_generation
