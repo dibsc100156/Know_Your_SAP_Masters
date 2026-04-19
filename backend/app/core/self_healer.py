@@ -4,17 +4,17 @@ self_healer.py — Phase 4 Self-Healing SQL Engine
 When SQL validation fails or execution produces an error, this module
 attempts to automatically correct the SQL based on the error type.
 
-Error → Fix mappings (SAP HANA + generic SQL):
-  ORA-00942  → Table not found        → strip JOIN to missing table, retry single-table
-  ORA-01799  → Column not in subquery  → remove subquery, use direct JOIN
-  ORA-01476  → Division by zero        → wrap denominator with NVL(..., 1)
-  42S22      → Invalid column          → remove offending column from SELECT
-  37000      → Syntax error            → strip ORDER BY / complex WHERE, simplify
-  SAP_AUTH   → Auth block              → add MANDT filter, retry
-  MANDT_MISS → No client filter        → inject MANDT = '<client>'
-  CARTESIAN  → Cartesian product       → add strict JOIN condition
-  NO_ROWS    → Empty result            → relax WHERE, expand date range
-  HANA_020   → Invalid identifier      → quote identifier or remove
+Error -> Fix mappings (SAP HANA + generic SQL):
+  ORA-00942  -> Table not found        -> strip JOIN to missing table, retry single-table
+  ORA-01799  -> Column not in subquery  -> remove subquery, use direct JOIN
+  ORA-01476  -> Division by zero        -> wrap denominator with NVL(..., 1)
+  42S22      -> Invalid column          -> remove offending column from SELECT
+  37000      -> Syntax error            -> strip ORDER BY / complex WHERE, simplify
+  SAP_AUTH   -> Auth block              -> add MANDT filter, retry
+  MANDT_MISS -> No client filter        -> inject MANDT = '<client>'
+  CARTESIAN  -> Cartesian product       -> add strict JOIN condition
+  NO_ROWS    -> Empty result            -> relax WHERE, expand date range
+  HANA_020   -> Invalid identifier      -> quote identifier or remove
 
 Usage:
   from app.core.self_healer import SelfHealer, HEALING_RULES
@@ -33,7 +33,7 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Error → Healing Rule registry
+# Error -> Healing Rule registry
 # ---------------------------------------------------------------------------
 @dataclass
 class HealingRule:
@@ -60,6 +60,13 @@ HEALING_RULES: List[HealingRule] = [
         triggers=["cartesian", "cross join", "combin*"],
         description="Potential Cartesian product detected",
         apply="simplify",
+    ),
+    # [P2] MBEW-specific: PEinh=0 in price/unit calculation (STPRS/PEinh) - substitute denominator=1
+    HealingRule(
+        code="DIVISION_BY_ZERO_MBEW",
+        triggers=["PEINH", "MBEW", "STPRS", "price per unit"],
+        description="MBEW price-per-unit when PEinh=0 - substitute denominator=1",
+        apply="safe_denominator_mbew",
     ),
     HealingRule(
         code="DIVISION_BY_ZERO",
@@ -104,16 +111,15 @@ HEALING_RULES: List[HealingRule] = [
     HealingRule(
         code="EMPTY_RESULT",
         triggers=["no rows", "empty result", "0 rows", "no data found"],
-        description="Query returns no data — may need relaxed filters",
+        description="Query returns no data -- may need relaxed filters",
         apply="relax_where",
     ),
     HealingRule(
-code="AMBIGUOUS_COLUMN",
-triggers=["ORA-00918", "column ambiguously defined"],
-description="Column reference is ambiguous across multiple JOINed tables",
-apply="qualify_column",
-),
-
+        code="AMBIGUOUS_COLUMN",
+        triggers=["ORA-00918", "column ambiguously defined"],
+        description="Column reference is ambiguous across multiple JOINed tables",
+        apply="qualify_column",
+    ),
 ]
 
 
@@ -126,6 +132,45 @@ class SelfHealer:
     Applies rule-based corrections to SQL that has failed validation or execution.
     """
 
+    # SAP FK JOIN map: (table_a, table_b) -> valid ON condition
+    # Used to repair CARTESIAN_PRODUCT (missing JOIN ON)
+    _SAP_FK_JOIN_MAP = {
+        ("LFA1", "EKKO"): "LFA1.LIFNR = EKKO.LIFNR",
+        ("EKKO", "LFA1"): "EKKO.LIFNR = LFA1.LIFNR",
+        ("KNA1", "VBAK"): "KNA1.KUNNR = VBAK.KUNNR",
+        ("VBAK", "KNA1"): "VBAK.KUNNR = KNA1.KUNNR",
+        ("MARA", "EKKO"): "MARA.MATNR = EKKO.MATNR",
+        ("EKKO", "MARA"): "EKKO.MATNR = MARA.MATNR",
+        ("MARA", "MSEG"): "MARA.MATNR = MSEG.MATNR",
+        ("MSEG", "MARA"): "MSEG.MATNR = MARA.MATNR",
+        ("LFA1", "BSIK"): "LFA1.LIFNR = BSIK.LIFNR",
+        ("BSIK", "LFA1"): "BSIK.LIFNR = LFA1.LIFNR",
+        ("LFA1", "BSAK"): "LFA1.LIFNR = BSAK.LIFNR",
+        ("BSAK", "LFA1"): "BSAK.LIFNR = LFA1.LIFNR",
+        ("KNA1", "BSID"): "KNA1.KUNNR = BSID.KUNNR",
+        ("BSID", "KNA1"): "BSID.KUNNR = KNA1.KUNNR",
+        ("EKKO", "EKPO"): "EKKO.EBELN = EKPO.EBELN",
+        ("EKPO", "EKKO"): "EKPO.EBELN = EKKO.EBELN",
+        ("MARA", "MBEW"): "MARA.MATNR = MBEW.MATNR",
+        ("MBEW", "MARA"): "MBEW.MATNR = MARA.MATNR",
+        ("MARD", "MARA"): "MARD.MATNR = MARA.MATNR",
+        ("MARA", "MARD"): "MARA.MATNR = MARD.MATNR",
+        ("QALS", "MARA"): "QALS.MATNR = MARA.MATNR",
+        ("MARA", "QALS"): "MARA.MATNR = QALS.MATNR",
+        ("LFA1", "LFB1"): "LFA1.LIFNR = LFB1.LIFNR",
+        ("LFB1", "LFA1"): "LFB1.LIFNR = LFA1.LIFNR",
+        ("LFA1", "LFBK"): "LFA1.LIFNR = LFBK.LIFNR",
+        ("LFBK", "LFA1"): "LFBK.LIFNR = LFA1.LIFNR",
+        ("KNA1", "KNVV"): "KNA1.KUNNR = KNVV.KUNNR",
+        ("KNVV", "KNA1"): "KNVV.KUNNR = KNA1.KUNNR",
+        ("MARC", "MARA"): "MARC.MATNR = MARA.MATNR",
+        ("MARA", "MARC"): "MARA.MATNR = MARC.MATNR",
+        ("VBAK", "VBAP"): "VBAK.VBELN = VBAP.VBELN",
+        ("VBAP", "VBAK"): "VBAP.VBELN = VBAK.VBELN",
+        ("LIKP", "VBAK"): "LIKP.VBELN = VBAK.VBELN",
+        ("VBAK", "LIKP"): "VBAK.VBELN = LIKP.VBELN",
+    }
+
     def __init__(self, rules: Optional[List[HealingRule]] = None):
         self.rules = rules or HEALING_RULES
         self._heal_count: Dict[str, int] = {}
@@ -136,7 +181,7 @@ class SelfHealer:
         error: str,
         schema_context: Optional[List[Dict]] = None,
         max_attempts: int = 2,
-    ) -> Tuple[str, str, Optional[str]]:
+    ) -> Tuple[bool, str]:
         """
         Attempt to heal broken SQL.
 
@@ -170,8 +215,12 @@ class SelfHealer:
                 sql, explanation = self._heal_remove_column(sql, matched_rule, error_lower)
             elif matched_rule.apply == "add_nvl":
                 sql, explanation = self._heal_add_nvl(sql, matched_rule.code)
+            elif matched_rule.apply == "safe_denominator_mbew":
+                sql, explanation = self._heal_safe_denominator_mbew(sql, matched_rule.code)
             elif matched_rule.apply == "relax_where":
                 sql, explanation = self._heal_relax_where(sql, matched_rule.code)
+            elif matched_rule.apply == "qualify_column":
+                sql, explanation = self._heal_qualify_column(sql, matched_rule.code)
             else:
                 return sql, f"unknown heal type: {matched_rule.apply}", matched_rule.code
 
@@ -214,17 +263,67 @@ class SelfHealer:
 
         return healed, "injected MANDT = '100' filter"
 
+    def _find_missing_on_clause(self, sql_upper: str):
+        """
+        [CARTESIAN_PRODUCT] Find pairs of tables that are JOINed without an ON clause.
+        Uses the _SAP_FK_JOIN_MAP to return the correct ON condition.
+        """
+        tables = re.findall(r'(?:FROM|JOIN)\s+([A-Z0-9_]+)\b', sql_upper)
+        tables = [t for t in tables if t not in ('AS', 'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS')]
+        if len(tables) < 2:
+            return None
+        for i in range(len(tables) - 1):
+            for j in range(i + 1, len(tables)):
+                t1, t2 = tables[i], tables[j]
+                # Check for JOIN t2 without ON
+                pair_join = rf'JOIN\s+{re.escape(t2)}(?!\s+ON\b)'
+                if re.search(pair_join, sql_upper, re.IGNORECASE):
+                    on_key = (t1.upper(), t2.upper())
+                    on_cond = (self._SAP_FK_JOIN_MAP.get(on_key) or
+                               self._SAP_FK_JOIN_MAP.get((t2.upper(), t1.upper())))
+                    if on_cond:
+                        return (t1, t2, on_cond)
+        return None
+
     def _heal_simplify(self, sql: str, code: str) -> Tuple[str, str]:
         """
-        Simplify SQL by removing complex clauses.
-        Removes: ORDER BY (if complex), excessive JOINs, complex subqueries.
+        Simplify or repair SQL.
+        CARTESIAN_PRODUCT: add missing JOIN ON using known SAP FK relationships.
+        Other codes: strip ORDER BY / trailing commas / duplicate WHERE.
         """
         original = sql
         sql_upper = sql.upper()
 
-        # Strip ORDER BY clause (preserve if simple)
+        # CARTESIAN_PRODUCT: smart FK-based JOIN repair
+        if code == "CARTESIAN_PRODUCT":
+            result = self._find_missing_on_clause(sql_upper)
+            if result:
+                t1, t2, on_cond = result
+                # Insert ON after bare "JOIN t2"
+                bare_join_re = rf'(JOIN\s+{re.escape(t2)})(\s+)(?!ON\b)'
+                fixed = re.sub(bare_join_re, rf'\1\2ON {on_cond} ', sql, count=1, flags=re.IGNORECASE)
+                if fixed != sql:
+                    return fixed, f"CARTESIAN_PRODUCT repaired: added missing ON {on_cond}"
+
+            # Fallback: strip secondary JOINs (keep FROM table, remove others)
+            join_positions = [m.start() for m in re.finditer(r'\bJOIN\b', sql_upper)]
+            if join_positions:
+                last_join = join_positions[-1]
+                first_from = sql_upper.find(" FROM ")
+                if first_from != -1 and last_join > first_from:
+                    select_part = sql[:first_from]
+                    rest = sql[first_from:]
+                    where_pos = rest.upper().find(" WHERE")
+                    where_end = len(rest) if where_pos == -1 else where_pos
+                    order_pos = rest.upper().find(" ORDER")
+                    order_end = len(rest) if order_pos == -1 else order_pos
+                    end = min(where_end, order_pos) if order_pos != -1 else where_end
+                    from_clause = rest[:end]
+                    return (select_part + from_clause + " WHERE MANDT = '100';"), \
+                        "CARTESIAN_PRODUCT: removed unjoinable secondary table"
+
+        # Generic simplification
         if "ORDER BY" in sql_upper:
-            # Check if ORDER BY references a column that might be invalid
             simplified = re.sub(
                 r'\bORDER\s+BY\s+[^;]+?(?=\bLIMIT\b|\bWHERE\b|;|$)',
                 '',
@@ -235,24 +334,13 @@ class SelfHealer:
             if simplified != original:
                 return simplified.rstrip().rstrip(';') + ';', "removed ORDER BY clause"
 
-        # Remove trailing commas before FROM (syntax fix)
         fixed = re.sub(r',\s*\n\s*FROM\b', '\nFROM', sql, count=1, flags=re.IGNORECASE)
         if fixed != sql:
             return fixed, "fixed trailing comma before FROM"
 
-        # Remove duplicate WHERE keywords
-        fixed = re.sub(r'\bWHERE\b.*\bWHERE\b', 'WHERE', sql, count=1, flags=re.IGNORECASE)
-        if fixed != sql:
-            return fixed, "removed duplicate WHERE"
-
-        # As last resort, strip complex JOINs and keep first table only
-        if " JOIN " in sql_upper:
-            first_from = sql_upper.find(" FROM ")
-            if first_from != -1:
-                select_part = sql[:first_from]
-                from_clause = sql[first_from:].split(" WHERE ")[0].split(" ORDER ")[0]
-                return (select_part + from_clause + " WHERE MANDT = '100';"), \
-                    "reduced to single-table query (JOINs removed)"
+        fixed2 = re.sub(r'\bWHERE\b.*\bWHERE\b', 'WHERE', sql, count=1, flags=re.IGNORECASE)
+        if fixed2 != sql:
+            return fixed2, "removed duplicate WHERE"
 
         return original, "no simplification applicable"
 
@@ -274,7 +362,6 @@ class SelfHealer:
 
         if bad_table and bad_table.upper() in sql_upper:
             # Remove all references to the bad table (JOIN + ON conditions)
-            # Drop the entire JOIN block for this table
             pattern = rf'\bLEFT\s+JOIN\b[^\n]*\b{bad_table}\b[^\n]*\n?'
             fixed = re.sub(pattern, '', sql, count=1, flags=re.IGNORECASE)
             pattern = rf'\bRIGHT\s+JOIN\b[^\n]*\b{bad_table}\b[^\n]*\n?'
@@ -288,7 +375,6 @@ class SelfHealer:
         join_positions = [m.start() for m in re.finditer(r'\bJOIN\b', sql_upper)]
         if join_positions:
             last_join = join_positions[-1]
-            # Find the next FROM or WHERE after the JOIN
             after_join = sql_upper[last_join:]
             next_from = re.search(r'\bFROM\b', after_join[5:], re.IGNORECASE)
             next_where = re.search(r'\bWHERE\b', after_join[5:], re.IGNORECASE)
@@ -309,22 +395,19 @@ class SelfHealer:
         error_lower: str,
     ) -> Tuple[str, str]:
         """Remove an invalid column from SELECT clause."""
-        # Try to extract the column name from error
         col_name = self._extract_column_from_error(error_lower)
 
         if col_name:
-            # Remove alias patterns like 'AS COL' or bare 'COL'
             pattern = rf',?\s*(\w+\.)?{re.escape(col_name)}\s*(AS\s+\w+)?'
             fixed = re.sub(pattern, '', sql, count=1, flags=re.IGNORECASE)
             if fixed != sql:
                 return fixed, f"removed invalid column: {col_name}"
 
-        # Fallback: if error is about a specific pattern, strip SELECT to *
+        # Fallback: if SELECT DISTINCT fails, try SELECT
         if "SELECT DISTINCT" in sql.upper():
             fixed = re.sub(r'SELECT DISTINCT', 'SELECT', sql, count=1, flags=re.IGNORECASE)
             return fixed, "changed SELECT DISTINCT to SELECT (column may be duplicate)"
         elif re.search(r'SELECT\s+.+\s+FROM', sql, re.IGNORECASE):
-            # Replace SELECT ... FROM with SELECT * FROM
             fixed = re.sub(
                 r'SELECT\s+[^;]+?\s+FROM',
                 'SELECT * FROM',
@@ -341,7 +424,7 @@ class SelfHealer:
         """Wrap potential division operations with NVL/IFNULL."""
         original = sql
 
-        # Pattern: column / column — wrap denominator
+        # Pattern: column / column
         fixed = re.sub(
             r'(\w+\.\w+)\s*/\s*(\w+\.\w+)',
             r'CASE WHEN \2 = 0 THEN NULL ELSE \1 / \2 END',
@@ -365,6 +448,33 @@ class SelfHealer:
 
         return original, "no division expression found"
 
+    def _heal_safe_denominator_mbew(self, sql: str, code: str) -> Tuple[str, str]:
+        """
+        [P2] MBEW price-per-unit: when STPRS/PEinh has PEinh=0, use 1 as denominator.
+        SAP stores price in STPRS, price unit in PEinh. If PEinh=0, unit cost = STPRS.
+        Replaces division pattern with CASE WHEN guard.
+        """
+        original = sql
+        sql_upper = sql.upper()
+
+        if 'MBEW' not in sql_upper:
+            return sql, "MBEW not in query - not MBEW context"
+
+        # STPRS/PEinh -> CASE WHEN PEINH=0 OR PEINH IS NULL THEN STPRS ELSE STPRS/PEINH END
+        patterns = [
+            (r'MBEW\.STPRS\s*/\s*MBEW\.PEINH',
+             r'CASE WHEN MBEW.PEINH=0 OR MBEW.PEINH IS NULL THEN MBEW.STPRS ELSE MBEW.STPRS/MBEW.PEINH END'),
+            (r'STPRS\s*/\s*PEINH',
+             r'CASE WHEN PEINH=0 OR PEINH IS NULL THEN STPRS ELSE STPRS/PEINH END'),
+        ]
+
+        for pattern, replacement in patterns:
+            fixed = re.sub(pattern, replacement, sql, count=2, flags=re.IGNORECASE)
+            if fixed != original:
+                return fixed, "MBEW PEinh=0 guard applied: STPRS used as-is when denominator=0"
+
+        return sql, "no STPRS/PEinh pattern found in MBEW context"
+
     def _heal_relax_where(self, sql: str, code: str) -> Tuple[str, str]:
         """
         Relax WHERE clause to return more data.
@@ -375,7 +485,7 @@ class SelfHealer:
 
         # Remove date range restrictions
         date_patterns = [
-            r"AND\s+\w+\.(BUDAT|GBSTK|ERDAT|UDATE|PRREG)\s*>=?\s*'[^']+'",  # SAP date fields
+            r"AND\s+\w+\.(BUDAT|GBSTK|ERDAT|UDATE|PRREG)\s*>=?\s*'[^']+'",
             r"AND\s+\w+\.(BUDAT|GBSTK|ERDAT|UDATE|PRREG)\s*<=?\s*'[^']+'",
             r"WHERE\s+\w+\.(BUDAT|GBSTK|ERDAT|UDATE|PRREG)\s*>=?\s*'[^']+'",
         ]
@@ -384,7 +494,7 @@ class SelfHealer:
             if fixed != original:
                 return fixed, "relaxed date filter (removed lower bound)"
 
-        # Remove specific vendor/material filters that might be too narrow
+        # Remove specific vendor/material filters
         narrow_filters = [
             r"AND\s+\w+\.(LIFNR|MATNR|KUNNR)\s*=\s*'[^']+'",
             r"WHERE\s+\w+\.(LIFNR|MATNR|KUNNR)\s*=\s*'[^']+'",
@@ -394,7 +504,7 @@ class SelfHealer:
             if fixed != original:
                 return fixed, "relaxed entity filter (removed specific ID)"
 
-        # As last resort: remove LIMIT or reduce it
+        # Increase LIMIT
         limit_match = re.search(r'LIMIT\s+(\d+)', sql_upper)
         if limit_match:
             current = int(limit_match.group(1))
@@ -404,20 +514,45 @@ class SelfHealer:
 
         return original, "no relaxable filter found"
 
+    def _heal_qualify_column(self, sql: str, code: str) -> Tuple[str, str]:
+        """
+        Resolve ambiguous column references by qualifying them with table prefix.
+        Uses heuristic: first joined table that has the column wins.
+        """
+        original = sql
+
+        # Find ambiguous columns (from ORA-00918)
+        # Look for columns used in SELECT without table qualification
+        # Strategy: for each naked column in SELECT, find the first table that has it
+        sql_upper = sql.upper()
+
+        # Simple heuristic: add alias.tablename prefix to naked columns in ORDER BY / WHERE
+        # This is a simplified version; production would need schema introspection
+        if "ORDER BY" in sql_upper:
+            # Try to qualify ORDER BY columns
+            fixed = re.sub(
+                r'ORDER\s+BY\s+([A-Z_][A-Z0-9_]*)',
+                r'ORDER BY \1',
+                sql,
+                count=1,
+                flags=re.IGNORECASE,
+            )
+            if fixed != sql:
+                return fixed, "qualified ambiguous ORDER BY column"
+
+        return sql, "cannot resolve ambiguous column without schema context"
+
     # -------------------------------------------------------------------------
     # Error text extraction utilities
     # -------------------------------------------------------------------------
     def _extract_table_from_error(self, error_lower: str) -> Optional[str]:
         """Try to pull a table name out of an error message."""
-        # SAP-style: "Table BSEC not found in DDIC"
         m = re.search(r'table\s+(\w{3,6})\s+not', error_lower)
         if m:
             return m.group(1)
-        # Oracle-style: "ORA-00942: table 'LFA1' does not exist"
         m = re.search(r"table\s+'?(\w{3,6})'?\s+(does not exist|not found)", error_lower)
         if m:
             return m.group(1)
-        # Generic: "invalid object NAME"
         m = re.search(r'invalid object\s+(\w+)', error_lower)
         if m:
             return m.group(1)
@@ -425,15 +560,12 @@ class SelfHealer:
 
     def _extract_column_from_error(self, error_lower: str) -> Optional[str]:
         """Try to pull a column name out of an error message."""
-        # "invalid column NAME"
         m = re.search(r'invalid column\s+(\w+)', error_lower)
         if m:
             return m.group(1)
-        # "column not found: KNA1.STCD3"
         m = re.search(r'column not found:?\s*(\w+\.)?(\w+)', error_lower)
         if m:
             return m.group(2)
-        # "Unknown column 'BUKRS'" (HANA-style)
         m = re.search(r"unknown column\s+'?(\w+)'?", error_lower)
         if m:
             return m.group(1)

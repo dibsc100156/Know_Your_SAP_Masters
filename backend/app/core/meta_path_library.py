@@ -1227,6 +1227,101 @@ ORDER BY QALS.ERDAT DESC, QALS.QALS DESC
 ))
 
 # ═══════════════════════════════════════════════════════════════════════════════
+
+SAP_META_PATHS.append(MetaPath(
+    id="vendor_quality_scorecard",
+    name="Vendor Quality Scorecard (LFA1 + QALS + TQ01T)",
+    business_description=(
+        "Vendor quality scorecard: links LFA1 vendor master to QALS inspection lots "
+        "and TQ01T QM code texts. Produces per-vendor quality ratings, rejection rates, "
+        "and defect counts for spend analysis and supplier performance reviews."
+    ),
+    domain="quality_management",
+    module="QM",
+    tags=["vendor quality", "supplier scorecard", "QALS", "LFA1", "quality rating",
+          "rejection rate", "supplier performance", "inspection lot", "TQ01T"],
+    variants=[
+        PathVariant(
+            tables=["LFA1", "QALS", "TQ01T"],
+            join_conditions=[
+                ("LFA1", "QALS", "LFA1.LIFNR = QALS.LIFNR"),
+                ("QALS", "TQ01T", "QALS.QSMAT = TQ01T.QSMAT AND TQ01T.SPRAS = 'E'"),
+            ],
+            cardinality_notes="LFA1 is vendor master. QALS is inspection lots (1 per vendor per period). TQ01T is QM code text (lookup).",
+            score=1.0,
+            bloom_filter=["vendor quality", "supplier scorecard", "quality rating", "rejection"],
+        ),
+        PathVariant(
+            tables=["LFA1", "QALS", "QMEL", "T001W"],
+            join_conditions=[
+                ("LFA1", "QALS", "LFA1.LIFNR = QALS.LIFNR"),
+                ("QALS", "QMEL", "QALS.QALS = QMEL.QALS"),
+                ("QALS", "T001W", "QALS.WERKS = T001W.WERKS"),
+            ],
+            cardinality_notes="QMEL = QM notification. Extended variant with plant context.",
+            score=0.7,
+            bloom_filter=["quality notification", "quality issue", "complaint"],
+        ),
+    ],
+    required_filters=["LFA1.MANDT = :P_MANDT"],
+    optional_filters=[
+        "LFA1.LIFNR = :LIFNR",
+        "QALS.QSPEZ BETWEEN :DATE_FROM AND :DATE_TO",
+        "QALS.ART = '01'",
+        "QALS.STAT = 'Released'",
+        "T001W.WERKS = :WERKS",
+    ],
+    sql_template="""
+SELECT
+    LFA1.LIFNR  AS vendor_id,
+    LFA1.NAME1  AS vendor_name,
+    LFA1.ORT01  AS city,
+    LFA1.LAND1  AS country,
+    T001W.NAME1  AS plant_name,
+    COUNT(DISTINCT QALS.QALS)        AS inspection_lot_count,
+    SUM(QALS.MENGE1)                 AS total_inspected_qty,
+    SUM(QALS.MABST)                  AS total_rejected_qty,
+    CASE WHEN SUM(QALS.MENGE1) > 0
+         THEN ROUND(SUM(QALS.MABST) / SUM(QALS.MENGE1) * 100, 2)
+         ELSE 0 END                  AS rejection_rate_pct,
+    CASE WHEN COUNT(DISTINCT QALS.QALS) > 0
+         THEN ROUND(SUM(QALS.MABST) / COUNT(DISTINCT QALS.QALS), 2)
+         ELSE 0 END                   AS avg_rejection_per_lot,
+    TQ01T.QKText  AS quality_code_text,
+    QALS.ERDAT   AS last_inspection_date,
+    -- Usage decision breakdown
+    SUM(CASE WHEN QAMV.QUNDZ = 'R' THEN 1 ELSE 0 END)  AS reject_count,
+    SUM(CASE WHEN QAMV.QUNDZ IN ('A','B','C') THEN 1 ELSE 0 END)  AS accept_count
+FROM LFA1
+JOIN QALS ON LFA1.LIFNR = QALS.LIFNR
+LEFT JOIN TQ01T ON QALS.QSMAT = TQ01T.QSMAT AND TQ01T.SPRAS = 'E'
+LEFT JOIN T001W ON QALS.WERKS = T001W.WERKS
+LEFT JOIN QAMV ON QALS.QALS = QAMV.QALS
+WHERE {filters}
+GROUP BY
+    LFA1.LIFNR, LFA1.NAME1, LFA1.ORT01, LFA1.LAND1,
+    T001W.NAME1, TQ01T.QKText, QALS.ERDAT
+ORDER BY rejection_rate_pct DESC, LFA1.NAME1
+""",
+    select_columns={
+        "LFA1": ["LIFNR", "NAME1", "ORT01", "LAND1"],
+        "QALS": ["QALS", "LIFNR", "WERKS", "MENGE1", "MABST", "ERDAT", "ART", "STAT"],
+        "TQ01T": ["QSMAT", "QKText"],
+        "QAMV": ["QUNDZ"],
+        "T001W": ["NAME1"],
+    },
+    example_queries=[
+        "vendor quality rating",
+        "supplier inspection results",
+        "top vendors by quality score",
+        "vendor rejection rate by plant",
+        "supplier quality scorecard",
+        "vendor quality performance",
+    ],
+    confidence_boost=0.25,
+    row_count_warning="LFA1 has ~10000 vendors. QALS join can be large - always filter LIFNR, date range, or plant.",
+))
+
 #  DOMAIN 6 — PROJECT SYSTEM
 # ═══════════════════════════════════════════════════════════════════════════════
 

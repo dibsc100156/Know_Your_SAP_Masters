@@ -690,16 +690,17 @@ def graph_route_query(query: str, domain_hint: str, domain_agents: Dict[str, Dom
 
             final_score = ((1.5 * agent_context_score) + (1.0 * tool_spec_score)) / 2.5
 
+            # [P1] Compound keyword bonus - fixes pur_agent underselling on vendor+purchasing queries
+            compound_vendor_purchasing = (
+                any(k in query_lower for k in ["vendor", "supplier"]) and
+                any(k in query_lower for k in ["purchase order", "contract", "rfq", "info record"])
+            )
+            if compound_vendor_purchasing and agent_name == "pur_agent":
+                final_score = min(1.0, final_score + 0.15)
 
             if final_score >= 0.25:
-
-
                 agent_instance = domain_agents.get(agent_name)
-
-
                 if agent_instance:
-
-
                     scored.append((agent_instance, final_score))
 
 
