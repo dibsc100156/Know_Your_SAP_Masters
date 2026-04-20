@@ -1788,7 +1788,23 @@ class SteinerTreeExplorer:
         or 1:N explosions unless necessary.
         """
         W = nx.Graph()
-        HUGE_TABLES = {"BSEG", "MSEG", "MKPF", "BSIS", "BSAS", "BSID", "BSAD", "BSIK", "BSAK", "LIPS"}
+        # Tables that should NEVER be used as Steiner intermediates:
+        # These are high-volume transactional tables (millions of rows in prod).
+        # Penalties are cumulative — edges THROUGH these tables get heavy weight.
+        HUGE_TABLES = {
+            # Accounting / Finance — 100M–1B rows in large orgs
+            "BSEG", "MSEG", "MKPF", "BSIS", "BSAS", "BSID", "BSAD", "BSIK", "BSAK",
+            # Materials Management — high volume
+            "MCHA", "MCH1", "MSKA", "MSLB", "MKOL", "MSSL",       # Special stock
+            "LQUA",                                                   # WM Quant — huge
+            # Sales & Distribution — high volume
+            "LIPS", "VBFA",                                           # Delivery lines, doc flow
+            "VBRP",                                                    # Billing line items
+            # QM — Inspection lots (can be very large in inspection-heavy cos)
+            "QALS", "QAVE", "QAMV",                                  # QM history tables
+            # Payroll (should never appear in FK graph anyway, but safe)
+            "PA0008",
+        }
         
         for u, v, data in self.G.edges(data=True):
             weight = 1.0

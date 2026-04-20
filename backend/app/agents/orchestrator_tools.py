@@ -777,6 +777,200 @@ def meta_path_match(query: str, auth_context=None, domain: str = None, top_k: in
     except Exception as e:
         return ToolResult(status=ToolStatus.ERROR, message=f"Meta-path match failed: {str(e)}")
 
+def steiner_tree_explore(terminal_tables: List[str], root_table: str = None) -> ToolResult:
+    """
+    [Pillar 5] Multi-Terminal Steiner Tree.
+
+    Finds the minimum-cost JOIN tree connecting 3 or more terminal SAP tables.
+    This is the Steiner Tree problem on the FK graph — NP-hard, solved approximately
+    using NetworkX's Kou/GJ algorithm. The result is the minimum-cost set of JOINs
+    that connects ALL terminals, not just pairwise connections.
+
+    For 2 terminals, falls back to a direct find_path call.
+
+    Returns:
+        - terminals: all requested tables
+        - steiner_nodes: all tables in the optimal tree (terminals + Steiner intermediates)
+        - edges: the JOIN edges of the tree with join conditions
+        - join_clause: SQL FROM + JOIN string
+        - cost: total weighted cost of the tree
+        - strategy: "steiner_tree" or "pairwise_path"
+    """
+    from app.core.graph_store import SteinerTreeExplorer, graph_store
+    from app.core.graph_store import graph_store as _gs
+    import logging
+    logger = logging.getLogger("steiner_tree")
+
+    try:
+        terminals = [t.upper().strip() for t in terminal_tables if t]
+        if not root_table:
+            root_table = terminals[0]
+        else:
+            root_table = root_table.upper().strip()
+
+        if len(terminals) < 2:
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                message=f"Need at least 2 terminals, got {len(terminals)}"
+            )
+
+        # ── 2 terminals: use direct find_path (fast path, no Steiner overhead) ──
+        if len(terminals) == 2:
+            path = _gs.find_path(terminals[0], terminals[1])
+            if not path:
+                return ToolResult(
+                    status=ToolStatus.ERROR,
+                    message=f"No path found between {terminals[0]} and {terminals[1]}"
+                )
+            join_conditions = []
+            for i in range(len(path) - 1):
+                cond = _gs.get_join_condition(path[i], path[i + 1])
+                join_conditions.append({
+                    "from": path[i],
+                    "to": path[i + 1],
+                    "condition": cond or f"Implicit FK {path[i]} → {path[i+1]}",
+                })
+            join_clause = _build_sql_from_edges(join_conditions, root_table)
+            return ToolResult(
+                status=ToolStatus.SUCCESS,
+                data={
+                    "terminals": terminals,
+                    "steiner_nodes": path,
+                    "edges": join_conditions,
+                    "join_clause": join_clause,
+                    "cost": len(path) - 1,
+                    "strategy": "pairwise_path",
+                    "path": path,
+                },
+                message=f"Pairwise path ({len(path)} nodes): {' → '.join(path)}"
+            )
+
+        # ── 3+ terminals: use Steiner tree approximation ──
+        logger.info(f"[SteinerTree] Solving for terminals: {terminals}")
+        st_explorer = SteinerTreeExplorer(_gs)
+        st = st_explorer.find_steiner_tree(terminals)
+
+        if not st or len(st.nodes) == 0:
+            # Fallback: pairwise star from first terminal
+            logger.warning(f"[SteinerTree] Failed — falling back to pairwise star from {terminals[0]}")
+            return _pairwise_star_fallback(_gs, terminals, root_table)
+
+        # ── Build edge list from the tree ──
+        steiner_nodes = list(st.nodes)
+        edges = []
+        total_cost = 0.0
+
+        for u, v, data in st.edges(data=True):
+            cond = _gs.get_join_condition(u, v) or data.get("condition", "")
+            edge_cost = data.get("weight", 1.0)
+            total_cost += edge_cost
+            edges.append({
+                "from": u,
+                "to": v,
+                "condition": cond,
+                "cardinality": data.get("cardinality", "1:1"),
+                "bridge_type": data.get("bridge_type", "internal"),
+                "edge_weight": edge_cost,
+            })
+
+        # ── Generate SQL JOIN clause from edges ──
+        join_clause = _build_sql_from_edges(edges, root_table)
+
+        logger.info(
+            f"[SteinerTree] Solved: {len(steiner_nodes)} nodes, {len(edges)} edges, "
+            f"cost={total_cost:.2f} | Nodes: {steiner_nodes}"
+        )
+
+        return ToolResult(
+            status=ToolStatus.SUCCESS,
+            data={
+                "terminals": terminals,
+                "steiner_nodes": steiner_nodes,
+                "edges": edges,
+                "join_clause": join_clause,
+                "cost": total_cost,
+                "strategy": "steiner_tree",
+                "path": steiner_nodes,  # alias for compatibility
+            },
+            message=(
+                f"Steiner tree: {len(steiner_nodes)} nodes ({len(terminals)} terminals), "
+                f"{len(edges)} JOINs, cost={total_cost:.2f}"
+            )
+        )
+
+    except Exception as e:
+        import traceback
+        logger.error(f"[SteinerTree] Error: {e}\n{traceback.format_exc()}")
+        return ToolResult(
+            status=ToolStatus.ERROR,
+            message=f"Steiner tree failed: {str(e)}"
+        )
+
+
+def _build_sql_from_edges(edges: List[Dict], root: str) -> str:
+    """Convert a list of JOIN edges into a SQL FROM + JOIN clause."""
+    lines = [f"FROM {root}"]
+    for edge in edges:
+        u, v = edge["from"], edge["to"]
+        cond = edge["condition"]
+        # Direction: u is the "from" (already in FROM), v is new
+        if u == root:
+            lines.append(f"LEFT JOIN {v} ON {cond}")
+        elif v == root:
+            lines.append(f"LEFT JOIN {u} ON {cond}")
+        else:
+            # Non-root edge — pick whichever side has fewer already-added nodes
+            lines.append(f"LEFT JOIN {v} ON {cond}  -- via {u}")
+    return "\n".join(lines)
+
+
+def _pairwise_star_fallback(gs, terminals: List[str], root: str) -> ToolResult:
+    """Fallback: connect each terminal directly to root via pairwise paths."""
+    all_edges = []
+    all_nodes = {root}
+    total_cost = 0.0
+
+    for t in terminals:
+        if t == root:
+            continue
+        path = gs.find_path(root, t)
+        if not path:
+            continue
+        all_nodes.update(path)
+        for i in range(len(path) - 1):
+            cond = gs.get_join_condition(path[i], path[i + 1])
+            edge_cost = 1.0
+            total_cost += edge_cost
+            all_edges.append({
+                "from": path[i],
+                "to": path[i + 1],
+                "condition": cond or f"Implicit",
+                "cardinality": "1:1",
+                "bridge_type": "fallback",
+                "edge_weight": edge_cost,
+            })
+
+    if not all_edges:
+        return ToolResult(
+            status=ToolStatus.ERROR,
+            message=f"No connecting paths found from {root} to any terminal"
+        )
+
+    join_clause = _build_sql_from_edges(all_edges, root)
+    return ToolResult(
+        status=ToolStatus.SUCCESS,
+        data={
+            "terminals": terminals,
+            "steiner_nodes": list(all_nodes),
+            "edges": all_edges,
+            "join_clause": join_clause,
+            "cost": total_cost,
+            "strategy": "pairwise_star_fallback",
+        },
+        message=f"Pairwise star fallback: {len(all_nodes)} nodes, {len(all_edges)} edges, cost={total_cost:.1f}"
+    )
+
+
 def all_paths_explore(start_table: str, end_table: str, max_depth: int = 5, top_k: int = 3) -> ToolResult:
     """[Pillar 5] Find all valid JOIN paths ranked by score."""
     from app.core.graph_store import path_explorer
@@ -1100,6 +1294,34 @@ TOOL_REGISTRY: Dict[str, Tool] = {
             "required": ["query"]
         },
         execute=meta_path_match,
+        pillars=["Pillar 5"],
+    ),
+
+    "steiner_tree_explore": Tool(
+        name="steiner_tree_explore",
+        description="[Pillar 5] Multi-terminal Steiner Tree — finds the minimum-cost JOIN tree "
+                    "connecting 3+ SAP table terminals. Solves the Steiner Tree problem on the FK graph "
+                    "using the Kou/GJ approximation algorithm. Returns all tree nodes (terminals + Steiner "
+                    "intermediates), JOIN edges with conditions, total cost, and SQL FROM/JOIN clause. "
+                    "Call this when a query explicitly or implicitly involves 3+ tables "
+                    "(e.g., 'vendor POs and their material descriptions and plant data'). "
+                    "Falls back to pairwise star for 2 terminals or when Steiner fails.",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "terminal_tables": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of 2+ SAP table names to connect (e.g., ['LFA1', 'MARA', 'EKKO'])",
+                },
+                "root_table": {
+                    "type": "string",
+                    "description": "Root/start table for the JOIN tree (default: first terminal)",
+                },
+            },
+            "required": ["terminal_tables"]
+        },
+        execute=steiner_tree_explore,
         pillars=["Pillar 5"],
     ),
 

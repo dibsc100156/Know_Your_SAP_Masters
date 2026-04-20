@@ -2105,7 +2105,7 @@ def run_agent_loop(
                 routing.tier.value, routing.composite_score))
             join_clause = ""
         else:
-                    # STEP 3: GRAPH TRAVERSAL (Pillar 5) — if multi-table
+                    # STEP 3: GRAPH TRAVERSAL (Pillar 5) — multi-terminal Steiner Tree
             
                     # =========================================================================
             
@@ -2119,49 +2119,104 @@ def run_agent_loop(
             
                             phase_3_start = time.time()
             
-                            logger.info(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
+                            # ── 3+ terminals → Steiner tree (minimum-cost JOIN tree) ──
+                            if len(tables_involved) >= 3:
             
-                            graph_result = call_tool("all_paths_explore", {
+                                logger.info(
+                                    f"\n[3/5] [Pillar 5] Steiner Tree — terminals={tables_involved} "
+                                    f"[{len(tables_involved)} tables]"
+                                )
             
-                                "start_table": tables_involved[0],
+                                steiner_result = call_tool("steiner_tree_explore", {
+                                    "terminal_tables": tables_involved,
+                                    "root_table": tables_involved[0],
+                                })
             
-                                "end_table": tables_involved[1],
+                                trace("steiner_tree_explore", steiner_result)
             
-                                "max_depth": 5,
+                                if steiner_result.status == ToolStatus.SUCCESS:
+                                    join_clause = steiner_result.data["join_clause"]
+                                    base_sql += f"\n{join_clause}"
+                                    cost = steiner_result.data.get("cost", 0)
+                                    strategy = steiner_result.data.get("strategy", "unknown")
+                                    nodes = steiner_result.data.get("steiner_nodes", [])
+                                    logger.info(
+                                        f"    [{strategy}] {len(nodes)} nodes, cost={cost:.2f}"
+                                    )
+                                    logger.info(
+                                        f"    JOIN tree: {' → '.join(nodes[:6])}"
+                                        f"{'' if len(nodes) <= 6 else ' ...'}"
+                                    )
+                                else:
+                                    logger.warning(
+                                        f"    [WARN] Steiner failed: {steiner_result.message}. "
+                                        f"Falling back to pairwise paths."
+                                    )
+                                    # Fallback to pairwise between first two tables
+                                    pairwise_result = call_tool("all_paths_explore", {
+                                        "start_table": tables_involved[0],
+                                        "end_table": tables_involved[1],
+                                        "max_depth": 5,
+                                        "top_k": 3,
+                                    })
+                                    trace("all_paths_explore (steiner fallback)", pairwise_result)
+                                    if pairwise_result.status == ToolStatus.SUCCESS:
+                                        join_clause = pairwise_result.data["best_join_clause"]
+                                        base_sql += f"\n{join_clause}"
+                                        logger.info(
+                                            f"    Pairwise fallback path: "
+                                            f"{' → '.join(pairwise_result.data['best_path_tables'])}"
+                                        )
             
-                                "top_k": 3
+                                if current_run_id:
+                                    _update_harness_phase(
+                                        hr, current_run_id, "phase_3", "completed",
+                                        artifacts={
+                                            "tables": tables_involved,
+                                            "join_clause": join_clause[:300] if join_clause else "",
+                                            "strategy": "steiner_tree" if len(tables_involved) >= 3 else "pairwise",
+                                        },
+                                        duration_ms=int((time.time() - phase_3_start) * 1000),
+                                        verbose=verbose
+                                    )
             
-                            })
+                            # ── 2 terminals → pairwise all-paths ranked exploration ──
+                            elif len(tables_involved) == 2:
             
-                            trace("all_paths_explore", graph_result)
+                                logger.info(
+                                    f"\n[3/5] [Pillar 5] Pairwise paths — "
+                                    f"{tables_involved[0]} → {tables_involved[1]}"
+                                )
             
-                            if graph_result.status == ToolStatus.SUCCESS:
+                                graph_result = call_tool("all_paths_explore", {
+                                    "start_table": tables_involved[0],
+                                    "end_table": tables_involved[1],
+                                    "max_depth": 5,
+                                    "top_k": 3,
+                                })
             
-                                join_clause = graph_result.data["best_join_clause"]
+                                trace("all_paths_explore", graph_result)
             
-                                base_sql += f"\n{join_clause}"
+                                if graph_result.status == ToolStatus.SUCCESS:
+                                    join_clause = graph_result.data["best_join_clause"]
+                                    base_sql += f"\n{join_clause}"
+                                    logger.info(
+                                        f"    Best path: {' → '.join(graph_result.data['best_path_tables'])} "
+                                        f"(score={graph_result.data.get('ranked_paths', [{}])[0].get('score', '?')})"
+                                    )
+                                else:
+                                    logger.warning(f"    [WARN] {graph_result.message}")
             
-                                logger.info(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
-            
-                            else:
-            
-                                logger.info(f"    [WARN] {graph_result.message}")
-            
-                            if current_run_id:
-            
-                                _update_harness_phase(hr, current_run_id, "phase_3", "completed",
-            
-                                    artifacts={
-            
-                                        "tables": tables_involved,
-            
-                                        "join_clause": join_clause[:200] if join_clause else "",
-            
-                                    },
-            
-                                    duration_ms=int((time.time() - phase_3_start) * 1000),
-            
-                                    verbose=verbose)
+                                if current_run_id:
+                                    _update_harness_phase(
+                                        hr, current_run_id, "phase_3", "completed",
+                                        artifacts={
+                                            "tables": tables_involved,
+                                            "join_clause": join_clause[:200] if join_clause else "",
+                                        },
+                                        duration_ms=int((time.time() - phase_3_start) * 1000),
+                                        verbose=verbose
+                                    )
             
                         else:
             
