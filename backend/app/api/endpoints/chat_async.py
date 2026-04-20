@@ -53,6 +53,8 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="Natural language question about SAP master data")
     domain: str = Field(default="auto", description="Routing domain")
     user_role: str = Field(default="AP_CLERK", description="SAP role key")
+    urgency: str = Field(default="normal", description="Query urgency: critical | high | normal | low")
+    contract_type: str = Field(default="standard", description="SLA: enterprise | premium | standard")
 
 
 class TaskSubmitResponse(BaseModel):
@@ -64,6 +66,8 @@ class TaskSubmitResponse(BaseModel):
         description="Estimated wait time in seconds (based on query complexity hint)"
     )
     poll_after_s: float = Field(default=1.0, description="Recommended poll interval")
+    priority_score: float = Field(default=None, description="Phase 22: Urgency x Role-Authority score")
+    queue_target: str = Field(default=None, description="Phase 22: Celery queue targeted")
 
 
 class TaskStatusResponse(BaseModel):
@@ -116,10 +120,25 @@ async def submit_orchestrator_task(request: ChatRequest):
 
     try:
         # .delay() returns AsyncResult — task is already queued in RabbitMQ
-        async_result = run_orchestrator_task.delay(
+        # [Phase 22] Compute query priority and route to appropriate queue
+        from app.core.query_priority_scorer import compute_priority
+        priority_result = compute_priority(
             query=request.query,
             user_role=request.user_role,
+            routing_tier="simple",
             domain=request.domain,
+            urgency=request.urgency,
+            contract_type=request.contract_type,
+        )
+        celery_kwargs = priority_result.to_celery_kwargs()
+
+        async_result = run_orchestrator_task.apply_async(
+            kwargs={
+                "query": request.query,
+                "user_role": request.user_role,
+                "domain": request.domain,
+            },
+            **celery_kwargs
         )
         task_id = async_result.id
 
@@ -132,11 +151,13 @@ async def submit_orchestrator_task(request: ChatRequest):
             task_id=task_id,
             status="PENDING",
             message=(
-                f"Query queued. Poll GET /tasks/{task_id} for result. "
-                f"Or subscribe to ws://.../tasks/{task_id}/stream for SSE."
+                f"Query queued on {priority_result.queue} queue. "
+                f"Poll GET /tasks/{task_id} for result."
             ),
             estimated_wait_s=estimated_wait,
             poll_after_s=1.0,
+            priority_score=round(priority_result.score, 3),
+            queue_target=priority_result.queue,
         )
 
     except Exception as e:

@@ -84,6 +84,7 @@ def run_orchestrator_task(
     query: str,
     user_role: str = "AP_CLERK",
     domain: str = "auto",
+    urgency: str = "normal",  # Phase 22: urgency level for priority scoring
     use_supervisor: bool = False,  # NOTE: use_supervisor=True returns simplified result without confidence_score, critique, etc.
 ) -> dict:
     """
@@ -184,6 +185,7 @@ def run_orchestrator_task(
     elapsed_ms = int((time.time() - start_time) * 1000)
     result["task_id"] = task_id
     result["status"] = "success"
+    result["urgency"] = urgency
     result["celery"] = {
         "worker": self.request.hostname,
         "retries": self.request.retries,

@@ -25,7 +25,10 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="Natural language question about SAP master data")
     domain: str = Field(default="auto", description="Routing domain (auto or explicit)")
     user_role: str = Field(default="AP_CLERK", description="SAP Role Key")
-    use_swarm: bool = Field(default=False, description="Use Multi-Agent Domain Swarm instead of monolithic orchestrator")
+    use_swarm: bool = Field(default=False, description="Use Multi-Agent Domain Swarm")
+    # Phase 22: Dynamic Query Prioritization
+    urgency: str = Field(default="normal", description="Urgency: critical | high | normal | low")
+    contract_type: str = Field(default="standard", description="SLA: enterprise premium standard")
 
 
 class ChatResponse(BaseModel):
@@ -94,6 +97,11 @@ class ChatResponse(BaseModel):
     # Synthesis validation summary (populated when use_swarm=True)
     validation_summary: Optional[Dict[str, Any]] = None  # {agents_validated, agents_passed, agents_failed, per_agent}
 
+    # Phase 22: Dynamic Query Prioritization
+    priority_score: Optional[float] = None  # Urgency x Role-Authority score
+    queue_target: Optional[str] = None      # Celery queue: agent | priority
+    urgency: Optional[str] = None            # Urgency level applied
+
     # Role context returned for frontend display
     role_applied: str
     user_id: str
@@ -122,6 +130,17 @@ async def chat_master_data_endpoint(request: ChatRequest):
             domain_hint=request.domain,
         )
 
+        # [Phase 22] Compute priority for sync endpoint (informational only)
+        from app.core.query_priority_scorer import compute_priority
+        priority_result = compute_priority(
+            query=request.query,
+            user_role=request.user_role,
+            routing_tier=routing.tier.value,
+            domain=request.domain,
+            urgency=request.urgency,
+            contract_type=request.contract_type,
+        )
+
         result = run_agent_loop(
             query=request.query,
             auth_context=auth_context,
@@ -134,6 +153,11 @@ async def chat_master_data_endpoint(request: ChatRequest):
             use_swarm=request.use_swarm,  # Multi-Agent Domain Swarm vs monolithic orchestrator
             routing=routing,           # Phase L5: pre-computed complexity routing
         )
+
+        # [Phase 22] Attach priority metadata to result
+        result["priority_score"] = round(priority_result.score, 3)
+        result["queue_target"] = priority_result.queue
+        result["urgency"] = request.urgency
 
         # [Phase L4] Record query metrics for monitoring dashboard
         # Must be recorded BEFORE enrichment so result_dict has orchestrator's raw fields
@@ -224,6 +248,10 @@ async def chat_master_data_endpoint(request: ChatRequest):
             user_id=f"user:{auth_context.role_id.lower()}",
             quality_metrics=quality_metrics,
             trajectory_log=result.get("trajectory_log"),
+            # Phase 22: Dynamic Query Prioritization
+            priority_score=result.get("priority_score"),
+            queue_target=result.get("queue_target"),
+            urgency=result.get("urgency"),
         )
 
     except Exception as e:
