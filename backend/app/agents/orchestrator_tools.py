@@ -141,8 +141,23 @@ def schema_lookup(
     from app.core.vector_store import store_manager
 
     try:
-        # Step 1: Vector search (Schema RAG — Pillar 3)
-        raw_results = store_manager.search_schema(query, n_results=n_results, domain=domain)
+        # [Pillar 3] Hybrid BM25 + Vector search (David Karam layered RAG)
+        # Keyword-first routing: exact SAP table/field names → BM25 (precision),
+        # natural language → vector similarity (recall). RRF fusion combines both.
+        from app.core.bm25_hybrid import bm25_hybrid_search
+
+        hybrid_results = bm25_hybrid_search(query=query, domain=domain, top_k=n_results)
+
+        if hybrid_results:
+            raw_results = [
+                {"document": r["document"], "metadata": r["metadata"]}
+                for r in hybrid_results
+            ]
+            backend_note = "hybrid_bm25_vec"
+        else:
+            # Graceful fallback if BM25 index not yet built
+            raw_results = store_manager.search_schema(query, n_results=n_results, domain=domain)
+            backend_note = store_manager.backend_name
 
         if not raw_results:
             return ToolResult(
@@ -189,10 +204,10 @@ def schema_lookup(
                 "tables_used": tables_used,
                 "query": query,
                 "domain": domain,
-                "backend": store_manager.backend_name,
+                "backend": backend_note,
             },
-            message=f"Found {len(filtered_schemas)} authorized table(s) [backend={store_manager.backend_name}]",
-            metadata={"query": query, "domain": domain, "backend": store_manager.backend_name}
+            message=f"Found {len(filtered_schemas)} authorized table(s) [backend={backend_note}]",
+            metadata={"query": query, "domain": domain, "backend": backend_note}
         )
 
     except Exception as e:

@@ -96,6 +96,7 @@ from app.core.self_healer import self_healer
 from app.core.schema_auto_discover import schema_auto_discoverer
 
 from app.core.self_improver import self_improver
+from app.core.graph_provenance import GraphProvenanceRecorder
 from app.core.complexity_router import (
     get_routing_decision,
     ComplexityRouter,
@@ -525,6 +526,10 @@ def run_agent_loop(
         if verbose:
             tier_icon = {"TRIVIAL": "⚡", "SIMPLE": "🔹", "COMPLEX": "🔶", "EXPERT": "🔴"}[routing.tier.value]
             logger.debug(f"  [Phase L5] tier={routing.tier.value} score={routing.composite_score:.3f} {tier_icon}")
+
+        # [Priority 4] Graph Provenance — record step-by-step table discovery
+        provenance = GraphProvenanceRecorder()
+        provenance.start_query(query, routing.tier.value)
 
     # ============================================================================
     # [Phase 6] SWARM GATE - Delegate to Multi-Agent Domain Swarm if enabled
@@ -1252,6 +1257,7 @@ def run_agent_loop(
         if routing.should_skip("schema_discovery"):
             logger.info("[1/5] [Pillar 3] Schema RAG — SKIPPED (tier={}, score={:.3f})".format(
                 routing.tier.value, routing.composite_score))
+            provenance.record_skip("schema_lookup", f"routing tier={routing.tier.value}")
         else:
                     # STEP 1: SCHEMA RETRIEVAL (Pillar 3)
             
@@ -1303,6 +1309,13 @@ def run_agent_loop(
             
                     logger.info(f"    Tables found: {tables_involved}")
             
+                    # [Priority 4] Record schema_lookup step provenance
+                    provenance.record_step(
+                        "schema_lookup",
+                        tables_found=list(tables_involved),
+                        tool="schema_lookup",
+                    )
+
                     if current_run_id:
             
                         _update_harness_phase(hr, current_run_id, "phase_1", "completed",
@@ -1412,6 +1425,7 @@ def run_agent_loop(
         if routing.should_skip("graph_enhanced_schema"):
             logger.info("[1.5/5] [Pillar 5½] Graph Enhanced Schema — SKIPPED (tier={})".format(
                 routing.tier.value))
+            provenance.record_skip("graph_enhanced_schema", f"tier={routing.tier.value}")
         else:
                     # STEP 1.5: GRAPH-ENHANCED SCHEMA DISCOVERY (Pillar 5½)
             
@@ -3444,6 +3458,8 @@ def run_agent_loop(
     else:
 
         result_dict["trajectory_log"] = []
+    # [Priority 4] Graph provenance � explainable traversal path
+    result_dict["graph_provenance"] = provenance.build_provenance() if "provenance" in dir() else {}
 
     return result_dict
 
