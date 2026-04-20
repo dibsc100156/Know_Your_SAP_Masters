@@ -97,6 +97,7 @@ from app.core.schema_auto_discover import schema_auto_discoverer
 
 from app.core.self_improver import self_improver
 from app.core.graph_provenance import GraphProvenanceRecorder
+from app.core.orchestrator_builder import OrchestratorBuilder, always, if_tier_not, if_tier_in, if_confidence_below
 from app.core.complexity_router import (
     get_routing_decision,
     ComplexityRouter,
@@ -530,6 +531,29 @@ def run_agent_loop(
         # [Priority 4] Graph Provenance â record step-by-step table discovery
         provenance = GraphProvenanceRecorder()
         provenance.start_query(query, routing.tier.value)
+
+    # [Priority 10] Fluent Orchestrator Syntax
+    # Sam Bhagwat (Mastra): Graph-node/edge APIs force developers to think in graph terms.
+    # Fluent syntax makes the orchestration flow visible at a glance.
+    orchestrator_plan = (
+        OrchestratorBuilder()
+        .step("schema_discovery", if_tier_not("trivial"))
+        .step("graph_enhanced_schema", if_tier_in("simple", "complex", "expert"))
+        .step("sql_pattern_match", always)
+        .step("graph_traversal", if_tier_in("complex", "expert"))
+        .step("sql_assembly", always)
+        .step("self_critique", if_confidence_below(0.85))  # Only critique if we are unsure
+        .step("execute", always)
+        .build()
+    )
+    
+    # Helper to evaluate steps
+    def should_run_step(step_name: str, additional_ctx: dict = None) -> bool:
+        ctx = {"tier": routing.tier.value if routing else "COMPLEX"}
+        if additional_ctx:
+            ctx.update(additional_ctx)
+        return orchestrator_plan.should_run(step_name, ctx)
+
 
     ciba_warn_message = ""
     # [Priority 5] CIBA Tier Configuration
@@ -1300,7 +1324,7 @@ def run_agent_loop(
         # =========================================================================
 
         # [Phase L5] Skip schema retrieval for TRIVIAL queries (direct pattern match)
-        if routing.should_skip("schema_discovery"):
+        if not should_run_step("schema_discovery"):
             logger.info("[1/5] [Pillar 3] Schema RAG â SKIPPED (tier={}, score={:.3f})".format(
                 routing.tier.value, routing.composite_score))
             provenance.record_skip("schema_lookup", f"routing tier={routing.tier.value}")
@@ -1468,7 +1492,7 @@ def run_agent_loop(
         # bridges and structurally central tables that naive text-match would miss.
 
         # [Phase L5] Skip graph enhanced schema for TRIVIAL/SIMPLE tiers
-        if routing.should_skip("graph_enhanced_schema"):
+        if not should_run_step("graph_enhanced_schema"):
             logger.info("[1.5/5] [Pillar 5Â½] Graph Enhanced Schema â SKIPPED (tier={})".format(
                 routing.tier.value))
             provenance.record_skip("graph_enhanced_schema", f"tier={routing.tier.value}")
@@ -2160,7 +2184,7 @@ def run_agent_loop(
         # =========================================================================
 
         # [Phase L5] Skip graph traversal for TRIVIAL/SIMPLE tiers
-        if routing.should_skip("graph_traversal"):
+        if not should_run_step("graph_traversal"):
             logger.info("[3/5] [Pillar 5] Graph RAG â SKIPPED (tier={}, score={:.3f})".format(
                 routing.tier.value, routing.composite_score))
             join_clause = ""
@@ -2538,43 +2562,48 @@ def run_agent_loop(
 
     
 
-    critique_result = critique_agent.critique(
-
-        query=query,
-
-        sql=generated_sql,
-
-        schema_context=schema_context,
-
-        auth_context={
-
-            "role_id": auth_context.role_id,
-
-            "filters": auth_context.get_where_clauses() if hasattr(auth_context, "get_where_clauses") else {},
-
-            "allowed_company_codes": auth_context.allowed_company_codes,
-
-            "allowed_plants": auth_context.allowed_plants,
-
-            "allowed_purchasing_orgs": auth_context.allowed_purchasing_orgs,
-
-        }
-
-    )
-
+    # [Priority 10] Fluent step evaluation
+    if not should_run_step("self_critique", {"confidence": 0.50}):
+        logger.info("[4.5/5] [Phase 4] Self-Critique — SKIPPED (fluent step evaluated)")
+        critique_result = {"passed": True, "score": 7, "issues": []}
+    else:
+        critique_result = critique_agent.critique(
     
-
-    trace("critique_agent", ToolResult(
-
-        status=ToolStatus.SUCCESS if critique_result["passed"] else ToolStatus.ERROR,
-
-        message=f"Score: {critique_result['score']} â {'PASS' if critique_result['passed'] else 'FAIL'}",
-
-        data=critique_result,
-
-        metadata={},
-
-    ))
+            query=query,
+    
+            sql=generated_sql,
+    
+            schema_context=schema_context,
+    
+            auth_context={
+    
+                "role_id": auth_context.role_id,
+    
+                "filters": auth_context.get_where_clauses() if hasattr(auth_context, "get_where_clauses") else {},
+    
+                "allowed_company_codes": auth_context.allowed_company_codes,
+    
+                "allowed_plants": auth_context.allowed_plants,
+    
+                "allowed_purchasing_orgs": auth_context.allowed_purchasing_orgs,
+    
+            }
+    
+        )
+    
+        
+    
+        trace("critique_agent", ToolResult(
+    
+            status=ToolStatus.SUCCESS if critique_result["passed"] else ToolStatus.ERROR,
+    
+            message=f"Score: {critique_result['score']} â {'PASS' if critique_result['passed'] else 'FAIL'}",
+    
+            data=critique_result,
+    
+            metadata={},
+    
+        ))
 
     
 
