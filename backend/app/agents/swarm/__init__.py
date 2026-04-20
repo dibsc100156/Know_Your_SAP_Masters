@@ -74,6 +74,7 @@ def run_swarm(
     run_id: Optional[str] = None,
     enable_inboxes: bool = False,
     dispatcher = None,
+    agent_tool_mode = None,  # [Phase 19] Agent-as-Tool controller
 ) -> dict:
     """
     Convenience entry point — runs the multi-agent swarm or falls back
@@ -121,6 +122,7 @@ def run_swarm(
             domain_hint=domain_hint,
             verbose=verbose,
             run_id=run_id,
+            agent_tool_mode=agent_tool_mode,  # [Phase 19] passed through from orchestrator
         )
     finally:
         # Clean up inboxes after swarm execution

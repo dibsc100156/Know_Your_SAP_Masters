@@ -1,0 +1,2146 @@
+foreign_keys:
+- bridge_type: internal
+  cardinality: 1:N
+  condition: /SAPSLL/PNTPR.PARNR = /SAPSLL/PNTPR.PARNR
+  fieldname: PARNR
+  refField: PARNR
+  reftable: /SAPSLL/PNTPR
+  tabname: /SAPSLL/PNTPR
+- bridge_type: internal
+  cardinality: 1:N
+  condition: /SAPSLL/POD.PODHANDLE = /SAPSLL/POD.PODHANDLE
+  fieldname: PODHANDLE
+  refField: PODHANDLE
+  reftable: /SAPSLL/POD
+  tabname: /SAPSLL/POD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: A003.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: A003
+- bridge_type: internal
+  cardinality: 1:N
+  condition: ADR6.ADDRNUMBER = ADRC.ADDRNUMBER
+  fieldname: ADDRNUMBER
+  refField: ADDRNUMBER
+  reftable: ADRC
+  tabname: ADR6
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: AFVC.NPLNR = AFKO.NPLNR
+  fieldname: NPLNR
+  refField: NPLNR
+  reftable: AFKO
+  tabname: AFVC
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: AFVV.NPLNR = AFKO.NPLNR
+  fieldname: NPLNR
+  refField: NPLNR
+  reftable: AFKO
+  tabname: AFVV
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: AFVV.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: AFVV
+- bridge_type: internal
+  cardinality: 1:N
+  condition: ANLA.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: ANLA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: ANLC.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: ANLC
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: ASMD.QMNUM = QMEL.QMNUM
+  fieldname: QMNUM
+  refField: QMNUM
+  reftable: QMEL
+  tabname: ASMD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BKPF.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BKPF
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSAD.BELNR = BKPF.BELNR
+  fieldname: BELNR
+  refField: BELNR
+  reftable: BKPF
+  tabname: BSAD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSAD.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: BSAD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSAD.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: BSAD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSAD.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BSAD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSAK.BELNR = BKPF.BELNR
+  fieldname: BELNR
+  refField: BELNR
+  reftable: BKPF
+  tabname: BSAK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSAK.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: BSAK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSAK.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: BSAK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSAK.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BSAK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSAS.BELNR = BKPF.BELNR
+  fieldname: BELNR
+  refField: BELNR
+  reftable: BKPF
+  tabname: BSAS
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSAS.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BSAS
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSEG.BELNR = BKPF.BELNR
+  fieldname: BELNR
+  refField: BELNR
+  reftable: BKPF
+  tabname: BSEG
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSEG.GJAHR = BKPF.GJAHR
+  fieldname: GJAHR
+  refField: GJAHR
+  reftable: BKPF
+  tabname: BSEG
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSEG.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: BSEG
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSEG.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: BSEG
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSEG.HKONT = SKA1.SAKNR
+  fieldname: HKONT
+  refField: SAKNR
+  reftable: SKA1
+  tabname: BSEG
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSEG.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BSEG
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSID.BELNR = BKPF.BELNR
+  fieldname: BELNR
+  refField: BELNR
+  reftable: BKPF
+  tabname: BSID
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSID.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: BSID
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSID.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: BSID
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSID.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BSID
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSIK.BELNR = BKPF.BELNR
+  fieldname: BELNR
+  refField: BELNR
+  reftable: BKPF
+  tabname: BSIK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSIK.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: BSIK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: BSIK.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: BSIK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BSIK.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: BSIK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BUT000.ADDRNUMBER = ADRC.ADDRNUMBER
+  fieldname: ADDRNUMBER
+  refField: ADDRNUMBER
+  reftable: ADRC
+  tabname: BUT000
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BUT020.ADDRNUMBER = ADRC.ADDRNUMBER
+  fieldname: ADDRNUMBER
+  refField: ADDRNUMBER
+  reftable: ADRC
+  tabname: BUT020
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BUT020.PARTNER = BUT000.PARTNER
+  fieldname: PARTNER
+  refField: PARTNER
+  reftable: BUT000
+  tabname: BUT020
+- bridge_type: internal
+  cardinality: 1:N
+  condition: BUT050.PARTNER = BUT000.PARTNER
+  fieldname: PARTNER
+  refField: PARTNER
+  reftable: BUT000
+  tabname: BUT050
+- bridge_type: internal
+  cardinality: 1:N
+  condition: COSP.KOSTL = CSKS.KOSTL
+  fieldname: KOSTL
+  refField: KOSTL
+  reftable: CSKS
+  tabname: COSP
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: COSP.OBJNR = PRPS.OBJNR
+  fieldname: OBJNR
+  refField: OBJNR
+  reftable: PRPS
+  tabname: COSP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: COSS.KOSTL = CSKS.KOSTL
+  fieldname: KOSTL
+  refField: KOSTL
+  reftable: CSKS
+  tabname: COSS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: COSS.OBJNR = PRPS.OBJNR
+  fieldname: OBJNR
+  refField: OBJNR
+  reftable: PRPS
+  tabname: COSS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: CSKS.PERNR = PA0001.PERNR
+  fieldname: PERNR
+  refField: PERNR
+  reftable: PA0001
+  tabname: CSKS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: CSKS.KOKRS = TKA01.KOKRS
+  fieldname: KOKRS
+  refField: KOKRS
+  reftable: TKA01
+  tabname: CSKS
+- bridge_type: internal
+  cardinality: 1:N
+  condition: CUOBJ.CLINT = KLAH.CLINT
+  fieldname: CLINT
+  refField: CLINT
+  reftable: KLAH
+  tabname: CUOBJ
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: CUOBJ.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: CUOBJ
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: DRAD.DOKOB = TOA01.DOKOB
+  fieldname: DOKOB
+  refField: DOKOB
+  reftable: TOA01
+  tabname: DRAD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EANL.EQUNR = EQUI.EQUNR
+  fieldname: EQUNR
+  refField: EQUNR
+  reftable: EQUI
+  tabname: EANL
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EBAN.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EBAN
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EGERR.ANLAGE = EANL.ANLAGE
+  fieldname: ANLAGE
+  refField: ANLAGE
+  reftable: EANL
+  tabname: EGERR
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EINA.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EINA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EINA.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: EINA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EINE.INFNR = EINA.INFNR
+  fieldname: INFNR
+  refField: INFNR
+  reftable: EINA
+  tabname: EINE
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EINE.EKORG = T024.EKORG
+  fieldname: EKORG
+  refField: EKORG
+  reftable: T024
+  tabname: EINE
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EKBE.EBELN = EKKO.EBELN
+  fieldname: EBELN
+  refField: EBELN
+  reftable: EKKO
+  tabname: EKBE
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKBE.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EKBE
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EKES.EBELN = EKKO.EBELN
+  fieldname: EBELN
+  refField: EBELN
+  reftable: EKKO
+  tabname: EKES
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKES.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EKES
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EKKN.EBELN = EKKO.EBELN
+  fieldname: EBELN
+  refField: EBELN
+  reftable: EKKO
+  tabname: EKKN
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKKO.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EKKO
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKKO.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: EKKO
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKKO.ERNAM = USR01.BNAME
+  fieldname: ERNAM
+  refField: BNAME
+  reftable: USR01
+  tabname: EKKO
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EKPO.EBELN = EKKO.EBELN
+  fieldname: EBELN
+  refField: EBELN
+  reftable: EKKO
+  tabname: EKPO
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKPO.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EKPO
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKPO.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: EKPO
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EKPO.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: EKPO
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EKPO.EKORG = T024.EKORG
+  fieldname: EKORG
+  refField: EKORG
+  reftable: T024
+  tabname: EKPO
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EORD.INFNR = EINA.INFNR
+  fieldname: INFNR
+  refField: INFNR
+  reftable: EINA
+  tabname: EORD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EORD.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: EORD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EORD.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: EORD
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EORD.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: EORD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EQUI.TPLNR = IHK6.TPLNR
+  fieldname: TPLNR
+  refField: TPLNR
+  reftable: IHK6
+  tabname: EQUI
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: EQUI.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: EQUI
+- bridge_type: internal
+  cardinality: 1:N
+  condition: EVBS.GERNR = EANL.ANLAGE
+  fieldname: GERNR
+  refField: ANLAGE
+  reftable: EANL
+  tabname: EVBS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: IFLOT.OBJNR = IHPA.OBJNR
+  fieldname: OBJNR
+  refField: OBJNR
+  reftable: IHPA
+  tabname: IFLOT
+- bridge_type: internal
+  cardinality: 1:N
+  condition: IHK6.EQUNR = EQUI.EQUNR
+  fieldname: EQUNR
+  refField: EQUNR
+  reftable: EQUI
+  tabname: IHK6
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: IHPA.PARVW = TPAR.PARVW
+  fieldname: PARVW
+  refField: PARVW
+  reftable: TPAR
+  tabname: IHPA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: IHPA.OBJNR = VIQMEL.OBJNR
+  fieldname: OBJNR
+  refField: OBJNR
+  reftable: VIQMEL
+  tabname: IHPA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: ILOA.ADRNR = ADRC.ADDRNUMBER
+  fieldname: ADRNR
+  refField: ADDRNUMBER
+  reftable: ADRC
+  tabname: ILOA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: ILOA.ILOAN = IFLO.ILOAN
+  fieldname: ILOAN
+  refField: ILOAN
+  reftable: IFLO
+  tabname: ILOA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: INOB.OBJEK = KLAH.CLINT
+  fieldname: OBJEK
+  refField: CLINT
+  reftable: KLAH
+  tabname: INOB
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: INOB.OBJEK = MARA.MATNR
+  fieldname: OBJEK
+  refField: MATNR
+  reftable: MARA
+  tabname: INOB
+- bridge_type: cross_module
+  cardinality: '1:1'
+  condition: INOB.OBTYP = T001O.OBTYP
+  fieldname: OBTYP
+  refField: OBTYP
+  reftable: T001O
+  tabname: INOB
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: J_1BBRANCH.BRANCH = J_1BTBCD.BRANCH
+  fieldname: BRANCH
+  refField: BRANCH
+  reftable: J_1BTBCD
+  tabname: J_1BBRANCH
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: J_1BBRANCH.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: J_1BBRANCH
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: KNA1.ADRNR = ADRC.ADDRNUMBER
+  fieldname: ADRNR
+  refField: ADDRNUMBER
+  reftable: ADRC
+  tabname: KNA1
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: KNA1.PARTNER = BUT000.PARTNER
+  fieldname: PARTNER
+  refField: PARTNER
+  reftable: BUT000
+  tabname: KNA1
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: KNB1.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: KNB1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: KNB1.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: KNB1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: KNBK.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: KNBK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: KNVK.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: KNVK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: KNVV.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: KNVV
+- bridge_type: internal
+  cardinality: 1:N
+  condition: KONV.KNUMV = VBAK.KNUMV
+  fieldname: KNUMV
+  refField: KNUMV
+  reftable: VBAK
+  tabname: KONV
+- bridge_type: internal
+  cardinality: '1:1'
+  condition: LAGP.LGTYP = LAGP.LGTYP
+  fieldname: LGTYP
+  refField: LGTYP
+  reftable: LAGP
+  tabname: LAGP
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LAGP.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: LAGP
+- bridge_type: internal
+  cardinality: '1:1'
+  condition: LDCP.LGTYP = LAGP.LGTYP
+  fieldname: LGTYP
+  refField: LGTYP
+  reftable: LAGP
+  tabname: LDCP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LDCP.LGPLA = LDCP.LGPLA
+  fieldname: LGPLA
+  refField: LGPLA
+  reftable: LDCP
+  tabname: LDCP
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LDCP.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: LDCP
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LEU4.TPLNR = T001W.WERKS
+  fieldname: TPLNR
+  refField: WERKS
+  reftable: T001W
+  tabname: LEU4
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LEU4.TKNUM = VTTK.TKNUM
+  fieldname: TKNUM
+  refField: TKNUM
+  reftable: VTTK
+  tabname: LEU4
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LFA1.ADRNR = ADRC.ADDRNUMBER
+  fieldname: ADRNR
+  refField: ADDRNUMBER
+  reftable: ADRC
+  tabname: LFA1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LFA1.PARTNER = BUT000.PARTNER
+  fieldname: PARTNER
+  refField: PARTNER
+  reftable: BUT000
+  tabname: LFA1
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LFASS.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: LFASS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LFB1.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: LFB1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LFB1.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: LFB1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LFBK.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: LFBK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LFC1.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: LFC1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LIKP.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: LIKP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LIKP.VBELN = VBAK.VBELN
+  fieldname: VBELN
+  refField: VBELN
+  reftable: VBAK
+  tabname: LIKP
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LIKP.TKNUM = VTTK.TKNUM
+  fieldname: TKNUM
+  refField: TKNUM
+  reftable: VTTK
+  tabname: LIKP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LIPS.VBELN = LIKP.VBELN
+  fieldname: VBELN
+  refField: VBELN
+  reftable: LIKP
+  tabname: LIPS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LIPS.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: LIPS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LQUA.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: LQUA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LQUA.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: LQUA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: LQUA.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: LQUA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LTAK.TONUM = LEU4.TONUM
+  fieldname: TONUM
+  refField: TONUM
+  reftable: LEU4
+  tabname: LTAK
+- bridge_type: internal
+  cardinality: 1:N
+  condition: LTBP.TONUM = LEU4.TONUM
+  fieldname: TONUM
+  refField: TONUM
+  reftable: LEU4
+  tabname: LTBP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MAKT.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MAKT
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: MAPL.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MAPL
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: MAPL.PLNTY = PLKO.PLNTY
+  fieldname: PLNTY
+  refField: PLNTY
+  reftable: PLKO
+  tabname: MAPL
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: MAPL.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MAPL
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: MARA.MATNR = J_1IG_HSN_SAC.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: J_1IG_HSN_SAC
+  tabname: MARA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARA.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MARA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARC.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MARC
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARC.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MARC
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARD.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MARD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARD.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: MARD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARD.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MARD
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MARM.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MARM
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MBEW.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MBEW
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MBEW.BWKEY = T001W.WERKS
+  fieldname: BWKEY
+  refField: WERKS
+  reftable: T001W
+  tabname: MBEW
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MCH1.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MCH1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MCH1.CHARG = MCHA.CHARG
+  fieldname: CHARG
+  refField: CHARG
+  reftable: MCHA
+  tabname: MCH1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MCHA.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MCHA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MKOL.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MKOL
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MKOL.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: MKOL
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MKOL.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MKOL
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MLGN.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MLGN
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MLGN.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: MLGN
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MLGN.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MLGN
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MLGT.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MLGT
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MLGT.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: MLGT
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MLGT.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MLGT
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: MSKA.KUNNU = KNA1.KUNNR
+  fieldname: KUNNU
+  refField: KUNNR
+  reftable: KNA1
+  tabname: MSKA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSKA.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MSKA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSKA.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: MSKA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSKA.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MSKA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: MSLB.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: MSLB
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSLB.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MSLB
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSLB.LGORT = T001L.LGORT
+  fieldname: LGORT
+  refField: LGORT
+  reftable: T001L
+  tabname: MSLB
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSLB.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: MSLB
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MSSL.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MSSL
+- bridge_type: internal
+  cardinality: 1:N
+  condition: MVKE.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: MVKE
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: OIB_A04.TPLNR = IHK6.TPLNR
+  fieldname: TPLNR
+  refField: TPLNR
+  reftable: IHK6
+  tabname: OIB_A04
+- bridge_type: internal
+  cardinality: 1:N
+  condition: OIG_V.OIBNR = OIB_A04.OIBNR
+  fieldname: OIBNR
+  refField: OIBNR
+  reftable: OIB_A04
+  tabname: OIG_V
+- bridge_type: internal
+  cardinality: 1:N
+  condition: PA0001.PERNR = PA0001.PERNR
+  fieldname: PERNR
+  refField: PERNR
+  reftable: PA0001
+  tabname: PA0001
+- bridge_type: internal
+  cardinality: 1:N
+  condition: PA0002.PERNR = PA0001.PERNR
+  fieldname: PERNR
+  refField: PERNR
+  reftable: PA0001
+  tabname: PA0002
+- bridge_type: internal
+  cardinality: 1:N
+  condition: PA0008.PERNR = PA0001.PERNR
+  fieldname: PERNR
+  refField: PERNR
+  reftable: PA0001
+  tabname: PA0008
+- bridge_type: internal
+  cardinality: 1:N
+  condition: PA0021.PERNR = PA0001.PERNR
+  fieldname: PERNR
+  refField: PERNR
+  reftable: PA0001
+  tabname: PA0021
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: PLMK.PLNNR = PLKO.PLNNR
+  fieldname: PLNNR
+  refField: PLNNR
+  reftable: PLKO
+  tabname: PLMK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: PLPO.PLNNR = PLKO.PLNNR
+  fieldname: PLNNR
+  refField: PLNNR
+  reftable: PLKO
+  tabname: PLPO
+- bridge_type: internal
+  cardinality: 1:N
+  condition: PRPS.PSPHI = PROJ.PSPNR
+  fieldname: PSPHI
+  refField: PSPNR
+  reftable: PROJ
+  tabname: PRPS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: QALS.LIFNR = LFA1.LIFNR
+  fieldname: LIFNR
+  refField: LIFNR
+  reftable: LFA1
+  tabname: QALS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: QALS.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: QALS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: QALS.CHARG = MCHA.CHARG
+  fieldname: CHARG
+  refField: CHARG
+  reftable: MCHA
+  tabname: QALS
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: QALS.WERKS = T001W.WERKS
+  fieldname: WERKS
+  refField: WERKS
+  reftable: T001W
+  tabname: QALS
+- bridge_type: internal
+  cardinality: 1:N
+  condition: QAMV.QALS = QALS.QALS
+  fieldname: QALS
+  refField: QALS
+  reftable: QALS
+  tabname: QAMV
+- bridge_type: internal
+  cardinality: 1:N
+  condition: QAVE.QALS = QALS.QALS
+  fieldname: QALS
+  refField: QALS
+  reftable: QALS
+  tabname: QAVE
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: QMFE.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: QMFE
+- bridge_type: internal
+  cardinality: 1:N
+  condition: SKB1.SAKNR = SKA1.SAKNR
+  fieldname: SAKNR
+  refField: SAKNR
+  reftable: SKA1
+  tabname: SKB1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: SKB1.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: SKB1
+- bridge_type: internal
+  cardinality: 1:N
+  condition: T001K.BUKRS = T001.BUKRS
+  fieldname: BUKRS
+  refField: BUKRS
+  reftable: T001
+  tabname: T001K
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBAK.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: VBAK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: VBAK.TKNUM = VTTK.TKNUM
+  fieldname: TKNUM
+  refField: TKNUM
+  reftable: VTTK
+  tabname: VBAK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: VBAP.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: VBAP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBAP.VBELN = VBAK.VBELN
+  fieldname: VBELN
+  refField: VBELN
+  reftable: VBAK
+  tabname: VBAP
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: VBEP.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: VBEP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBEP.VBELN = VBAK.VBELN
+  fieldname: VBELN
+  refField: VBELN
+  reftable: VBAK
+  tabname: VBEP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBFA.VBELV = VBAK.VBELN
+  fieldname: VBELV
+  refField: VBELN
+  reftable: VBAK
+  tabname: VBFA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBFA.VBELN = VBAK.VBELN
+  fieldname: VBELN
+  refField: VBELN
+  reftable: VBAK
+  tabname: VBFA
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBRK.KUNNR = KNA1.KUNNR
+  fieldname: KUNNR
+  refField: KUNNR
+  reftable: KNA1
+  tabname: VBRK
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: VBRP.MATNR = MARA.MATNR
+  fieldname: MATNR
+  refField: MATNR
+  reftable: MARA
+  tabname: VBRP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VBRP.VBELN = VBRK.VBELN
+  fieldname: VBELN
+  refField: VBELN
+  reftable: VBRK
+  tabname: VBRP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VIMONI.VKONT = VIBDT.VKONT
+  fieldname: VKONT
+  refField: VKONT
+  reftable: VIBDT
+  tabname: VIMONI
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VTFA.TKNUM = VTTK.TKNUM
+  fieldname: TKNUM
+  refField: TKNUM
+  reftable: VTTK
+  tabname: VTFA
+- bridge_type: cross_module
+  cardinality: 1:N
+  condition: VTLP.TPLNR = TVRO.TPLNR
+  fieldname: TPLNR
+  refField: TPLNR
+  reftable: TVRO
+  tabname: VTLP
+- bridge_type: internal
+  cardinality: 1:N
+  condition: VTLP.TKNUM = VTTK.TKNUM
+  fieldname: TKNUM
+  refField: TKNUM
+  reftable: VTTK
+  tabname: VTLP
+metadata:
+  fk_edge_count: 188
+  generated: '2026-04-20T07:54:51'
+  mode: seed
+  source: SEED (SAP-like DD08L subset)
+  table_count: 137
+tables:
+  /SAPSLL/PNTPR:
+    bridge: false
+    description: 'GTS: Partner Master Data (Trade Compliance)'
+    domain: ''
+    module: GTS
+    primary_key: []
+  /SAPSLL/POD:
+    bridge: false
+    description: 'GTS: Proof of Delivery / Export Control'
+    domain: ''
+    module: GTS
+    primary_key: []
+  A003:
+    bridge: false
+    description: 'Condition Records: Tax (Customer-Material-Country)'
+    domain: ''
+    module: SD
+    primary_key: []
+  ADR6:
+    bridge: false
+    description: 'Business Partner: Email Addresses'
+    domain: ''
+    module: BP
+    primary_key: []
+  ADRC:
+    bridge: true
+    description: Business Address Services (Central Address Mgmt)
+    domain: ''
+    module: BP
+    primary_key: []
+  AFKO:
+    bridge: false
+    description: Network Header (for Orders/Networks)
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  AFVC:
+    bridge: false
+    description: Activity at Work Center (Network Node)
+    domain: ''
+    module: PS
+    primary_key: []
+  AFVV:
+    bridge: false
+    description: Operation/Cost Data for Activities
+    domain: ''
+    module: PS
+    primary_key: []
+  ANEA:
+    bridge: false
+    description: Asset Accounting Document Amounts
+    domain: ''
+    module: FI
+    primary_key: []
+  ANEP:
+    bridge: false
+    description: Asset Accounting Document Line Items
+    domain: ''
+    module: FI
+    primary_key: []
+  ANLA:
+    bridge: false
+    description: Asset Master Record (Investment Accounting)
+    domain: ''
+    module: FI
+    primary_key: []
+  ANLC:
+    bridge: false
+    description: 'Asset Master: Line Items (Company Code)'
+    domain: ''
+    module: FI
+    primary_key: []
+  ASMD:
+    bridge: false
+    description: Service Order / Service Notification
+    domain: ''
+    module: CS
+    primary_key: []
+  BKPF:
+    bridge: true
+    description: Accounting Document Header
+    domain: ''
+    module: FI
+    primary_key: []
+  BSAD:
+    bridge: false
+    description: 'Accounting: Secondary Index for Customers (Cleared Items)'
+    domain: ''
+    module: FI
+    primary_key: []
+  BSAK:
+    bridge: false
+    description: 'Accounting: Secondary Index for Vendors (Cleared Items)'
+    domain: ''
+    module: FI
+    primary_key: []
+  BSAS:
+    bridge: false
+    description: 'Accounting: Secondary Index for G/L Accounts (Cleared Items)'
+    domain: ''
+    module: FI
+    primary_key: []
+  BSEG:
+    bridge: true
+    description: Accounting Document Segment (Line Items)
+    domain: ''
+    module: FI
+    primary_key: []
+  BSID:
+    bridge: false
+    description: 'Accounting: Secondary Index for Customers (Open Items)'
+    domain: ''
+    module: FI
+    primary_key: []
+  BSIK:
+    bridge: false
+    description: 'Accounting: Secondary Index for Vendors (Open Items)'
+    domain: ''
+    module: FI
+    primary_key: []
+  BUT000:
+    bridge: true
+    description: 'Business Partner: General Data I (Central BP Master)'
+    domain: ''
+    module: BP
+    primary_key: []
+  BUT020:
+    bridge: false
+    description: 'Business Partner: Address Management'
+    domain: ''
+    module: BP
+    primary_key: []
+  BUT050:
+    bridge: false
+    description: 'Business Partner: Customer/Vendor Link (Role Relationships)'
+    domain: ''
+    module: BP
+    primary_key: []
+  CABN:
+    bridge: false
+    description: 'Configuration: Characteristic (Feature) Master'
+    domain: ''
+    module: LO-VC
+    primary_key: []
+  COEP:
+    bridge: false
+    description: 'CO Object: Cost Line Items (Actual)'
+    domain: ''
+    module: CO
+    primary_key: []
+  COSP:
+    bridge: false
+    description: 'CO Object: Cost Totals (Actual)'
+    domain: ''
+    module: CO
+    primary_key: []
+  COSS:
+    bridge: false
+    description: 'CO Object: Cost Totals (Plan)'
+    domain: ''
+    module: CO
+    primary_key: []
+  COVP:
+    bridge: false
+    description: 'CO Object: Cost Line Items (Plan)'
+    domain: ''
+    module: CO
+    primary_key: []
+  CSKS:
+    bridge: false
+    description: Cost Center Master
+    domain: ''
+    module: CO
+    primary_key: []
+  CSSL:
+    bridge: false
+    description: Cost Center Group / Cost Element
+    domain: ''
+    module: CO
+    primary_key: []
+  CUOBJ:
+    bridge: false
+    description: 'Configuration: Configuration (Internal Object Key)'
+    domain: ''
+    module: LO-VC
+    primary_key: []
+  DRAD:
+    bridge: false
+    description: Document-Item Assignment (GOS attachments)
+    domain: ''
+    module: CS
+    primary_key: []
+  EANL:
+    bridge: false
+    description: 'Utilities: Equipment Master (Installation Point)'
+    domain: ''
+    module: IS-UTILITY
+    primary_key: []
+  EBAN:
+    bridge: false
+    description: Purchase Requisition
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EGERR:
+    bridge: false
+    description: 'Utilities: Device Register / Error Register'
+    domain: ''
+    module: IS-UTILITY
+    primary_key: []
+  EINA:
+    bridge: true
+    description: 'Purchasing Info Record: General Data'
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EINE:
+    bridge: false
+    description: 'Purchasing Info Record: Purchasing Organization Data'
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EKBE:
+    bridge: false
+    description: Purchasing Document History
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EKES:
+    bridge: false
+    description: Vendor Confirmations (Scheduling Agreements)
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EKKN:
+    bridge: false
+    description: Account Assignment (Purchasing Document)
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EKKO:
+    bridge: true
+    description: Purchasing Document Header
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EKPO:
+    bridge: false
+    description: Purchasing Document Item
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EORD:
+    bridge: true
+    description: Source List (Vendor-Material-Plant)
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  EQUI:
+    bridge: true
+    description: Equipment Master Data
+    domain: ''
+    module: PM
+    primary_key: []
+  EVBS:
+    bridge: false
+    description: 'Utilities: Device Installation (Field Service)'
+    domain: ''
+    module: IS-UTILITY
+    primary_key: []
+  IFLO:
+    bridge: false
+    description: Functional Location Master
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  IFLOT:
+    bridge: false
+    description: Fleet / Technical Object Master
+    domain: ''
+    module: PM
+    primary_key: []
+  IHK6:
+    bridge: false
+    description: Equipment Master Record (Functional Location/Tech Obj)
+    domain: ''
+    module: PM
+    primary_key: []
+  IHPA:
+    bridge: false
+    description: Business Partner Relationships (for Service)
+    domain: ''
+    module: CS
+    primary_key: []
+  ILOA:
+    bridge: false
+    description: Technical Object Location / Address Assignment
+    domain: ''
+    module: PM
+    primary_key: []
+  INOB:
+    bridge: false
+    description: 'Allocation: Material to Configuration (Long Text)'
+    domain: ''
+    module: LO-VC
+    primary_key: []
+  J_1BBRANCH:
+    bridge: false
+    description: 'India: Branch/Plant Registration for GST'
+    domain: ''
+    module: TAX
+    primary_key: []
+  J_1BTBCD:
+    bridge: false
+    description: 'India: Branch Codes for GST'
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  J_1IG_HSN_SAC:
+    bridge: false
+    description: 'India: HSN Codes for Materials / SAC Codes for Services'
+    domain: ''
+    module: TAX
+    primary_key: []
+  KLAH:
+    bridge: false
+    description: 'Configuration: Class Master (Product Class)'
+    domain: ''
+    module: LO-VC
+    primary_key: []
+  KNA1:
+    bridge: true
+    description: Customer Master (General Data)
+    domain: ''
+    module: SD
+    primary_key: []
+  KNB1:
+    bridge: false
+    description: Customer Master (Company Code Data)
+    domain: ''
+    module: FI
+    primary_key: []
+  KNBK:
+    bridge: false
+    description: Customer Master (Bank Details)
+    domain: ''
+    module: SD
+    primary_key: []
+  KNVK:
+    bridge: false
+    description: Customer Master Contact Relationships
+    domain: ''
+    module: SD
+    primary_key: []
+  KNVV:
+    bridge: false
+    description: Customer Master (Sales Area Data)
+    domain: ''
+    module: SD
+    primary_key: []
+  KONV:
+    bridge: false
+    description: Pricing Conditions (Communication)
+    domain: ''
+    module: SD
+    primary_key: []
+  LAGP:
+    bridge: false
+    description: Storage Type (Warehouse Management)
+    domain: ''
+    module: WM
+    primary_key: []
+  LDCP:
+    bridge: false
+    description: Storage Bin (Warehouse Management)
+    domain: ''
+    module: WM
+    primary_key: []
+  LEU4:
+    bridge: false
+    description: Transfer Order Header
+    domain: ''
+    module: WM
+    primary_key: []
+  LFA1:
+    bridge: true
+    description: Vendor Master (General Section)
+    domain: ''
+    module: BP
+    primary_key: []
+  LFASS:
+    bridge: false
+    description: Vendor Evaluation Grades
+    domain: ''
+    module: MM
+    primary_key: []
+  LFB1:
+    bridge: false
+    description: Vendor Master (Company Code Data)
+    domain: ''
+    module: FI
+    primary_key: []
+  LFBK:
+    bridge: false
+    description: Vendor Master (Bank Details)
+    domain: ''
+    module: BP
+    primary_key: []
+  LFC1:
+    bridge: false
+    description: Vendor Master (One-Time Vendor)
+    domain: ''
+    module: FI
+    primary_key: []
+  LFbw:
+    bridge: false
+    description: Vendor Evaluation Grades (Material/Plant)
+    domain: ''
+    module: MM
+    primary_key: []
+  LIKP:
+    bridge: false
+    description: Delivery Document Header
+    domain: ''
+    module: SD
+    primary_key: []
+  LIPS:
+    bridge: false
+    description: Delivery Document Item
+    domain: ''
+    module: SD
+    primary_key: []
+  LQUA:
+    bridge: true
+    description: "Quant (WM) \u2014 Physical Stock Record"
+    domain: ''
+    module: WM
+    primary_key: []
+  LTAK:
+    bridge: false
+    description: Transfer Order Header (All Items)
+    domain: ''
+    module: WM
+    primary_key: []
+  LTBP:
+    bridge: false
+    description: Transfer Order Item (Batch-managed)
+    domain: ''
+    module: WM
+    primary_key: []
+  MAKT:
+    bridge: false
+    description: Material Descriptions
+    domain: ''
+    module: MM
+    primary_key: []
+  MARA:
+    bridge: true
+    description: General Material Data
+    domain: ''
+    module: MM
+    primary_key: []
+  MARC:
+    bridge: false
+    description: Plant Data for Material
+    domain: ''
+    module: MM
+    primary_key: []
+  MARD:
+    bridge: false
+    description: Storage Location Data for Material
+    domain: ''
+    module: MM
+    primary_key: []
+  MARM:
+    bridge: false
+    description: Unit of Measure Data for Material
+    domain: ''
+    module: MM
+    primary_key: []
+  MBEW:
+    bridge: false
+    description: Material Valuation
+    domain: ''
+    module: MM
+    primary_key: []
+  MCH1:
+    bridge: false
+    description: Batch Stock (Quantities)
+    domain: ''
+    module: MM
+    primary_key: []
+  MCHA:
+    bridge: false
+    description: Batch Master Record
+    domain: ''
+    module: MM
+    primary_key: []
+  MKOL:
+    bridge: false
+    description: Special Stock (Project-owned)
+    domain: ''
+    module: MM
+    primary_key: []
+  MLGN:
+    bridge: false
+    description: Material Data for Each Storage Location (WM)
+    domain: ''
+    module: MM
+    primary_key: []
+  MLGT:
+    bridge: false
+    description: Material Data for Each Storage Type (WM)
+    domain: ''
+    module: MM
+    primary_key: []
+  MSKA:
+    bridge: false
+    description: Sales Order Stock
+    domain: ''
+    module: MM
+    primary_key: []
+  MSLB:
+    bridge: false
+    description: Special Stock (Vendor-owned)
+    domain: ''
+    module: MM
+    primary_key: []
+  MSSL:
+    bridge: false
+    description: Special Stock (Stock-funded)
+    domain: ''
+    module: MM
+    primary_key: []
+  MVKE:
+    bridge: false
+    description: Sales Data for Material
+    domain: ''
+    module: MM
+    primary_key: []
+  NBEW:
+    bridge: false
+    description: 'Healthcare: Care Beneficiary (Insurance/Billing)'
+    domain: ''
+    module: IS-HEALTH
+    primary_key: []
+  NPAT:
+    bridge: false
+    description: 'Healthcare: Patient Master / Coverage'
+    domain: ''
+    module: IS-HEALTH
+    primary_key: []
+  NPNZ:
+    bridge: false
+    description: 'Healthcare: Care Plan / Care Activity Records'
+    domain: ''
+    module: IS-HEALTH
+    primary_key: []
+  OIB_A04:
+    bridge: false
+    description: 'Oil & Gas: Tank Farm / Storage Location Data'
+    domain: ''
+    module: IS-OIL
+    primary_key: []
+  OIG_V:
+    bridge: false
+    description: 'Oil & Gas: Volume / Measurement Data'
+    domain: ''
+    module: IS-OIL
+    primary_key: []
+  PA0001:
+    bridge: false
+    description: 'HR Master Record: Organization Assignment'
+    domain: ''
+    module: HR
+    primary_key: []
+  PA0002:
+    bridge: false
+    description: 'HR Master Record: Personal Data'
+    domain: ''
+    module: HR
+    primary_key: []
+  PA0008:
+    bridge: false
+    description: 'HR Master Record: Pay / Wage Type'
+    domain: ''
+    module: HR
+    primary_key: []
+  PA0021:
+    bridge: false
+    description: 'HR Master Record: Family Member/Dependents'
+    domain: ''
+    module: HR
+    primary_key: []
+  PCFC:
+    bridge: false
+    description: Profit Center Planning
+    domain: ''
+    module: CO
+    primary_key: []
+  PLKO:
+    bridge: false
+    description: Task List Header (QM/PP)
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  PROJ:
+    bridge: false
+    description: Project Definition
+    domain: ''
+    module: PS
+    primary_key: []
+  PRPS:
+    bridge: true
+    description: Work Breakdown Structure (WBS) Element
+    domain: ''
+    module: PS
+    primary_key: []
+  QMEL:
+    bridge: false
+    description: Quality Notification
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  SETY:
+    bridge: false
+    description: 'Retail: Assortment Module / Range Planning'
+    domain: ''
+    module: IS-RETAIL
+    primary_key: []
+  SKA1:
+    bridge: false
+    description: G/L Account Master (Chart of Accounts)
+    domain: ''
+    module: FI
+    primary_key: []
+  SKB1:
+    bridge: false
+    description: G/L Account Master (Company Code)
+    domain: ''
+    module: FI
+    primary_key: []
+  T001:
+    bridge: true
+    description: Company Codes
+    domain: ''
+    module: FI
+    primary_key: []
+  T001K:
+    bridge: false
+    description: Valuation Area (Company Code or Plant Level)
+    domain: ''
+    module: FI
+    primary_key: []
+  T001L:
+    bridge: false
+    description: Storage Locations
+    domain: ''
+    module: MM
+    primary_key: []
+  T001O:
+    bridge: false
+    description: Object Types for Classification
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  T001W:
+    bridge: true
+    description: Plants
+    domain: ''
+    module: MM
+    primary_key: []
+  T003:
+    bridge: false
+    description: Sales Document Types
+    domain: ''
+    module: SD
+    primary_key: []
+  T024:
+    bridge: true
+    description: Purchasing Organizations
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  T024E:
+    bridge: false
+    description: Purchasing Groups
+    domain: ''
+    module: MM-PUR
+    primary_key: []
+  T8JV:
+    bridge: false
+    description: 'Oil & Gas: Joint Venture Partner Codes'
+    domain: ''
+    module: IS-OIL
+    primary_key: []
+  TKA01:
+    bridge: false
+    description: Controlling Areas
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  TOA01:
+    bridge: false
+    description: Document Type Definitions (GOS)
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  TPAR:
+    bridge: false
+    description: Business Partner Relationship Types
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  TVAK:
+    bridge: false
+    description: Sales Document Types (Header)
+    domain: ''
+    module: SD
+    primary_key: []
+  TVCP:
+    bridge: false
+    description: Pricing Procedure (Header)
+    domain: ''
+    module: SD
+    primary_key: []
+  TVCPL:
+    bridge: false
+    description: Pricing Procedure (Line)
+    domain: ''
+    module: SD
+    primary_key: []
+  TVRO:
+    bridge: false
+    description: Transportation Route Definition
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  USR01:
+    bridge: false
+    description: User Master (Central User Administration)
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  VBAK:
+    bridge: true
+    description: Sales Document Header
+    domain: ''
+    module: SD
+    primary_key: []
+  VBAP:
+    bridge: false
+    description: Sales Document Item
+    domain: ''
+    module: SD
+    primary_key: []
+  VBEP:
+    bridge: false
+    description: 'Sales Document: Schedule Line'
+    domain: ''
+    module: SD
+    primary_key: []
+  VBFA:
+    bridge: false
+    description: Sales Document Flow (Document Chain)
+    domain: ''
+    module: SD
+    primary_key: []
+  VBRK:
+    bridge: false
+    description: Billing Document Header
+    domain: ''
+    module: SD
+    primary_key: []
+  VBRP:
+    bridge: false
+    description: Billing Document Item
+    domain: ''
+    module: SD
+    primary_key: []
+  VIBDT:
+    bridge: false
+    description: Real Estate Business Partner Link
+    domain: ''
+    module: RE
+    primary_key: []
+  VIMONI:
+    bridge: false
+    description: Real Estate Contract / Rent Index
+    domain: ''
+    module: RE
+    primary_key: []
+  VIQMEL:
+    bridge: false
+    description: QM Notification (PM)
+    domain: ''
+    module: UNKNOWN
+    primary_key: []
+  VTFA:
+    bridge: false
+    description: Transportation Order / Shipment Stage
+    domain: ''
+    module: TM
+    primary_key: []
+  VTLP:
+    bridge: false
+    description: Transportation Order / Shipment Leg
+    domain: ''
+    module: TM
+    primary_key: []
+  VTTK:
+    bridge: false
+    description: Transportation Order / Shipment Header
+    domain: ''
+    module: TM
+    primary_key: []
+  WRS1:
+    bridge: false
+    description: 'Retail: Replenishment Proposal / Buying Line'
+    domain: ''
+    module: IS-RETAIL
+    primary_key: []

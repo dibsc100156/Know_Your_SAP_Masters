@@ -92,9 +92,9 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy | 🆕 Apr 20 |
 | **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | ✅ **WIRED — Apr 20** |
 | **21** | **Formal Revision Loop** | `RevisionLoop` class with CoT trace + convergence detection | ✅ **WIRED — Apr 20** |
-| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | 🆕 Apr 20 |
-| **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | 🆕 Apr 20 |
-| **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | 🆕 Apr 20 |
+| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | ✅ **WIRED — Apr 20** |
+| **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | ✅ **WIRED — Apr 20** |
+| **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | ✅ **WIRED — Apr 20** |
 
 ---
 
@@ -289,8 +289,8 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 20 | 🟢 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | ✅ WIRED (Apr 20) |
 | 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | 🆕 Planned |
 | 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | 🆕 Planned |
-| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | 🆕 Planned |
-| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | 🆕 Planned |
+| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | ✅ WIRED — Apr 20 |
+| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | ✅ WIRED — Apr 20 |
 | 1 | 🔴 P0 | Real SAP HANA connection (`hdbcli`) — replace mock executor | M8 | 🚧 Pending |
 | 2 | 🔴 P0 | M7 Load Testing sign-off (p95 ≤ 300ms @ conc=10) | M7 | 🚧 Pending |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Done |

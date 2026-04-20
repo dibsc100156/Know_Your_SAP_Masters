@@ -1297,7 +1297,21 @@ class PlannerAgent:
         phase_start = time.time()
 
 
-        result = agent.run(
+        # [Phase 19] Agent-as-Tool override: use tool mode wrapper if active
+        if agent_tool_mode is not None:
+            _sess_id = getattr(auth_context, "session_id", None)
+            result = agent_tool_mode.wrap_agent_execution(
+                agent=agent,
+                query=decision.query,
+                auth_context=auth_context,
+                tables_hint=assignment.tables_hint,
+                verbose=verbose,
+                run_id=run_id,
+                sentinel_verdict=None,
+                session_id=_sess_id,
+            )
+        else:
+            result = agent.run(
 
 
             query=decision.query,
@@ -1867,6 +1881,9 @@ class PlannerAgent:
 
 
         run_id: Optional[str] = None,
+
+
+        agent_tool_mode = None,  # [Phase 19] Agent-as-Tool controller
 
 
     ) -> Dict[str, Any]:

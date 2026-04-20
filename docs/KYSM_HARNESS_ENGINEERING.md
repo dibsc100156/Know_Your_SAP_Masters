@@ -1,5 +1,5 @@
 # Know Your SAP Masters (KYSM) - Harness Engineering & Agentic AI
-## Session: April 16, 2026 | Status: LIVE (Updated April 16, 2026)
+## Session: April 20, 2026 | Status: LIVE (Updated April 20, 2026)
 
 ---
 
@@ -194,6 +194,13 @@ Infrastructure
 | **12b** | **Trajectory Log** (`HarnessRun.trajectory_log[]`) | ✅ **LIVE — Apr 15** |
 | **13** | **Inter-Agent Message Bus** (Redis pub/sub + streams) | ✅ **IMPLEMENTED — Apr 15** |
 | **13b** | **Negotiation Protocol** (4-phase, 6 strategies) | ✅ **IMPLEMENTED — Apr 15** |
+| **L5** | **Complexity Router** (`ComplexityRouter`, 4-tier: TRIVIAL/SIMPLE/COMPLEX/EXPERT) | ✅ **WIRED — Apr 20** |
+| **14** | **Voting Executor** (PATH_A/B/C: Graph RAG + SQL Pattern + Meta-Path, confidence boost) | ✅ **LIVE — Apr 19** |
+| **20** | **Resource-Aware Cost Router** (latency budgets, LRU decision cache, adaptive bypass) | ✅ **WIRED — Apr 20** |
+| **21** | **Formal Revision Loop** (8 RevisionPhase states, CoT trace, convergence detection) | ✅ **WIRED — Apr 20** |
+| **22** | **Dynamic Query Prioritization** (urgency × role_authority × SLA × recency scoring) | ✅ **WIRED — Apr 20** |
+| **23** | **Safety Guardrails** (8 engines: SQL injection, PII leak, cross-module, etc.) | ✅ **WIRED — Apr 20** |
+| **24** | **Episodic Memory** (Redis-backed session scratchpad: history, context, dedup) | ✅ **WIRED — Apr 20** |
 
 ---
 
@@ -770,6 +777,185 @@ This video is the **defining theoretical foundation** for what we've been buildi
 
 **Medium term:**
 - [x] **Meta-Harness Loop Built (Phase 11):** An automated `meta_harness_propose` tool runs via cron every 12 hours. It reads failed execution traces from Redis, diagnoses failure patterns using an LLM, outputs YAML recommendations for human review, and autonomously inserts patches (like new `HEALING_RULES` or `meta_paths`) into the codebase once approved.
+
+---
+
+
+
+---
+
+## Phase L5 — Complexity Router
+**Commit:** `d06a119` | **Status:** WIRED — April 20, 2026
+
+**New File:** `backend/app/core/complexity_router.py`
+
+Routes each incoming query to one of four complexity tiers before orchestrator execution:
+
+| Tier | Indicators | Routing |
+|------|-----------|---------|
+| TRIVIAL | Keywords: "vendor payment terms", "material description" | Early return, bypass full pipeline |
+| SIMPLE | Single table, no joins, no temporal | Fast path (Schema RAG only) |
+| COMPLEX | Multi-table, cross-domain | Full 5-pillar pipeline |
+| EXPERT | Graph traversal, temporal, fiscal year | Expert path (Graph RAG + Meta-Path + Temporal) |
+
+**Key features:**
+- `routing.should_skip(step_name)` — per-step bypass guards avoid unnecessary work
+- `routing_tier` + `routing_score` returned in orchestrator response
+- TRIVIAL bypass returns early with 0.95 confidence
+
+---
+
+## Phase 14 — Voting Executor
+**Commit:** `c4d087e` | **Status:** LIVE — April 19, 2026
+
+Three parallel execution paths vote on the correct SQL:
+
+| Path | Signal | Description |
+|------|--------|-------------|
+| PATH_A | Graph RAG | Table discovery via `find_path()` |
+| PATH_B | SQL Pattern RAG | Proven SQL via `SQLRAGStore.search()` |
+| PATH_C | Meta-Path | Pre-assembled SQL template via `meta_path_library.match()` |
+
+**Winner selection:** Highest confidence wins; composite confidence boosted by `voting_boost = 0.10` when PATH_B fires.
+
+**Files:** `backend/app/core/voting_executor.py`
+
+---
+
+## Phase 20 — Resource-Aware Cost Router
+**Commit:** `d06a119` | **Status:** WIRED — April 20, 2026
+
+Wraps `ComplexityRouter` with per-tier latency budgets and adaptive bypass:
+
+| Tier | Latency Budget | Behavior |
+|------|---------------|---------|
+| TRIVIAL | 5ms | Immediate bypass |
+| SIMPLE | 15ms | Fast path |
+| COMPLEX | 50ms | Full pipeline |
+| EXPERT | ∞ (unlimited) | Expert mode |
+
+**Adaptive bypass:** If routing overhead exceeds budget → use pre-computed `DEFAULT_DECISIONS` (LRU cache, 60s TTL).
+
+**File:** `backend/app/core/router_cost_tracker.py`
+
+---
+
+## Phase 21 — Formal Revision Loop
+**Commit:** `d06a119` | **Status:** WIRED — April 20, 2026
+
+State machine that iteratively revises SQL until confidence ≥ 0.85 or result stabilizes.
+
+**8 RevisionPhase states:**
+`SCHEMA_DISCOVERY → PATTERN_MATCH → SQL_ASSEMBLY → DRY_RUN → CRITIQUE → REVISION → FINAL_VALIDATION → COMPLETE`
+
+**Key features:**
+- Chain-of-Thought (CoT) trace at each phase transition
+- Convergence detection: exits when confidence ≥ 0.85 or stable for 2 iterations
+- Phase 6b integration: healed SQL → Qdrant auto-vectorization
+- `formal_trace` returned in orchestrator response
+
+**File:** `backend/app/core/formal_revision_loop.py`
+
+---
+
+## Phase 22 — Dynamic Query Prioritization
+**Commit:** `9b6c38b` | **Status:** WIRED — April 20, 2026
+
+Celery queue priority scoring for SLA-driven query routing.
+
+**Formula:**
+```
+priority_score = urgency × role_authority × complexity × SLA × recency × critical_boost
+```
+
+**Urgency levels:** critical(1.0) · high(0.8) · normal(0.5) · low(0.2)
+
+**Role tiers:** CFO_GLOBAL(3.0) · COO(2.5) · PROCUREMENT_MANAGER_EU(1.6) · AP_CLERK(1.0) · GUEST(0.5)
+
+**Queue routing:**
+- `is_critical=True` OR `score ≥ 8.0` → `"priority"` queue (fast lane)
+- `score ≥ 5.0` → `"agent"` queue with Celery priority N
+- otherwise → `"agent"` queue (default priority 0)
+
+**Files:**
+- `backend/app/core/query_priority_scorer.py` (18KB) — `QueryPriorityScorer`, `compute_priority()`
+- `backend/app/api/endpoints/chat_async.py` — wired into task submission
+- `backend/app/workers/orchestrator_tasks.py` — `urgency` param recorded in result
+
+**Smoke tests:** 9/9 PASS
+
+---
+
+## Phase 23 — Safety Guardrails (Standalone Layer)
+**Commit:** `fd2c71c` | **Status:** WIRED — April 20, 2026
+
+**New File:** `backend/app/core/safety_guardrails.py` (52KB)
+
+Decoupled from orchestrator — usable by any agent, API, or worker. Backward-compatible with existing `SecuritySentinel` via `LegacySentinelAdapter`.
+
+**8 Detection Engines:**
+
+| Engine | Threat | Severity |
+|--------|--------|----------|
+| `SQLInjectionEngine` | DROP/DELETE/TRUNCATE/UNION/tautology | CRITICAL |
+| `CrossModuleEscalationEngine` | Tables outside role scope | HIGH |
+| `SchemaEnumerationEngine` | Bulk table discovery probes | MEDIUM-HIGH |
+| `DeniedTableProbeEngine` | Repeated denied table access → lockout | HIGH |
+| `DataExfiltrationEngine` | Result sets > threshold | MEDIUM-HIGH |
+| `TemporalInferenceEngine` | Historical period by restricted roles | MEDIUM |
+| `RoleImpersonationEngine` | Mid-session domain switching | HIGH |
+| `OutputPIILeakEngine` | PII table access without clearance | HIGH |
+
+**Modes:**
+- `DISABLED` — Pass through, no monitoring
+- `AUDIT` — Monitor and log, never block (BLOCK → WARN)
+- `ENFORCING` — Monitor, warn, and tighten AuthContext
+
+**API:**
+```python
+from app.core.safety_guardrails import guard, get_sentinel
+verdict = guard(query, role_id, session_id, tables_accessed=[...])
+sentinel = get_sentinel()  # backward-compatible adapter
+```
+
+**Smoke tests:** 79/79 PASS
+
+---
+
+## Phase 24 — Episodic Memory (Session Scratchpad)
+**Commit:** `7db7b4b` | **Status:** WIRED — April 20, 2026
+
+**New File:** `backend/app/core/episodic_memory.py` (35KB)
+
+Redis-backed persistent session memory with in-memory fallback.
+
+**Redis key schema** (`kysm:episodic:`):
+```
+session:{sid}:queries     — Query history (sliding window, 50 records)
+session:{sid}:context     — Conversation turns (sliding window, 10 turns)
+session:{sid}:scratchpad  — Agent key-value scratchpad
+session:{sid}:meta        — Session metadata (role, tags, turn_count)
+dedup:{sid}:{sig}        — Query deduplication (TTL=10min)
+```
+
+**TTL defaults:** Session=8h | Scratchpad=4h | Dedup=10min
+
+**Core API:**
+```python
+from app.core.episodic_memory import record_query, get_context, get_memory_store
+
+store = get_memory_store()
+store.record_query(session_id="user123", query="show vendors",
+    tables_used=["LFA1"], confidence=0.92)
+
+ctx = store.get_context_snippet(session_id="user123", max_turns=6)
+store.set_scratchpad(session_id="user123", key="last_domain", value="vendor_master")
+is_dup, sig = store.check_dedup(session_id="user123", query="show vendors")
+```
+
+**Fire-and-forget:** All operations are non-blocking — Redis failures never block the request path.
+
+**Smoke tests:** 89/89 PASS
 
 ---
 

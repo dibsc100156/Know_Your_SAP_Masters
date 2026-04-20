@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.endpoints import chat, chat_async, governance, eval
+from app.api.endpoints import chat, chat_async, governance, eval, ciba
 
 api_router = APIRouter()
 # Sync endpoint — original, for backward compatibility and low-latency cases
@@ -10,3 +10,5 @@ api_router.include_router(chat_async.router, tags=["Chat:Async"])
 api_router.include_router(governance.router, tags=["Governance"])
 # Eval Alerting
 api_router.include_router(eval.router, tags=["Evaluation"])
+# CIBA Approval — async approve/deny for sentinel-blocked queries (Phase 15)
+api_router.include_router(ciba.router, tags=["CIBA Approval"])
