@@ -1173,6 +1173,55 @@ class Tool:
     pillars: List[str]  # Which pillars this tool belongs to
 
 
+
+# ── Priority 8: SAP Notes / OSS Knowledge Graph Tool ──────────────────────────
+
+def search_sap_notes(query: str, error_code: str = None, **kwargs) -> ToolResult:
+    """
+    Query the SAP Notes / OSS Knowledge Graph for solutions to errors.
+    """
+    try:
+        from app.core.sap_notes_kg import get_sap_notes_kg
+        kg = get_sap_notes_kg()
+        
+        if error_code:
+            # Exact match by error code
+            results = kg.search_by_error(error_code)
+        else:
+            # We would normally do vector/fuzzy search on symptom
+            results = kg.search_by_error(query)
+            
+        if not results or not results[0].get("error"):
+            return ToolResult(
+                status=ToolStatus.ERROR,
+                message=f"No SAP Notes found for error: {
+
+    "search_sap_notes": Tool(
+        name="search_sap_notes",
+        description="Search SAP Notes and OSS messages knowledge graph for error codes, symptoms, and solutions.",
+        parameters={
+            "query": "General symptom or keywords",
+            "error_code": "(Optional) Exact SAP error code like 'RAISE 033'"
+        },
+        func=search_sap_notes
+    ),
+error_code or query}",
+                metadata={"query": query, "error_code": error_code}
+            )
+            
+        return ToolResult(
+            status=ToolStatus.SUCCESS,
+            data={"sap_notes": results},
+            message=f"Found {len(results)} related SAP Notes.",
+            metadata={"query": query}
+        )
+    except Exception as e:
+        return ToolResult(
+            status=ToolStatus.ERROR,
+            message=f"SAP Notes KG search failed: {e}"
+        )
+
+
 TOOL_REGISTRY: Dict[str, Tool] = {
     "schema_lookup": Tool(
         name="schema_lookup",
