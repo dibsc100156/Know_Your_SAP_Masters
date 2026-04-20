@@ -690,8 +690,33 @@ def run_agent_loop(
 
     session_id = auth_context.role_id + "_" + str(hash(query) % 100000)  # simplified session key
 
-    
 
+    # [Phase 24] Episodic Memory — load prior context + dedup check
+    from app.core.episodic_memory import get_memory_store
+    mem = get_memory_store()
+
+    # Deduplicate near-identical queries within this session
+    is_dup, dedup_sig = mem.check_dedup(session_id, query)
+    if is_dup:
+        logger.info(f"[Episodic] Duplicate query detected (sig={dedup_sig[:12]}...) — loading cached context")
+
+    # Load prior conversation context for multi-turn continuity
+    ctx_snippet = mem.get_context_snippet(session_id, max_turns=6)
+    prior_history = mem.get_history(session_id, limit=5)
+    prior_tables: List[str] = []
+    if prior_history:
+        for rec in prior_history:
+            prior_tables.extend(rec.get("tables_used", []) if isinstance(rec, dict) else [])
+    prior_tables = list(dict.fromkeys(prior_tables))  # dedup preserve order
+
+    # Build context string for schema/pattern lookup hints
+    # [Phase 24] episodic_context is built for potential future LLM prompt injection
+    episodic_context = ""
+    if prior_history:
+        episodic_context += f"[Prior queries in this session: {len(prior_history)}]  "
+        episodic_context += f"[Prior tables accessed: {prior_tables}]\n"
+    if ctx_snippet:
+        episodic_context += f"[Recent context]: {ctx_snippet}"
     # Run threat evaluation BEFORE query executes
 
     sentinel_verdict = sentinel.evaluate(
@@ -1437,11 +1462,25 @@ def run_agent_loop(
 
                     tables_involved = ["LFA1"]  # ultimate fallback
 
+                    # [Phase 24] Bias toward prior session tables when blind fallback triggered
+                    if prior_tables:
+                        logger.info(f"[Episodic] Overriding LFA1 fallback with prior session tables: {prior_tables[:3]}")
+                        tables_involved = [t for t in prior_tables[:3] if auth_context.is_table_allowed(t)]
+                        if not tables_involved:
+                            tables_involved = ["LFA1"]
+
             except Exception as e:
 
                 logger.info(f"    [DDIC] Auto-discovery failed: {e}")
 
                 tables_involved = ["LFA1"]
+                # [Phase 24] Bias toward prior session tables when blind fallback triggered
+                if prior_tables:
+                    logger.info(f"[Episodic] Overriding LFA1 fallback with prior session tables: {prior_tables[:3]}")
+                    tables_involved = [t for t in prior_tables[:3] if auth_context.is_table_allowed(t)]
+                    if not tables_involved:
+                        tables_involved = ["LFA1"]
+
 
 
 
@@ -1610,11 +1649,8 @@ def run_agent_loop(
             temporal_result = call_tool("temporal_graph_search", {
 
                 "query": query,
-
-                "start_table": tables_involved[0],
-
-                "end_table": tables_involved[-1],
-
+                "start_table": tables_involved[0] if tables_involved else "LFA1",
+                "end_table": tables_involved[-1] if tables_involved else "LFA1",
             })
 
             trace("temporal_graph_search", temporal_result)
@@ -2994,6 +3030,23 @@ def run_agent_loop(
 
 
 
+    # [Phase 24] Enriched answer header from episodic session history
+    episodic_header = ""
+    if prior_history:
+        n_turns = len(prior_history)
+        prev_tables = list(dict.fromkeys(
+            t for rec in prior_history
+            for t in (rec.tables_used if hasattr(rec, "tables_used") else [])
+        ))
+        tables_part = (
+            f", I've also checked: {', '.join(prev_tables[:4])}"
+            if prev_tables else ""
+        )
+        episodic_header = (
+            f" Based on {n_turns} prior query/turn(s) in this session"
+            f"{tables_part}."
+        )
+
     if not data_records:
 
         final_answer = (
@@ -3004,6 +3057,7 @@ def run_agent_loop(
 
             f"Tables searched: {', '.join(tables_involved)}."
 
+            f"{episodic_header}"
         )
 
     else:
@@ -3016,6 +3070,7 @@ def run_agent_loop(
 
             f"Showing authorized data only."
 
+            f"{episodic_header}"
         )
 
         if masked_fields:
@@ -3419,6 +3474,28 @@ def run_agent_loop(
 
         result_dict["trajectory_log"] = []
 
+
+    # [Phase 24] Inject episodic session context into result_dict
+    result_dict["episodic_context"] = episodic_context
+    result_dict["prior_turns"] = len(prior_history)
+    result_dict["prior_tables"] = prior_tables
+
+    # [Phase 24] Episodic Memory — record this query after execution
+    try:
+        mem.record_query(
+            session_id=session_id,
+            query=query,
+            tables_used=tables_involved,
+            sql_generated=generated_sql if "generated_sql" in dir() else None,
+            domain=domain,
+            role_id=auth_context.role_id,
+            confidence=round(
+                result_dict.get("confidence_score", {}).get("composite", 0.0)
+                if isinstance(result_dict.get("confidence_score"), dict) else 0.0, 3),
+            answer=result_dict.get("answer", "")[:500] if result_dict.get("answer") else "",
+        )
+    except Exception:
+        pass  # fire-and-forget — never block on episodic memory
     return result_dict
 
 
