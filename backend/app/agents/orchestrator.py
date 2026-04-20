@@ -531,6 +531,45 @@ def run_agent_loop(
         provenance = GraphProvenanceRecorder()
         provenance.start_query(query, routing.tier.value)
 
+    ciba_warn_message = ""
+    # [Priority 5] CIBA Tier Configuration
+    ciba_policy = {
+        "TRIVIAL": "none",            
+        "SIMPLE": "warn",             
+        "COMPLEX": "if_sentinel",     
+        "EXPERT": "always"            
+    }.get(routing.tier.value if routing else "COMPLEX", "if_sentinel")
+
+    if ciba_policy == "always":
+        from app.core.ciba_approval_store import get_ciba_store
+        ciba = get_ciba_store()
+        session_id = auth_context.role_id + "_" + str(hash(query) % 100000)
+        
+        if ciba.is_query_approved(session_id, query):
+            logger.info("[CIBA] EXPERT Query previously approved—proceeding.")
+        elif ciba.is_query_denied(session_id, query):
+            logger.warning("[!!] EXPERT Query previously denied by CIBA—hard rejection.")
+            return {
+                "answer": "Your query was denied by a security approver and cannot be re-submitted for another 30 minutes.",
+                "tables_used": [], "executed_sql": None, "masked_fields": [], "data": [], "tool_trace": [],
+                "status": "ciba_denied", "ciba_request_id": None, "confidence_score": None,
+            }
+        else:
+            ciba_req = ciba.create_approval_request(
+                session_id=session_id,
+                user_id=(auth_context.user_id if hasattr(auth_context, "user_id") else f"user:{auth_context.role_id.lower()}"),
+                role_id=auth_context.role_id,
+                query=query,
+                generated_sql="[EXPERT Swarm Deferred Execution]",
+                tables_requested=[]
+            )
+            logger.warning(f"[!!] CIBA hard block—EXPERT tier requires approval. Request {ciba_req.request_id} created.")
+            return {
+                "answer": f"Your query has been routed to the EXPERT tier and requires supervisor approval before execution.\n\nYour request ID: {ciba_req.request_id}\nUse the CIBA /pending endpoint or your approval inbox to review and act on this request.",
+                "tables_used": [], "executed_sql": None, "masked_fields": [], "data": [], "tool_trace": [],
+                "status": "ciba_pending", "ciba_request_id": ciba_req.request_id, "confidence_score": None,
+            }
+
     # ============================================================================
     # [Phase 6] SWARM GATE - Delegate to Multi-Agent Domain Swarm if enabled
     # ============================================================================
@@ -698,8 +737,15 @@ def run_agent_loop(
 
             # [Phase 15 CIBA] Handle hard block with async approval flow
             if sentinel_verdict.recommended_action == "block":
-                from app.core.ciba_approval_store import get_ciba_store
-                ciba = get_ciba_store()
+                # [Priority 5] Override block based on Tier
+                if ciba_policy == "none":
+                    logger.info("[CIBA] TRIVIAL tier policy overrides Sentinel block -> proceed.")
+                elif ciba_policy == "warn":
+                    logger.warning("[CIBA] SIMPLE tier policy overrides Sentinel block -> warn only.")
+                    ciba_warn_message = f"\n\n[Warning] The Security Sentinel flagged this query ({sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else 'threat'}), but it proceeded under the SIMPLE tier policy."
+                else:
+                    from app.core.ciba_approval_store import get_ciba_store
+                    ciba = get_ciba_store()
 
                 # Check if query was previously approved or denied in this session
                 if ciba.is_query_approved(session_id, query):
@@ -3061,6 +3107,7 @@ def run_agent_loop(
         if masked_fields:
 
             final_answer += f" Some fields masked per your role ({auth_context.role_id})."
+        final_answer += ciba_warn_message
 
 
 

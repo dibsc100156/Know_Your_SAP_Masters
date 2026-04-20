@@ -1194,18 +1194,7 @@ def search_sap_notes(query: str, error_code: str = None, **kwargs) -> ToolResult
         if not results or not results[0].get("error"):
             return ToolResult(
                 status=ToolStatus.ERROR,
-                message=f"No SAP Notes found for error: {
-
-    "search_sap_notes": Tool(
-        name="search_sap_notes",
-        description="Search SAP Notes and OSS messages knowledge graph for error codes, symptoms, and solutions.",
-        parameters={
-            "query": "General symptom or keywords",
-            "error_code": "(Optional) Exact SAP error code like 'RAISE 033'"
-        },
-        func=search_sap_notes
-    ),
-error_code or query}",
+                message=f"No SAP Notes found for error: {error_code or query}",
                 metadata={"query": query, "error_code": error_code}
             )
             
@@ -1223,6 +1212,16 @@ error_code or query}",
 
 
 TOOL_REGISTRY: Dict[str, Tool] = {
+    "search_sap_notes": Tool(
+        name="search_sap_notes",
+        description="Search SAP Notes and OSS messages knowledge graph for error codes, symptoms, and solutions.",
+        input_schema={
+            "query": "General symptom or keywords",
+            "error_code": "(Optional) Exact SAP error code like 'RAISE 033'"
+        },
+        execute=search_sap_notes,
+        pillars=["SAP_Notes_KG"]
+    ),
     "schema_lookup": Tool(
         name="schema_lookup",
         description="[Pillar 3] Schema RAG. Find SAP tables matching a natural language query. "
