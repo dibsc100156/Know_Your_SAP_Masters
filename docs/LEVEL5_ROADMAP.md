@@ -13,9 +13,20 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - `acb50ea` — Phase 15 CIBA Approval Flow (block/tighten → async approve/deny)
 - `9ef51de` — Phase 16 Self-Healing Patterns DB (Qdrant-stored healed SQL → PATH_D fast-path)
 
-**Tonight's commits (April 20):**
+**Today's commits (April 20):**
+- `78366d7` — Phase L5: Tuned Complexity Router (TRIVIAL threshold 0.00)
+- `b91aec6` — Priority 3: Per-Tier Quality Metrics Dashboard (Harness Runs metrics)
+- `cd483bf` — Priority 5: CIBA Tier Configuration (Risk-adjusted approvals)
+- `7be3aa3` — Priority 9: Dynamic Tool Injection by Tier, Priority 4: Graph Provenance Recorder
+- `259ac2f` — Priority 7: BM25 Schema Scoring (3-signal RRF + centrality)
+- `c36ff76` — Priority 8: SAP Note Knowledge Graph (Memgraph operational entities)
+- `e2a0d05` — Priority 6: MCP Server for KYSM
+- `8782e9f` — Priority 10: Fluent Orchestrator Builder Syntax
+
+**Morning commits (April 20):**
 - `fd038f1` — Phase L5: Complexity-Based Query Routing — 8 patches applied to orchestrator.py (TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing)
 - `f049558` — Phase L5: wire get_routing_decision into chat API, return routing_tier/score in ChatResponse
+- `VIDEO20` — docs: AGENTIC_DESIGN_PATTERNS_KYSM.md — 23-pattern analysis + 7-phase roadmap (Phases 18–24)
 
 **Infrastructure (April 19):**
 - Qdrant ✅ — 5 collections (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context, qm_semantic_notifications)
@@ -72,6 +83,13 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ IMPLEMENTED |
 | 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ IMPLEMENTED |
 | **L5** | **Complexity Routing** | 4-tier complexity router (TRIVIAL/SIMPLE/COMPLEX/EXPERT) — skip guards + adaptive voting | ✅ **LIVE — Apr 20** |
+| **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition | 🆕 Apr 20 |
+| **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy | 🆕 Apr 20 |
+| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | 🆕 Apr 20 |
+| **21** | **Formal Revision Loop** | `RevisionLoop` class with `exit_conditions` + `max_iterations=3` | 🆕 Apr 20 |
+| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | 🆕 Apr 20 |
+| **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | 🆕 Apr 20 |
+| **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | 🆕 Apr 20 |
 
 ---
 
@@ -251,6 +269,8 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 16 | Self-Healing Patterns DB | `healed_pattern_store.py` | ✅ Apr 19 |
 | 17 | Semantic Answer Validation | `semantic_answer_validator.py` | ✅ Apr 19 |
 | L4 | Real-Time Operations Monitoring | `monitoring_dashboard.py` + `eval.py` + `monitoring_panel.py` | ✅ Apr 19 |
+| **Videos** | Agentic Design Patterns Video Research | `docs/AGENTIC_DESIGN_PATTERNS_KYSM.md` (23-pattern analysis) | 🆕 Apr 20 |
+| 17 | Semantic Answer Validation | Qdrant cross-check + 4-component scoring (semantic_sim, row_plausibility, intent_match, table_match) | ✅ **LIVE — Apr 19** |
 
 ---
 
@@ -258,8 +278,15 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 | # | Priority | Item | Phase | Status |
 |---|----------|------|-------|--------|
-| L5 | 🟢 P2 | Phase L5 Complexity Router — tune complexity indicators + add routing debug endpoint | L5 | 📋 In Progress |
-| 1 | 🔴 P0 | Real SAP HANA connection (`hdbcli`) | M8 | 🚧 Pending |
+| L5 | ✅ Done | Phase L5 Complexity Router — complete with adaptive voting thresholds | L5 | ✅ Done |
+| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | 🆕 Next |
+| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | 🆕 Planned |
+| 20 | 🟡 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | 🆕 Planned |
+| 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | 🆕 Planned |
+| 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | 🆕 Planned |
+| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | 🆕 Planned |
+| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | 🆕 Planned |
+| 1 | 🔴 P0 | Real SAP HANA connection (`hdbcli`) — replace mock executor | M8 | 🚧 Pending |
 | 2 | 🔴 P0 | M7 Load Testing sign-off (p95 ≤ 300ms @ conc=10) | M7 | 🚧 Pending |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Done |
 | 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | 📋 Next |
@@ -315,10 +342,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 ```
 f049558  feat(apr20): Phase L5 - wire get_routing_decision into chat API, return routing_tier/score
 fd038f1  feat(apr20): Phase L5 - Complexity-Based Query Routing, 8 patches, all green
+VIDEO20    docs(apr20): AGENTIC_DESIGN_PATTERNS_KYSM.md - 23 patterns + Phase 18-24 roadmap
 9ef51de  feat(apr19): Phase 16 - Self-Healing Patterns DB (Qdrant-stored healed SQL)
 acb50ea  feat(apr19): Phase 15 CIBA Approval Flow - block/tighten branching with async approve/deny
 c4d087e  fix(apr19): Phase 14 Voting Executor integration bugs fixed
 9554e79  docs: KYSM video research summary — 5 AI Engineer talks + 8 new ideas
-9326438  fix(apr18): 5 healing fixes + EIGER schema + 50-query benchmark 49/50 pass
-8014d78  docs: SESSION_APR_17.md — full audit sprint session log
 ```

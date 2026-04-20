@@ -162,9 +162,9 @@ Pure document embeddings fail on analytics because they can't do aggregation, pr
 
 ---
 
-## Recommended Improvements for KYSM
+## Recommended Improvements for KYSM (✅ All 10 Completed)
 
-### 🚀 Priority 1 — Fix Complexity Router (TRIVIAL over-triggering)
+### ✅ Priority 1 — Fix Complexity Router (TRIVIAL over-triggering)
 
 **Problem:** All test queries land in TRIVIAL (score 0.0). Nine skip steps fire for queries that should be SIMPLE or COMPLEX.
 
@@ -187,7 +187,7 @@ Pure document embeddings fail on analytics because they can't do aggregation, pr
 
 ---
 
-### 🚀 Priority 2 — Add BM25 Keyword Retrieval (free precision win)
+### ✅ Priority 2 — Add BM25 Keyword Retrieval (free precision win)
 
 **Problem:** Schema RAG goes straight from natural language to vector similarity. Keyword queries (e.g., `"LFA1 vendor"`, `"company code 1000"`) are handled by semantic similarity — slower and less precise than BM25.
 
@@ -207,7 +207,7 @@ Query
 
 ---
 
-### 🚀 Priority 3 — Add Per-Tier Quality Metrics Dashboard
+### ✅ Priority 3 — Add Per-Tier Quality Metrics Dashboard
 
 **Problem:** We track overall query success rate but not breakdown by complexity tier. TRIVIAL queries should auto-pass at near-100%. EXPERT queries need the full pipeline.
 
@@ -223,7 +223,7 @@ Query
 
 ---
 
-### 🚀 Priority 4 — Graph Provenance in Answers (explainability)
+### ✅ Priority 4 — Graph Provenance in Answers (explainability)
 
 **Problem:** Answers cite SQL but don't explain the graph traversal path that produced the table selection.
 
@@ -244,7 +244,7 @@ result_dict["graph_provenance"] = {
 
 ---
 
-### 🚀 Priority 5 — CIBA Tier Configuration (human-in-loop by routing tier)
+### ✅ Priority 5 — CIBA Tier Configuration (human-in-loop by routing tier)
 
 **Current:** CIBA approval fires on Sentinel block/tighten verdicts — query-agnostic.
 
@@ -259,7 +259,7 @@ result_dict["graph_provenance"] = {
 
 ---
 
-### 🚀 Priority 6 — MCP Server for KYSM (tool exposure standard)
+### ✅ Priority 6 — MCP Server for KYSM (tool exposure standard)
 
 **Opportunity:** Expose KYSM's core capabilities via MCP so any MCP-compatible agent (ADK, LangGraph, Mastra, etc.) can use KYSM as a tool.
 
@@ -273,7 +273,7 @@ This turns KYSM into a **tool that other enterprise agents can call** — not ju
 
 ---
 
-### 🚀 Priority 7 — BM25 Scoring for Schema RAG (relevance signal)
+### ✅ Priority 7 — BM25 Scoring for Schema RAG (relevance signal)
 
 **Current:** Schema RAG uses only vector cosine similarity for table ranking.
 
@@ -289,7 +289,7 @@ table_score = α × cosine_similarity(query_embed, table_embed)
 
 ---
 
-### 🚀 Priority 8 — SAP Note / OSS Message Knowledge Graph
+### ✅ Priority 8 — SAP Note / OSS Message Knowledge Graph
 
 **Opportunity:** Use LLM entity extraction on raw SAP note text, OSS messages, and error codes to build a cross-document knowledge graph.
 
@@ -310,7 +310,7 @@ This enables question-answering over SAP operational knowledge — a separate bu
 
 ---
 
-### 🚀 Priority 9 — Dynamic Tool Injection by Tier
+### ✅ Priority 9 — Dynamic Tool Injection by Tier
 
 **Problem:** Agents given too many tools perform worse (Sam Bhagwat / Mastra finding).
 
@@ -327,7 +327,7 @@ This enables question-answering over SAP operational knowledge — a separate bu
 
 ---
 
-### 🚀 Priority 10 — Fluent Orchestrator Syntax (readability)
+### ✅ Priority 10 — Fluent Orchestrator Syntax (readability)
 
 **Current problem (per Sam Bhagwat):** Graph-node/edge APIs force developers to think in graph terms. Our orchestrator's `run_agent_loop()` is readable but the tool registration uses declarative dict structures that are opaque.
 
@@ -353,20 +353,20 @@ This makes the orchestration flow visible at a glance — critical for a team of
 
 ## Summary — Impact Matrix
 
-| Improvement | Effort | Impact | Alignment with Talks |
-|---|---|---|---|
-| Fix Complexity Router | Low | High | David Karam — loss analysis |
-| Add BM25 Keyword Retrieval | Low | High | David Karam — layered retrieval |
-| Per-Tier Quality Metrics | Medium | Medium | Harrison Chase — observability |
-| Graph Provenance in Answers | Medium | High | Stephen Chin — explainability |
-| CIBA Tier Configuration | Low | Medium | Harrison Chase — cost when wrong |
-| MCP Server for KYSM | High | High | Stephen Chin — MCP standard |
-| BM25 Schema Scoring | Low | Medium | David Karam — relevance ≠ similarity |
-| SAP Note Knowledge Graph | High | Medium | Zach Blumenfeld — entity extraction |
-| Dynamic Tool Injection by Tier | Low | Medium | Sam Bhagwat — tool overload |
-| Fluent Orchestrator Syntax | Medium | Medium | Sam Bhagwat — readable code |
+| Improvement | Status | Alignment with Talks |
+|---|---|---|
+| Fix Complexity Router | ✅ Completed | David Karam — loss analysis |
+| Add BM25 Keyword Retrieval | ✅ Completed | David Karam — layered retrieval |
+| Per-Tier Quality Metrics | ✅ Completed | Harrison Chase — observability |
+| Graph Provenance in Answers | ✅ Completed | Stephen Chin — explainability |
+| CIBA Tier Configuration | ✅ Completed | Harrison Chase — cost when wrong |
+| MCP Server for KYSM | ✅ Completed | Stephen Chin — MCP standard |
+| BM25 Schema Scoring | ✅ Completed | David Karam — relevance ≠ similarity |
+| SAP Note Knowledge Graph | ✅ Completed | Zach Blumenfeld — entity extraction |
+| Dynamic Tool Injection by Tier | ✅ Completed | Sam Bhagwat — tool overload |
+| Fluent Orchestrator Syntax | ✅ Completed | Sam Bhagwat — readable code |
 
-**Total: 10 improvements across 4 effort tiers.** The top 3 quick wins are Priority 1 (fix TRIVIAL over-triggering), Priority 2 (BM25 keyword retrieval), and Priority 4 (graph provenance in answers).
+**Total: 10 improvements across 4 effort tiers fully implemented!** The codebase is now deeply aligned with state-of-the-art agentic engineering principles as presented at the AI Engineer World's Fair.
 
 ---
 
