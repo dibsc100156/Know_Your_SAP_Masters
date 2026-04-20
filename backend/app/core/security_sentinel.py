@@ -139,6 +139,34 @@ class SecuritySentinel:
             "EKKO", "EKPO", "EKET",                    # PO scheduling
             "MARA", "MARC", "MAPL",                     # Material + BOM + routing
         ],
+        # ============================================================
+        # BENCHMARK ROLES — added 2026-04-20
+        # ============================================================
+        "MM_CLERK": [
+            "MARA", "MARC", "MARD", "MAKT", "MARM",  # Material master + descriptions
+            "EINA", "EINE", "EORD",                    # Info records + source list
+            "EKKO", "EKPO", "EKET",                    # Purchasing docs
+            "MSKA", "MSLB", "MKOL", "MSSL",           # Special stock
+            "QALS", "QAVE", "QMFE",                     # QM inspection lots
+            "LQUA", "LAGP", "MLGT",                     # Warehouse management
+            "MBEW",                                       # Material valuation (limited)
+        ],
+        "SD_CLERK": [
+            "KNA1", "KNB1", "KNBK", "KNVV",          # Customer master + bank + sales
+            "KNVV", "MVKE",                             # Customer sales + product hierarchy
+            "VBAK", "VBAP", "VBEP",                    # Sales orders + lines + scheduling
+            "LIKP", "LIPS",                             # Deliveries + lines
+            "VBRK", "VBRP",                             # Billing docs + lines
+            "TVCP", "TVCPL",                            # Pricing conditions
+        ],
+        "FI_ACCOUNTANT": [
+            "BKPF", "BSEG",                            # Accounting documents + line items
+            "SKA1", "SKB1",                             # G/L account masters
+            "CSKB", "CSKS",                             # Cost element + cost center
+            "PCFC", "COVP",                            # Profit center + plan/actual
+            "ANLA", "ANLC",                             # Asset master + cost
+            "T001", "T003", "TBSL",                   # Chart of accounts, doc types, posting keys
+        ],
     }
 
     # Domain-level scope boundaries

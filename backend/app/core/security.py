@@ -104,7 +104,54 @@ SAP_ROLES: Dict[str, SAPAuthContext] = {
         masked_fields={
             "BUT000-BU_GROUP": "REDACTED" # Cannot see Vendor groupings
         }
-    )
+    ),
+    # ============================================================
+    # BENCHMARK ROLES — added 2026-04-20
+    # ============================================================
+    "MM_CLERK": SAPAuthContext(
+        role_id="MM_CLERK",
+        description="Materials Management Clerk - Plant Operations",
+        allowed_company_codes=["1000", "1010"],
+        allowed_purchasing_orgs=["1000"],
+        allowed_plants=["1000", "1010"],
+        # Cannot see payroll or full accounting entries
+        denied_tables=["PA0008", "PAYR", "BNKAPY"],
+        # Mask material cost/valuation-sensitive fields
+        masked_fields={
+            "MBEW-BWLAS": "REDACTED",  # Valuation type
+            "MBEW-STPRS": "REDACTED",  # Standard price
+            "MBEW-PEPRS": "REDACTED",  # Planned price
+            "MARC-HKMAT": "REDACTED",  # Origin grouping
+        }
+    ),
+    "SD_CLERK": SAPAuthContext(
+        role_id="SD_CLERK",
+        description="Sales & Distribution Clerk - Customer Operations",
+        allowed_company_codes=["1000", "1010"],
+        allowed_purchasing_orgs=[],  # No direct purchasing
+        allowed_plants=["1000", "1010"],
+        # Cannot see payroll, material valuation, or AP/GL journal entries
+        denied_tables=["PA0008", "PAYR", "MBEW", "BSAK", "BNKAPY"],
+        masked_fields={
+            "KNA1-STCD1": "REDACTED",  # Tax number 1 (SSN/EIN equivalent)
+            "KNA1-STCD2": "REDACTED",  # Tax number 2
+            "KNBK-BANKN": "REDACTED",  # Customer bank account
+            "KNBK-BANKL": "REDACTED",  # Customer bank key
+        }
+    ),
+    "FI_ACCOUNTANT": SAPAuthContext(
+        role_id="FI_ACCOUNTANT",
+        description="Finance Accountant - GL & Cost Center Reporting",
+        allowed_company_codes=["1000", "1010"],
+        allowed_purchasing_orgs=[],  # No purchasing access
+        allowed_plants=[],           # No plant-level inventory access
+        # Cannot see payroll, HR, or MM valuation
+        denied_tables=["PA0008", "PAYR", "MBEW", "MARC", "MARD", "MKOL", "MSKA"],
+        masked_fields={
+            "BSEG-BUIZT": "REDACTED",  # Business transaction text (payment terms detail)
+            "BSEG-VBUND": "REDACTED",  # Trading partner details
+        }
+    ),
 }
 
 class SecurityMesh:
