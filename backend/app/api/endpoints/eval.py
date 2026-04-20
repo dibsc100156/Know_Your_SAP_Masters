@@ -42,7 +42,17 @@ async def get_monitoring_metrics() -> Dict[str, Any]:
       - Swarm: agent count distribution
       - Per-domain and per-role breakdowns
     """
-    return get_monitor().get_all_metrics()
+    metrics = get_monitor().get_all_metrics()
+    try:
+        from app.core.harness_runs import HarnessRuns
+        from app.core.redis_client import get_redis
+        hr = HarnessRuns(get_redis())
+        tier_metrics = hr.get_tier_metrics()
+        metrics["tier_metrics"] = tier_metrics
+    except Exception as e:
+        metrics["tier_metrics"] = {"error": str(e)}
+        
+    return metrics
 
 @router.get("/monitoring/status")
 async def get_monitoring_status() -> Dict[str, Any]:

@@ -90,6 +90,10 @@ class HarnessRun:
     swarm_routing: str       # single | parallel | cross_module | negotiation | escalated
     planner_reasoning: str = ""
     complexity_score: float = 0.0
+    routing_tier: str = ""         # Priority 3: TRIVIAL | SIMPLE | COMPLEX | EXPERT
+    voting_threshold_adopted: float = 0.0 # Priority 3: threshold used for this run
+    schema_rag_used: bool = False  # Priority 3: whether Schema RAG was run
+    skip_steps: List[str] = field(default_factory=list) # Priority 3: intentional skips
     created_at: str = ""     # ISO-8601
     updated_at: str = ""     # ISO-8601
     execution_time_ms: int = 0
@@ -106,6 +110,10 @@ class HarnessRun:
             "swarm_routing": self.swarm_routing,
             "planner_reasoning": self.planner_reasoning,
             "complexity_score": self.complexity_score,
+            "routing_tier": self.routing_tier,
+            "voting_threshold_adopted": self.voting_threshold_adopted,
+            "schema_rag_used": self.schema_rag_used,
+            "skip_steps": self.skip_steps,
             "created_at": self.created_at,
             "updated_at": self.updated_at,
             "execution_time_ms": self.execution_time_ms,
@@ -127,6 +135,10 @@ class HarnessRun:
             swarm_routing=d.get("swarm_routing", "single"),
             planner_reasoning=d.get("planner_reasoning", ""),
             complexity_score=d.get("complexity_score", 0.0),
+            routing_tier=d.get("routing_tier", ""),
+            voting_threshold_adopted=d.get("voting_threshold_adopted", 0.0),
+            schema_rag_used=d.get("schema_rag_used", False),
+            skip_steps=d.get("skip_steps", []),
             created_at=d.get("created_at", ""),
             updated_at=d.get("updated_at", ""),
             execution_time_ms=d.get("execution_time_ms", 0),
@@ -348,6 +360,29 @@ class HarnessRuns:
         self._redis.hset(hash_key, mapping=self._run_to_hash(run))
         self._redis.expire(hash_key, self.TTL_SECONDS)
 
+
+    def update_routing_metrics(
+        self,
+        run_id: str,
+        routing_tier: str,
+        voting_threshold_adopted: float,
+        schema_rag_used: bool,
+        skip_steps: List[str]
+    ) -> None:
+        """Update priority 3 routing metrics."""
+        hash_key = self.HASH_KEY.format(run_id=run_id)
+        if not self.redis:
+            return
+        
+        updates = {
+            "routing_tier": routing_tier,
+            "voting_threshold_adopted": json.dumps(voting_threshold_adopted),
+            "schema_rag_used": "true" if schema_rag_used else "false",
+            "skip_steps": json.dumps(skip_steps),
+            "updated_at": _iso_now()
+        }
+        self.redis.hset(hash_key, mapping=updates)
+
     def complete_run(
         self,
         run_id: str,
@@ -371,6 +406,73 @@ class HarnessRuns:
         self._redis.expire(hash_key, self.TTL_SECONDS)
         self._redis.srem(self.ACTIVE_SET, run_id)
 
+
+    def get_tier_metrics(self) -> Dict[str, Any]:
+        """Priority 3: Per-Tier Quality Metrics Dashboard."""
+        if not self.redis:
+            return {}
+            
+        keys = self.redis.keys("harness_run:*")
+        
+        distribution = {"TRIVIAL": 0, "SIMPLE": 0, "COMPLEX": 0, "EXPERT": 0, "UNKNOWN": 0}
+        schema_used_counts = {"TRIVIAL": 0, "SIMPLE": 0, "COMPLEX": 0, "EXPERT": 0, "UNKNOWN": 0}
+        total_confidence = {"TRIVIAL": 0.0, "SIMPLE": 0.0, "COMPLEX": 0.0, "EXPERT": 0.0, "UNKNOWN": 0.0}
+        
+        voting_threshold_adopted_count = 0
+        total_runs = 0
+        
+        for k in keys:
+            run_data = self.redis.hgetall(k)
+            if not run_data:
+                continue
+            
+            # decode from bytes
+            run = {k.decode('utf-8'): v.decode('utf-8') for k, v in run_data.items()}
+            
+            tier = run.get("routing_tier", "UNKNOWN")
+            if not tier: tier = "UNKNOWN"
+            if tier not in distribution:
+                distribution[tier] = 0
+                schema_used_counts[tier] = 0
+                total_confidence[tier] = 0.0
+                
+            distribution[tier] += 1
+            total_runs += 1
+            
+            if run.get("schema_rag_used", "false") == "true":
+                schema_used_counts[tier] += 1
+                
+            conf_str = run.get("confidence_score", "0.0")
+            try:
+                total_confidence[tier] += float(conf_str)
+            except ValueError:
+                pass
+                
+            vt = run.get("voting_threshold_adopted", "0.7")
+            try:
+                if float(vt) != 0.7:
+                    voting_threshold_adopted_count += 1
+            except ValueError:
+                pass
+
+        avg_confidence = {}
+        schema_rag_hit_rate = {}
+        for t, count in distribution.items():
+            if count > 0:
+                avg_confidence[t] = round(total_confidence[t] / count, 3)
+                schema_rag_hit_rate[t] = round((schema_used_counts[t] / count) * 100, 1)
+            else:
+                avg_confidence[t] = 0.0
+                schema_rag_hit_rate[t] = 0.0
+
+        return {
+            "tier_distribution": distribution,
+            "avg_confidence_by_tier": avg_confidence,
+            "schema_rag_hit_rate_by_tier": schema_rag_hit_rate,
+            "voting_threshold_adopted_pct": round((voting_threshold_adopted_count / total_runs * 100), 1) if total_runs > 0 else 0.0,
+            "total_runs": total_runs
+        }
+        
     def get_run(self, run_id: str) -> Optional[HarnessRun]:
         """Retrieve a single run by run_id, or None if not found."""
         hash_key = self.HASH_KEY.format(run_id=run_id)
