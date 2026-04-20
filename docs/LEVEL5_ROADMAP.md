@@ -13,6 +13,9 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - `acb50ea` — Phase 15 CIBA Approval Flow (block/tighten → async approve/deny)
 - `9ef51de` — Phase 16 Self-Healing Patterns DB (Qdrant-stored healed SQL → PATH_D fast-path)
 
+**Evening commits (April 20):**
+- `(wip)` — Phases L5+20+21: Restored clean orchestrator, re-applied L5 routing + Phase 20 cost tracker + Phase 21 Formal Revision Loop (correct 12-space else-block indentation)
+
 **Today's commits (April 20):**
 - `78366d7` — Phase L5: Tuned Complexity Router (TRIVIAL threshold 0.00)
 - `b91aec6` — Priority 3: Per-Tier Quality Metrics Dashboard (Harness Runs metrics)
@@ -48,6 +51,8 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 5 | Graph RAG | NetworkX FK graph, `AllPathsExplorer`, `TemporalGraphRAG`, Meta-Path Library | ✅ Working |
 | 5½ | Graph Embedding Search | Node2Vec + text hybrid in Qdrant | ✅ Working |
 | **L5** | **Complexity Routing** | `ComplexityRouter` — 4-tier skip guards + adaptive voting threshold | ✅ **LIVE — Apr 20** |
+| **L5+20** | **Resource-Aware Cost Router** | `RouterCostTracker` — per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms), adaptive bypass | ✅ **WIRED — Apr 20** |
+| **L5+21** | **Formal Revision Loop** | `FormalRevisionLoop` — CoT trace accumulation, 8-phase convergence, `max_iterations=3` | ✅ **WIRED — Apr 20** |
 
 ---
 
@@ -85,8 +90,8 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **L5** | **Complexity Routing** | 4-tier complexity router (TRIVIAL/SIMPLE/COMPLEX/EXPERT) — skip guards + adaptive voting | ✅ **LIVE — Apr 20** |
 | **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition | 🆕 Apr 20 |
 | **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy | 🆕 Apr 20 |
-| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | 🆕 Apr 20 |
-| **21** | **Formal Revision Loop** | `RevisionLoop` class with `exit_conditions` + `max_iterations=3` | 🆕 Apr 20 |
+| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | ✅ **WIRED — Apr 20** |
+| **21** | **Formal Revision Loop** | `RevisionLoop` class with CoT trace + convergence detection | ✅ **WIRED — Apr 20** |
 | **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | 🆕 Apr 20 |
 | **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | 🆕 Apr 20 |
 | **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | 🆕 Apr 20 |
@@ -279,9 +284,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | # | Priority | Item | Phase | Status |
 |---|----------|------|-------|--------|
 | L5 | ✅ Done | Phase L5 Complexity Router — complete with adaptive voting thresholds | L5 | ✅ Done |
-| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | 🆕 Next |
-| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | 🆕 Planned |
-| 20 | 🟡 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | 🆕 Planned |
+| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | 🚧 WIRED (Apr 20) |
+| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | 🚧 WIRED (Apr 20) |
+| 20 | 🟢 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | ✅ WIRED (Apr 20) |
 | 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | 🆕 Planned |
 | 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | 🆕 Planned |
 | 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | 🆕 Planned |
