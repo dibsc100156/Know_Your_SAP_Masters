@@ -106,6 +106,10 @@ from app.core.router_cost_tracker import (
     route_with_cost,
     get_router_cost_tracker,
 )
+from app.core.model_driven_sequencer import (
+    build_model_driven_plan,
+    should_enable_model_driven_mode,
+)
 
 from app.core.temporal_engine import TemporalEngine
 from app.core.formal_revision_loop import (
@@ -562,6 +566,8 @@ def run_agent_loop(
                          f"score={routing.score:.3f} {tier_icon} "
                          f"(cost={get_router_cost_tracker().get_cost_stats().get('total_cost_ms', 0):.1f}ms)")
 
+    start_time = time.time()
+
     # ============================================================================
     # [Phase 21] Formal Revision Loop — CoT trace + convergence detection
     # ============================================================================
@@ -634,10 +640,6 @@ def run_agent_loop(
             logger.warning(f"\n[WARN] Harness tracking unavailable: {e}")
 
 
-
-
-
-    start_time = time.time()
 
 
 
@@ -824,6 +826,44 @@ def run_agent_loop(
 
     top_pattern: Dict[str, Any] = {"intent": "unknown", "tables": []}
 
+    model_driven_plan = build_model_driven_plan(
+        query=query,
+        domain=domain,
+        routing=routing,
+        available_tools=list_tools(),
+    ) if should_enable_model_driven_mode(routing) else None
+    planned_tools = set(model_driven_plan.selected_tools) if model_driven_plan else set()
+
+    if model_driven_plan and model_driven_plan.enabled:
+        logger.info(
+            f"[Feature 3] Model-driven sequencing enabled for {routing.tier.value}: "
+            f"{' -> '.join(model_driven_plan.selected_tools)}"
+        )
+        tool_trace.append({
+            "tool": "model_driven_plan",
+            "status": "success",
+            "message": "Description-aware tool sequence generated",
+            "metadata": {
+                "selected_tools": model_driven_plan.selected_tools,
+                "skipped_tools": model_driven_plan.skipped_tools,
+                "rationale": model_driven_plan.rationale,
+                "signals": model_driven_plan.signals,
+            },
+        })
+        _traj(
+            "feature_3_model_driven_plan",
+            "planned",
+            "Description-aware tool sequence generated",
+            {
+                "selected_tools": model_driven_plan.selected_tools,
+                "signals": model_driven_plan.signals,
+            },
+        )
+
+    def should_run_tool(tool_name: str) -> bool:
+        if not model_driven_plan or not model_driven_plan.enabled:
+            return True
+        return tool_name in planned_tools
 
 
     # ========================================================================
@@ -914,23 +954,45 @@ def run_agent_loop(
 
     # =========================================================================
 
+    # STEP -0.5: SAP NOTE / OSS KG (Feature 3 model-selected advisory step)
+
+    # =========================================================================
+
+    if should_run_tool("search_sap_notes"):
+        sap_note_result = call_tool("search_sap_notes", {
+            "query": query,
+        }, auth_context=auth_context)
+        trace("search_sap_notes", sap_note_result)
+        if sap_note_result.status == ToolStatus.SUCCESS:
+            logger.info(f"[Feature 3] SAP Notes KG surfaced {len(sap_note_result.data.get('sap_notes', []))} note(s) before SQL planning")
+
+    # =========================================================================
+
     # STEP 0: META-PATH MATCH (Fast-path)
 
     # =========================================================================
 
     phase_0_start = time.time()
 
-    logger.info("\n[0/5] [Pillar 5] Meta-Path Match — meta_path_match()")
+    meta_path_used = False
+    if should_run_tool("meta_path_match"):
+        logger.info("\n[0/5] [Pillar 5] Meta-Path Match — meta_path_match()")
+        meta_result = call_tool("meta_path_match", {
 
-    meta_result = call_tool("meta_path_match", {
+            "query": query,
 
-        "query": query,
+            "domain": domain,
 
-        "domain": domain,
-
-    }, auth_context=auth_context)
-
-    trace("meta_path_match", meta_result)
+        }, auth_context=auth_context)
+        trace("meta_path_match", meta_result)
+    else:
+        meta_result = ToolResult(
+            status=ToolStatus.SKIPPED,
+            message="Skipped by model-driven sequencing",
+            data={"match": {}},
+            metadata={"feature": "model_driven_sequencing"},
+        )
+        trace("meta_path_match", meta_result)
 
     meta_path_used = False
     _traj("phase_0_meta_path", "hit" if meta_path_used else "miss", "tables set after meta_path")
@@ -968,7 +1030,7 @@ def run_agent_loop(
 
 
 
-        if len(tables_involved) >= 2:
+        if len(tables_involved) >= 2 and should_run_tool("temporal_graph_search"):
 
             temporal_result = call_tool("temporal_graph_search", {
 
@@ -1330,17 +1392,25 @@ def run_agent_loop(
 
             phase_1_start = time.time()
 
-        logger.info("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
+        if should_run_tool("schema_lookup"):
+            logger.info("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
 
-        schema_result = call_tool("schema_lookup", {
+            schema_result = call_tool("schema_lookup", {
 
-            "query": query,
+                "query": query,
 
-            "domain": domain,
+                "domain": domain,
 
-            "n_results": 4,
+                "n_results": 4,
 
-        }, auth_context=auth_context)
+            }, auth_context=auth_context)
+        else:
+            schema_result = ToolResult(
+                status=ToolStatus.SKIPPED,
+                message="Skipped by model-driven sequencing",
+                data={"tables_used": [], "schemas": []},
+                metadata={"feature": "model_driven_sequencing"},
+            )
 
         trace("schema_lookup", schema_result)
 
@@ -1498,19 +1568,27 @@ def run_agent_loop(
 
         phase_1b_start = time.time()
 
-        logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
+        if should_run_tool("graph_enhanced_schema_discovery"):
+            logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
 
-        graph_result = call_tool("graph_enhanced_schema_discovery", {
+            graph_result = call_tool("graph_enhanced_schema_discovery", {
 
-            "query": query,
+                "query": query,
 
-            "domain": domain,
+                "domain": domain,
 
-            "top_k": 5,
+                "top_k": 5,
 
-            "expand_neighbors": 2,
+                "expand_neighbors": 2,
 
-        }, auth_context=auth_context)
+            }, auth_context=auth_context)
+        else:
+            graph_result = ToolResult(
+                status=ToolStatus.SKIPPED,
+                message="Skipped by model-driven sequencing",
+                data={"tables": [], "tables_discovered": []},
+                metadata={"feature": "model_driven_sequencing"},
+            )
 
         trace("graph_enhanced_schema_discovery", graph_result)
 
@@ -1581,31 +1659,34 @@ def run_agent_loop(
 
         phase_2_start = time.time()
 
-        logger.info("\n[2/5] [Pillar 4] SQL RAG — sql_pattern_lookup()")
+        if should_run_tool("sql_pattern_lookup"):
+            logger.info("\n[2/5] [Pillar 4] SQL RAG — sql_pattern_lookup()")
 
-        
+            # [Phase 4] Memory Layer: pull boosted patterns for this domain
+            boosted = sap_memory.get_boosted_patterns(domain=domain, top_k=3)
 
-        # [Phase 4] Memory Layer: pull boosted patterns for this domain
+            if boosted:
 
-        boosted = sap_memory.get_boosted_patterns(domain=domain, top_k=3)
+                logger.info(f"    [MEMORY] Found {len(boosted)} boosted pattern(s) for '{domain}': "
 
-        if boosted:
+                      f"{', '.join(p['pattern_name'] for p in boosted[:3])}")
 
-            logger.info(f"    [MEMORY] Found {len(boosted)} boosted pattern(s) for '{domain}': "
+            sql_result = call_tool("sql_pattern_lookup", {
 
-                  f"{', '.join(p['pattern_name'] for p in boosted[:3])}")
+                "query": query,
 
-        
+                "domain": domain,
 
-        sql_result = call_tool("sql_pattern_lookup", {
+                "n_results": 2,
 
-            "query": query,
-
-            "domain": domain,
-
-            "n_results": 2,
-
-        }, auth_context=auth_context)
+            }, auth_context=auth_context)
+        else:
+            sql_result = ToolResult(
+                status=ToolStatus.SKIPPED,
+                message="Skipped by model-driven sequencing",
+                data={"patterns": []},
+                metadata={"feature": "model_driven_sequencing"},
+            )
 
         trace("sql_pattern_lookup", sql_result)
 
@@ -1642,7 +1723,7 @@ def run_agent_loop(
 
         # =========================================================================
 
-        if len(tables_involved) >= 2:
+        if len(tables_involved) >= 2 and should_run_tool("temporal_graph_search"):
 
             logger.info(f"\n[2b/5] [Pillar 5] Temporal Detection — checking for date anchors in query")
 
@@ -2181,7 +2262,7 @@ def run_agent_loop(
 
             # Only use Graph RAG when we have no pattern — build JOIN from scratch
 
-            if len(tables_involved) > 1:
+            if len(tables_involved) > 1 and should_run_tool("all_paths_explore"):
 
                 phase_3_start = time.time()
 
