@@ -1,6 +1,7 @@
 # AI Engineer World's Fair — Video Insights & KYSM Improvement Roadmap
 
 **Compiled:** April 20, 2026
+**Updated:** April 21, 2026
 **Source:** 7 talks from AI Engineer World's Fair (July 2025)
 | # | Talk | Speaker | Duration | Views | Key Theme |
 |---|------|---------|----------|-------|-----------|
@@ -163,6 +164,18 @@ Pure document embeddings fail on analytics because they can't do aggregation, pr
 ---
 
 ## Recommended Improvements for KYSM (✅ All 10 Completed)
+
+### April 21 follow-through — Strands/AWS orchestration patterns
+
+After the initial 10-priority sprint, KYSM picked up 3 additional orchestration upgrades inspired by the Strands-style agent loop and AWS enterprise-agent patterns:
+
+| Feature | Status | Commit | What changed |
+|---|---|---|---|
+| Feature 3 — Model-Driven Tool Sequencing | ✅ Bootstrap LIVE | `114aff4` | Added `model_driven_sequencer.py` and wired `run_agent_loop()` to build a description-aware tool plan for COMPLEX/EXPERT tiers. The orchestrator now selectively executes `search_sap_notes`, `meta_path_match`, `schema_lookup`, `graph_enhanced_schema_discovery`, `sql_pattern_lookup`, `temporal_graph_search`, and `all_paths_explore` based on routing signals + tool descriptions rather than a single rigid order. |
+| Feature 4 — Plain-English Safeguards | ✅ LIVE | `eba82a6` | Strengthened tool descriptions with `[CRITICAL SAFEGUARD]` instructions for `schema_lookup`, `sql_execute`, and `all_paths_explore`, following the Strands idea that safety intent should live close to the tool contract. |
+| Feature 5 — Scatter-Gather Swarm | ✅ LIVE | `eba82a6` | Extended swarm planning with `SCATTER_GATHER` routing so multi-entity queries can dispatch multiple domain agents in parallel and gather results through synthesis. |
+
+**Scope note:** Feature 3 is intentionally a safe bootstrap, not a fully unconstrained free-form tool loop. Validation and execution guardrails remain mandatory.
 
 ### ✅ Priority 1 — Fix Complexity Router (TRIVIAL over-triggering)
 

@@ -1,5 +1,5 @@
 # KYSM Level-5 Roadmap — Consolidated Implementation Status
-**Last Updated:** April 20, 2026 | Project: Know Your SAP Masters (SAP Masters)
+**Last Updated:** April 21, 2026 | Project: Know Your SAP Masters (SAP Masters)
 
 ---
 
@@ -25,6 +25,10 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - `c36ff76` — Priority 8: SAP Note Knowledge Graph (Memgraph operational entities)
 - `e2a0d05` — Priority 6: MCP Server for KYSM
 - `8782e9f` — Priority 10: Fluent Orchestrator Builder Syntax
+
+**Today's commits (April 21):**
+- `eba82a6` — Feature 4: Plain-English Safeguards + Feature 5: Scatter-Gather Swarm
+- `114aff4` — Feature 3: Bootstrap Model-Driven Tool Sequencing (Strands pattern)
 
 **Morning commits (April 20):**
 - `fd038f1` — Phase L5: Complexity-Based Query Routing — 8 patches applied to orchestrator.py (TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing)
@@ -53,6 +57,9 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **L5** | **Complexity Routing** | `ComplexityRouter` — 4-tier skip guards + adaptive voting threshold | ✅ **LIVE — Apr 20** |
 | **L5+20** | **Resource-Aware Cost Router** | `RouterCostTracker` — per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms), adaptive bypass | ✅ **WIRED — Apr 20** |
 | **L5+21** | **Formal Revision Loop** | `FormalRevisionLoop` — CoT trace accumulation, 8-phase convergence, `max_iterations=3` | ✅ **WIRED — Apr 20** |
+| **F3** | **Model-Driven Tool Sequencing** | `model_driven_sequencer.py` — description-aware tool planning for COMPLEX/EXPERT tiers | ✅ **BOOTSTRAP LIVE — Apr 21** |
+| **F4** | **Plain-English Safeguards** | Tool descriptions encode mandatory safety guidance close to tool contracts | ✅ **LIVE — Apr 21** |
+| **F5** | **Scatter-Gather Swarm** | Multi-entity swarm routing with parallel fan-out and synthesis gather | ✅ **LIVE — Apr 21** |
 
 ---
 
