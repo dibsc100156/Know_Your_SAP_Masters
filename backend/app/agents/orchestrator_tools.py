@@ -1225,7 +1225,9 @@ TOOL_REGISTRY: Dict[str, Tool] = {
     "schema_lookup": Tool(
         name="schema_lookup",
         description="[Pillar 3] Schema RAG. Find SAP tables matching a natural language query. "
-                    "Returns table names, descriptions, and safe column lists filtered by role.",
+                    "Returns table names, descriptions, and safe column lists filtered by role. "
+                    "[CRITICAL SAFEGUARD] You MUST call this (or graph_enhanced_schema_discovery) BEFORE sql_execute "
+                    "to prevent hallucinated table names. Do not assume table names without running schema lookup first.",
         input_schema={
             "type": "object",
             "properties": {
@@ -1315,7 +1317,9 @@ TOOL_REGISTRY: Dict[str, Tool] = {
     "sql_execute": Tool(
         name="sql_execute",
         description="[Execution] Execute validated SAP HANA SQL against mock or real database. "
-                    "Returns row set with role-based masking applied.",
+                    "Returns row set with role-based masking applied. "
+                    "[CRITICAL SAFEGUARD] Do NOT execute if query targets employee salary tables (PA0008, PSKEY, PCL1/PCL2) "
+                    "unless auth_role is explicitly HR_ADMIN. Always prefer sql_pattern_lookup result if available.",
         input_schema={
             "type": "object",
             "properties": {
@@ -1391,7 +1395,9 @@ TOOL_REGISTRY: Dict[str, Tool] = {
     "all_paths_explore": Tool(
         name="all_paths_explore",
         description="[Pillar 5] Finds ALL valid JOIN paths between two tables, scored and ranked "
-                    "by cardinality and module transits.",
+                    "by cardinality and module transits. "
+                    "[CRITICAL SAFEGUARD] Never set max_depth > 5 to prevent exponential traversal timeouts. "
+                    "Prefer meta_path_match if the query matches a known domain pattern.",
         input_schema={
             "type": "object",
             "properties": {

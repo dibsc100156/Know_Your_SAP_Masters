@@ -1,7 +1,7 @@
 """
 
 
-planner_agent.py — Multi-Agent Domain Swarm: Planner Agent
+planner_agent.py ÃÂ¢ÃÂÃÂ Multi-Agent Domain Swarm: Planner Agent
 
 
 =========================================================
@@ -16,16 +16,16 @@ The Planner is the entry point for every user query in the new swarm architectur
 Responsibilities:
 
 
-  1. ANALYZE — Parse query intent, detect domain scope, identify complexity
+  1. ANALYZE ÃÂ¢ÃÂÃÂ Parse query intent, detect domain scope, identify complexity
 
 
-  2. ROUTE   — Decide: single-agent | parallel-domains | cross-module | escalation
+  2. ROUTE   ÃÂ¢ÃÂÃÂ Decide: single-agent | parallel-domains | cross-module | escalation
 
 
-  3. DISPATCH — Hand off to selected Domain Agents with precise task instructions
+  3. DISPATCH ÃÂ¢ÃÂÃÂ Hand off to selected Domain Agents with precise task instructions
 
 
-  4. MONITOR  — Track agent progress, handle timeouts, collect partial results
+  4. MONITOR  ÃÂ¢ÃÂÃÂ Track agent progress, handle timeouts, collect partial results
 
 
 
@@ -37,28 +37,28 @@ Decision Tree:
   query
 
 
-    ├─ SINGLE DOMAIN (confidence ≥ 0.85 from one agent)
+    ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ SINGLE DOMAIN (confidence ÃÂ¢ÃÂÃÂ¥ 0.85 from one agent)
 
 
-    │     └─→ Domain Agent directly → Synthesis Agent → Response
+    ÃÂ¢ÃÂÃÂ     ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Domain Agent directly ÃÂ¢ÃÂÃÂ Synthesis Agent ÃÂ¢ÃÂÃÂ Response
 
 
-    ├─ PARALLEL DOMAINS (2+ agents, score ≥ 0.5, no cross-module JOIN needed)
+    ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ PARALLEL DOMAINS (2+ agents, score ÃÂ¢ÃÂÃÂ¥ 0.5, no cross-module JOIN needed)
 
 
-    │     └─→ Domain Agents [parallel] → Synthesis Agent → Response
+    ÃÂ¢ÃÂÃÂ     ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Domain Agents [parallel] ÃÂ¢ÃÂÃÂ Synthesis Agent ÃÂ¢ÃÂÃÂ Response
 
 
-    ├─ CROSS-MODULE (CROSS_AGENT score ≥ 0.7 OR multi-domain JOIN detected)
+    ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ CROSS-MODULE (CROSS_AGENT score ÃÂ¢ÃÂÃÂ¥ 0.7 OR multi-domain JOIN detected)
 
 
-    │     └─→ CROSS_AGENT → Synthesis Agent → Response
+    ÃÂ¢ÃÂÃÂ     ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ CROSS_AGENT ÃÂ¢ÃÂÃÂ Synthesis Agent ÃÂ¢ÃÂÃÂ Response
 
 
-    └─ COMPLEX / NEGOTIATION (contains negotiation, temporal, QM keywords)
+    ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ COMPLEX / NEGOTIATION (contains negotiation, temporal, QM keywords)
 
 
-          └─→ Specialist Agent(s) → Synthesis Agent → Response
+          ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Specialist Agent(s) ÃÂ¢ÃÂÃÂ Synthesis Agent ÃÂ¢ÃÂÃÂ Response
 
 
 
@@ -157,8 +157,8 @@ class RoutingType(Enum):
     SINGLE      = "single"       # One domain agent handles alone
 
 
-    PARALLEL    = "parallel"     # Multiple domain agents, no inter-agent JOINs
-
+    PARALLEL       = "parallel"        # Multiple domain agents, no inter-agent JOINs
+    SCATTER_GATHER = "scatter_gather"  # [Feature 5] Multi-entity: N agents parallel + synthesis merge
 
     CROSS_MODULE = "cross_module" # Graph traversal required across domains
 
@@ -648,9 +648,11 @@ def graph_route_query(query: str, domain_hint: str, domain_agents: Dict[str, Dom
 
         agent_context_score = min(1.0, agent_context_score)
 
-
-
-
+        # [Feature 5] Cross-domain boost for multi-entity queries
+        for _grp in [("vendor","invoice"),("vendor","quality"),("vendor","delivery"),("customer","invoice"),("customer","delivery"),("material","stock","inspection"),("purchase","order","goods"),("project","costs","budget")]:
+            if sum(1 for _kw in _grp if _kw in query_lower) >= 2:
+                agent_context_score = min(1.0, agent_context_score + 0.4)
+                break
 
         # 2. Tool Specificity Score (Weight 1.0)
 
@@ -734,7 +736,7 @@ class PlannerAgent:
     """
 
 
-    Swarm Planner — the intelligent routing layer that replaces
+    Swarm Planner ÃÂ¢ÃÂÃÂ the intelligent routing layer that replaces
 
 
     the monolithic single-orchestrator entry point.
@@ -773,7 +775,7 @@ class PlannerAgent:
             max_parallel_agents: Cap on parallel agents (avoid broadcast storms)
 
 
-            complexity_threshold: Above this → escalate to monolithic orchestrator
+            complexity_threshold: Above this ÃÂ¢ÃÂÃÂ escalate to monolithic orchestrator
 
 
         """
@@ -854,7 +856,7 @@ class PlannerAgent:
         """
 
 
-        Analyze the query and produce a SwarmDecision — the routing plan.
+        Analyze the query and produce a SwarmDecision ÃÂ¢ÃÂÃÂ the routing plan.
 
 
         This is the main entry point for the planner.
@@ -878,7 +880,7 @@ class PlannerAgent:
 
 
 
-        # Step 1: Route to domain agents — 1.5:1 Agent:Tool graph scoring
+        # Step 1: Route to domain agents ÃÂ¢ÃÂÃÂ 1.5:1 Agent:Tool graph scoring
 
 
         routed = graph_route_query(query, domain_hint, self._domain_agents, self.max_parallel_agents)
@@ -1085,6 +1087,11 @@ class PlannerAgent:
                 ))
 
 
+        # [Feature 5] Multi-entity detection: scatter-gather for cross-domain queries
+        _multi_entity = (complexity_details.get("multi_entity",0) >= 0.6 or complexity_details.get("cross_module_join",0) >= 0.7)
+        if _multi_entity and len(assignments) >= 2:
+            routing = RoutingType.SCATTER_GATHER
+            reasoning = f"[SCATTER-GATHER] Multi-entity query: {len(assignments)} agents in parallel scatter-gather."
         elif len(assignments) >= 2:
 
 
@@ -1191,21 +1198,12 @@ class PlannerAgent:
 
 
     def dispatch_single(
-
-
         self,
-
-
         decision: SwarmDecision,
-
-
         auth_context: SAPAuthContext,
-
-
         verbose: bool = False,
-
-
         run_id: Optional[str] = None,
+        agent_tool_mode = None,
 
 
     ) -> Dict[str, Any]:
@@ -1448,6 +1446,8 @@ class PlannerAgent:
 
         run_id: Optional[str] = None,
 
+        agent_tool_mode = None,
+
     ) -> Dict[str, Any]:
 
         """
@@ -1530,7 +1530,8 @@ class PlannerAgent:
 
         if verbose:
 
-            print(f"\n[SWARM] Dispatching {decision.routing.value.upper()} to {len(decision.assignments)} agents (Celery) | queues={{[_agent_to_queue.get(a.agent_name, 'agent') for a in decision.assignments]}} | plan_path={{plan_path}}")
+            scatter_note = " [SCATTER-GATHER: parallel synthesis]" if decision.routing.value == "scatter_gather" else ""
+            print(f"\n[SWARM] Dispatching {decision.routing.value.upper()} to {len(decision.assignments)} agents{scatter_note} (Celery) | queues={{[_agent_to_queue.get(a.agent_name, 'agent') for a in decision.assignments]}} | plan_path={{plan_path}}")
 
 
 
@@ -1808,7 +1809,7 @@ class PlannerAgent:
         """
 
 
-        Synthesis Agent — combines results from multiple domain agents
+        Synthesis Agent ÃÂ¢ÃÂÃÂ combines results from multiple domain agents
 
 
         into a single coherent response.
@@ -1892,7 +1893,7 @@ class PlannerAgent:
         """
 
 
-        Main entry point — plan AND execute the swarm.
+        Main entry point ÃÂ¢ÃÂÃÂ plan AND execute the swarm.
 
 
         Returns the final synthesized result.
@@ -2096,13 +2097,13 @@ class PlannerAgent:
         if decision.routing == RoutingType.SINGLE:
 
 
-            return self.dispatch_single(decision, auth_context, verbose=verbose, run_id=run_id)
+            return self.dispatch_single(decision, auth_context, verbose=verbose, run_id=run_id, agent_tool_mode=agent_tool_mode)
 
 
         else:
 
 
-            return self.dispatch_parallel(decision, auth_context, verbose=verbose, run_id=run_id)
+            return self.dispatch_parallel(decision, auth_context, verbose=verbose, run_id=run_id, agent_tool_mode=agent_tool_mode)
 
 
 
@@ -2255,7 +2256,7 @@ class PlannerAgent:
         for a in decision.assignments:
 
 
-            print(f"    [{a.priority}] {a.agent_display} (conf={a.confidence:.2f}) — {a.task[:50]}...")
+            print(f"    [{a.priority}] {a.agent_display} (conf={a.confidence:.2f}) ÃÂ¢ÃÂÃÂ {a.task[:50]}...")
 
 
         print(f"  Flags: temporal={decision.requires_temporal} "
