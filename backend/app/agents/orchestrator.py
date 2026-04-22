@@ -1948,13 +1948,31 @@ def run_agent_loop(
             {"patterns": len(sql_result.data.get("patterns", [])) if sql_result.data else 0},
         )
 
+        from app.core.retrieval_quality import RetrievalQualityScorer
+        retrieval_quality_context = RetrievalQualityScorer().assess(
+            query=query,
+            domain=domain,
+            schema_result=schema_result,
+            graph_result=graph_result,
+            sql_result=sql_result,
+            exploration_result=exploration_result,
+            memory_context=memory_context,
+        )
+
+        if retrieval_quality_context.recommended_tables:
+            ranked_tables = retrieval_quality_context.recommended_tables + [
+                t for t in tables_involved if t not in retrieval_quality_context.recommended_tables
+            ]
+            tables_involved = list(dict.fromkeys(ranked_tables))
+            logger.info(f"    [RetrievalQuality] Ranked tables: {tables_involved[:5]} | composite={retrieval_quality_context.composite_score:.3f}")
+
         base_sql = ""
 
         if sql_result.status == ToolStatus.SUCCESS and sql_result.data.get("patterns"):
 
-            # Use the top-ranked pattern
+            # Use the best-ranked pattern after retrieval quality fusion
 
-            top_pattern = sql_result.data["patterns"][0]
+            top_pattern = retrieval_quality_context.recommended_pattern or sql_result.data["patterns"][0]
 
             base_sql = top_pattern["sql"]
 
@@ -3955,6 +3973,10 @@ def run_agent_loop(
 
 
     # [Phase 24] Inject episodic session context into result_dict
+    if 'retrieval_quality_context' in locals() and retrieval_quality_context is not None:
+        result_dict["retrieval_quality"] = retrieval_quality_context.summary()
+        result_dict["retrieval_trace"] = retrieval_quality_context.trace
+
     result_dict["episodic_context"] = episodic_context
     result_dict["prior_turns"] = len(prior_history)
     result_dict["prior_tables"] = prior_tables
