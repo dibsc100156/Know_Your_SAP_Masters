@@ -275,6 +275,10 @@ class RedisBackend:
             logger.debug(f"[EpisodicMemory] get_queries failed: {e}")
             return []
 
+    def get_history(self, session_id: str, limit: int = DEFAULT_QUERY_HISTORY_LIMIT) -> List[QueryRecord]:
+        """Alias for get_queries to match the in-memory backend API."""
+        return self.get_queries(session_id, limit=limit)
+
     # ── Conversation Context ────────────────────────────────────────────────
 
     def push_context(self, session_id: str, turn: ConversationTurn, max_window: int = DEFAULT_CONTEXT_WINDOW) -> None:
@@ -703,6 +707,30 @@ class EpisodicMemoryStore:
         ctx = self.get_context(session_id, max_turns=max_turns)
         return ctx.get_prompt_snippet(max_turns=max_turns)
 
+    def get_recent_query_pairs(self, session_id: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Return the most recent bounded query/result pairs for lightweight reuse/debug."""
+        history = self.get_history(session_id, limit=limit)
+        return [
+            {
+                "turn_id": rec.turn_id,
+                "query": rec.query,
+                "domain": rec.domain,
+                "tables_used": rec.tables_used,
+                "confidence": rec.confidence,
+                "answer_excerpt": rec.answer_excerpt,
+                "timestamp": rec.timestamp,
+            }
+            for rec in history
+        ]
+
+    def find_recent_duplicate(self, session_id: str, query: str, limit: int = 10) -> Optional[QueryRecord]:
+        """Return the most recent matching query record by signature, if any."""
+        sig = self._backend._query_signature(query) if hasattr(self._backend, '_query_signature') else RedisBackend._query_signature(query)
+        for rec in reversed(self.get_history(session_id, limit=limit)):
+            if rec.query_signature == sig:
+                return rec
+        return None
+
     def set_scratchpad(
         self,
         session_id: str,
@@ -814,7 +842,8 @@ class EpisodicMemoryStore:
         """
         meta = self._backend.get_meta(session_id)
         ctx = self.get_context(session_id, max_turns=max_turns)
-        history = self._backend.get_history(session_id, limit=max_turns)
+        history = self.get_history(session_id, limit=max_turns)
+        scratchpad = self.get_all_scratchpad(session_id)
 
         lines = ["[Session Context]"]
         if meta:
@@ -831,6 +860,12 @@ class EpisodicMemoryStore:
                 )
             if table_summary:
                 lines.append("Recent queries:\n" + "\n".join(table_summary))
+        if scratchpad:
+            lines.append(
+                "Scratchpad: " + ", ".join(
+                    f"{k}={scratchpad[k]}" for k in sorted(scratchpad.keys()) if k in {"last_domain", "last_routing_tier", "last_tables"}
+                )
+            )
 
         return "\n".join(lines)
 

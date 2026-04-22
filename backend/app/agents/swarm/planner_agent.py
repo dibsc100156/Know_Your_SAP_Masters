@@ -1555,14 +1555,27 @@ class PlannerAgent:
                     "agent_name": assignment.agent_name,
                 }
             try:
-                result = agent.run(
-                    query=decision.query,
-                    auth_context=auth_context,
-                    tables_hint=assignment.tables_hint,
-                    run_id=run_id,
-                    plan_path=plan_path,
-                    verbose=False,
-                )
+                if agent_tool_mode is not None:
+                    session_id = getattr(auth_context, "session_id", None)
+                    result = agent_tool_mode.wrap_agent_execution(
+                        agent=agent,
+                        query=decision.query,
+                        auth_context=auth_context,
+                        tables_hint=assignment.tables_hint,
+                        verbose=False,
+                        run_id=run_id,
+                        sentinel_verdict=None,
+                        session_id=session_id,
+                    )
+                else:
+                    result = agent.run(
+                        query=decision.query,
+                        auth_context=auth_context,
+                        tables_hint=assignment.tables_hint,
+                        run_id=run_id,
+                        plan_path=plan_path,
+                        verbose=False,
+                    )
                 result["status"] = result.get("status", "success")
                 result["agent_name"] = assignment.agent_name
                 return result
@@ -1592,9 +1605,9 @@ class PlannerAgent:
 
         results = {}
 
-        for i, result in enumerate(raw_results):
+        for result in raw_results:
 
-            agent_name = decision.assignments[i].agent_name if i < len(decision.assignments) else "unknown"
+            agent_name = result.get("agent_name", "unknown")
 
             if result.get("status") in ("error", "timeout", "role_error", "agent_not_found", "celery_error"):
 
@@ -1623,7 +1636,7 @@ class PlannerAgent:
         # Synthesis
 
 
-        synthesis = self._synthesize(decision, results, auth_context)
+        synthesis = self._synthesize(decision, results, auth_context, agent_tool_mode=agent_tool_mode)
 
 
         synth_elapsed = int((time.time() - synth_start) * 1000)
@@ -1803,6 +1816,9 @@ class PlannerAgent:
         auth_context: SAPAuthContext,
 
 
+        agent_tool_mode = None,
+
+
     ) -> Dict[str, Any]:
 
 
@@ -1855,6 +1871,12 @@ class PlannerAgent:
 
 
             routing=decision.routing,
+
+
+            agent_tool_mode=agent_tool_mode,
+
+
+            session_id=getattr(auth_context, "session_id", None),
 
 
         )

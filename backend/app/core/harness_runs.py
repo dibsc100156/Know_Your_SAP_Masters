@@ -98,6 +98,8 @@ class HarnessRun:
     updated_at: str = ""     # ISO-8601
     execution_time_ms: int = 0
     confidence_score: float = 0.0
+    quality_metrics: Dict[str, float] = field(default_factory=dict)
+    trajectory_event_count: int = 0
     phase_states: List[PhaseState] = field(default_factory=list)
     trajectory_log: List[Dict[str, Any]] = field(default_factory=list)
 
@@ -118,6 +120,8 @@ class HarnessRun:
             "updated_at": self.updated_at,
             "execution_time_ms": self.execution_time_ms,
             "confidence_score": self.confidence_score,
+            "quality_metrics": self.quality_metrics,
+            "trajectory_event_count": self.trajectory_event_count,
             "phase_states": [p.to_dict() for p in self.phase_states],
             "trajectory_log": self.trajectory_log,
         }
@@ -143,6 +147,8 @@ class HarnessRun:
             updated_at=d.get("updated_at", ""),
             execution_time_ms=d.get("execution_time_ms", 0),
             confidence_score=d.get("confidence_score", 0.0),
+            quality_metrics=d.get("quality_metrics", {}),
+            trajectory_event_count=d.get("trajectory_event_count", 0),
             phase_states=phases,
             trajectory_log=d.get("trajectory_log", []),
         )
@@ -284,10 +290,22 @@ class HarnessRuns:
             "reasoning": reasoning,
             "metadata": metadata,
         })
+        run.trajectory_event_count = len(run.trajectory_log)
         # Save back the single JSON field without overwriting the whole hash
         self._redis.hset(hash_key, "trajectory_log", json.dumps(run.trajectory_log))
+        self._redis.hset(hash_key, "trajectory_event_count", str(run.trajectory_event_count))
 
-
+    def set_quality_metrics(self, run_id: str, metrics: Dict[str, float]) -> None:
+        """Persist computed quality metrics back onto the run hash."""
+        hash_key = self.HASH_KEY.format(run_id=run_id)
+        if not self._redis.exists(hash_key):
+            return
+        self._redis.hset(hash_key, "quality_metrics", json.dumps(metrics))
+        if "correctness_score" in metrics:
+            self._redis.hset(hash_key, "quality_score", str(metrics["correctness_score"]))
+        if "trajectory_adherence" in metrics:
+            self._redis.hset(hash_key, "trajectory_adherence", str(metrics["trajectory_adherence"]))
+        self._redis.expire(hash_key, self.TTL_SECONDS)
 
     def hset_run_field(self, run_id: str, field: str, value: str) -> None:
         """Set a single field on a run hash without overwriting the whole hash."""
@@ -535,6 +553,7 @@ class HarnessRuns:
         d = run.to_dict()
         d["phase_states"] = json.dumps(d["phase_states"])
         d["trajectory_log"] = json.dumps(d.get("trajectory_log", []))
+        d["quality_metrics"] = json.dumps(d.get("quality_metrics", {}))
         # Convert all scalar fields to strings
         return {k: str(v) if not isinstance(v, str) else v for k, v in d.items()}
 
@@ -544,12 +563,16 @@ class HarnessRuns:
             raw["phase_states"] = json.loads(raw["phase_states"])
         if "trajectory_log" in raw:
             raw["trajectory_log"] = json.loads(raw["trajectory_log"])
+        if "quality_metrics" in raw:
+            raw["quality_metrics"] = json.loads(raw["quality_metrics"])
         if "complexity_score" in raw:
             raw["complexity_score"] = float(raw["complexity_score"])
         if "confidence_score" in raw:
             raw["confidence_score"] = float(raw["confidence_score"])
         if "execution_time_ms" in raw:
             raw["execution_time_ms"] = int(raw["execution_time_ms"])
+        if "trajectory_event_count" in raw:
+            raw["trajectory_event_count"] = int(raw["trajectory_event_count"])
         return HarnessRun.from_dict(raw)
 
 

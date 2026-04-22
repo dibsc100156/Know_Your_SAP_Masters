@@ -17,6 +17,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 
 **April 20 evening commits:**
 - `(wip)` — Phases L5+20+21: Restored clean orchestrator, re-applied L5 routing + Phase 20 cost tracker + Phase 21 Formal Revision Loop (correct 12-space else-block indentation)
+- **2026-04-22:** Phase 21 Formal Revision Loop wired through the live orchestrator/API path — bounded critique/validation/execution revision attempts now honor `max_iterations=3`, apply explicit confidence/stability exit conditions, and surface `formal_trace` + `revision_summary` in API responses. Targeted unittest coverage added in `backend/tests/test_phase21_formal_revision_loop.py`.
 
 **April 20 commits:**
 - `78366d7` — Phase L5: Tuned Complexity Router (TRIVIAL threshold 0.00)
@@ -32,6 +33,14 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - Hybrid graph runtime perf/load sign-off is now **GREEN** (`backend/reports/hybrid_graph_signoff_20260422T094235Z.json`)
 - Native ranked-path probing tuned to BFS-limited Bolt execution; sign-off harness switched to direct Bolt measurement instead of subprocess overhead
 - Passing metrics: native ranked-path p95 `6.716 ms`, mixed workload p95 `28.337 ms`, burst p95 `14.702 ms`, steady-state p95 `4.396 ms`
+- Phase 19 core live wiring landed: Sentinel/CIBA pre-swarm override, tool-mode parallel dispatch, `dedup_only` tool-mode synthesis, session-aware API context, and targeted unittest coverage
+- Phase 20 now runs on the live API path: `chat.py` uses `route_with_cost(...)`, exposes `cost_stats` / `routing_bypass_reason`, and has targeted unittest coverage for bypass + cache behavior
+- Phase 23/24 platform extras now surface live layered guardrail + episodic session metadata through the sync chat API, with targeted unittest coverage for guardrail adapter behavior and episodic memory retention/dedup
+- Phase 24 now goes beyond raw history loading: duplicate-turn lookup, recent query/result pairs, scratchpad-aware prompt context, and richer episodic metadata are wired into the live orchestrator path
+- Phase 19 operator guidance is now documented in `docs/PHASE19_OPERATOR_GUIDE.md`
+- Phase 22 fairness tests + queue policy are now documented/covered in `docs/PHASE22_QUEUE_POLICY.md` and `backend/tests/test_phase22_query_prioritization.py`
+- F3 + Phase 12 benchmark artifacts now live in `backend/benchmark_f3_phase12.py`, `backend/reports/benchmark_f3_phase12.json`, and `docs/F3_PHASE12_BENCHMARK.md`
+- Meta-Harness reporting/apply flow now has targeted close-out coverage in `backend/tests/test_phase11_meta_harness_loop.py`
 
 **April 21 commits:**
 - `eba82a6` — Feature 4: Plain-English Safeguards + Feature 5: Scatter-Gather Swarm
@@ -62,9 +71,9 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 5 | Graph RAG | NetworkX FK graph, `AllPathsExplorer`, `TemporalGraphRAG`, Meta-Path Library | ✅ Complete |
 | 5½ | Graph Embedding Search | Node2Vec + text hybrid in Qdrant | ✅ Complete |
 | **L5** | **Complexity Routing** | `ComplexityRouter` — 4-tier skip guards + adaptive voting threshold | ✅ Complete |
-| **L5+20** | **Resource-Aware Cost Router** | `RouterCostTracker` — per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms), adaptive bypass | 🟡 Partial |
-| **L5+21** | **Formal Revision Loop** | `FormalRevisionLoop` — CoT trace accumulation, 8-phase convergence, `max_iterations=3` | 🟡 Partial |
-| **F3** | **Model-Driven Tool Sequencing** | `model_driven_sequencer.py` — description-aware tool planning for COMPLEX/EXPERT tiers | 🟡 Partial |
+| **L5+20** | **Resource-Aware Cost Router** | `RouterCostTracker` — per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms), adaptive bypass, and cheap-query validation coverage | ✅ Complete |
+| **L5+21** | **Formal Revision Loop** | `FormalRevisionLoop` — CoT trace accumulation, bounded critique/validation/execution revisions, `max_iterations=3`, API `formal_trace` + `revision_summary` | ✅ Complete |
+| **F3** | **Model-Driven Tool Sequencing** | `model_driven_sequencer.py` — description-aware bootstrap planning + iterative replanning/history surfaced in API for COMPLEX/EXPERT tiers, benchmarked Apr 22 | ✅ Complete |
 | **F4** | **Plain-English Safeguards** | Tool descriptions encode mandatory safety guidance close to tool contracts | ✅ Complete |
 | **F5** | **Scatter-Gather Swarm** | Multi-entity swarm routing with parallel fan-out and synthesis gather | ✅ Complete |
 
@@ -97,17 +106,17 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 8 | Result Masking | Role-based column redaction (Pillar 1) | ✅ Complete |
 | 9 | Frontend Modernization | 8-phase + confidence gauge + signal table + dark card | ✅ Complete |
 | **10** | **Multi-Agent Domain Swarm** | Planner + 7 Domain Agents + Synthesis Agent — ThreadPoolExecutor | ✅ Complete |
-| 11 | Meta-Harness Loop | `meta_harness_loop.py` — collect→analyze→YAML→approve→patch | 🟡 Partial |
-| 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from Redis traces | 🟡 Partial |
+| 11 | Meta-Harness Loop | `meta_harness_loop.py` — collect→analyze→YAML→approve→patch with structured reporting/apply coverage | ✅ Complete |
+| 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from phase states + structured trajectory log; live persistence/surfacing + benchmark artifacts expanded Apr 22 | ✅ Complete |
 | 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ Complete |
 | 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ Complete |
-| **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition | 🟡 Partial |
-| **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy | 🟡 Partial |
-| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | 🟡 Partial |
-| **21** | **Formal Revision Loop** | `RevisionLoop` class with CoT trace + convergence detection | 🟡 Partial |
-| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | 🟡 Partial |
-| **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | 🟡 Partial |
-| **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | 🟡 Partial |
+| **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition with live orchestrator merge + surfaced decomposition plan | ✅ Complete |
+| **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy; live wiring, tests, and operator guide now complete | ✅ Complete |
+| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold; live API path, trace output, and cheap-query validation complete | ✅ Complete |
+| **21** | **Formal Revision Loop** | `RevisionLoop` class with live orchestrator/API integration, CoT trace + convergence detection | ✅ Complete |
+| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue; live sync/async API wiring, fairness tests, and queue policy docs complete | ✅ Complete |
+| **23** | **Safety Guardrails (Standalone)** | `safety_guardrails.py` now owns the live layered safety contract behind the sentinel adapter; guardrail verdict/profile surfaced in API | ✅ Complete |
+| **24** | **Episodic Memory Store** | Redis-backed session scratchpad with live context/dedup integration, duplicate-turn lookup, recent query/result pairs, and surfaced episodic metadata in API | ✅ Complete |
 
 ---
 
@@ -278,9 +287,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 5.5 | Sandboxed Validation | `sql_executor.py`, `orchestrator.py` | ✅ Complete |
 | 6b | Memory Compounding | `orchestrator.py` (Step 8b) | ✅ Complete |
 | 6c | Proactive Threat Sentinel | `security_sentinel.py` (32KB) | ✅ Complete |
-| 11 | Meta-Harness Loop | `meta_harness_loop.py` + `failure_trigger.py` | 🟡 Partial |
-| 12 | Quality Evaluator | `quality_evaluator.py` | 🟡 Partial |
-| 12b | Trajectory Log | `HarnessRun.trajectory_log[]` | 🟡 Partial |
+| 11 | Meta-Harness Loop | `meta_harness_loop.py` + `failure_trigger.py` | ✅ Complete |
+| 12 | Quality Evaluator | `quality_evaluator.py` | ✅ Complete |
+| 12b | Trajectory Log | `HarnessRun.trajectory_log[]` with persisted `trajectory_event_count` + richer major-phase spans | ✅ Complete |
 | 14 | Voting Executor | `voting_executor.py` | ✅ Complete |
 | 15 | CIBA Approval | `ciba_approval_store.py` + `ciba.py` | ✅ Complete |
 | 16 | Self-Healing Patterns DB | `healed_pattern_store.py` | ✅ Complete |
@@ -295,13 +304,13 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | # | Priority | Item | Phase | Status |
 |---|----------|------|-------|--------|
 | L5 | — | Phase L5 Complexity Router — complete with adaptive voting thresholds | L5 | ✅ Complete |
-| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | 🟡 Partial |
-| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | 🟡 Partial |
-| 20 | 🟢 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | 🟡 Partial |
-| 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | 🚧 Planned |
-| 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | 🚧 Planned |
-| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | 🟡 Partial |
-| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | 🟡 Partial |
+| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | ✅ Complete (live wiring + tests Apr 22) |
+| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | ✅ Complete (operator guide + tests Apr 22) |
+| 20 | 🟢 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | ✅ Complete (cheap-query validation added Apr 22) |
+| 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | ✅ Complete (live wiring + API surfacing Apr 22) |
+| 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | ✅ Complete (fairness tests + queue policy Apr 22) |
+| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | ✅ Complete |
+| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | ✅ Complete |
 | 1 | 🔴 P0 | Real SAP HANA activation (`HANA_MODE=pool`) — replace mock as the default runtime | M7 | 🚧 Planned |
 | 2 | 🔴 P0 | Hybrid graph runtime load/perf sign-off (Memgraph + NX mirror, p95 target) | Ops | ✅ Complete |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Complete |

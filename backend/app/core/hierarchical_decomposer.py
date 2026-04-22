@@ -253,8 +253,8 @@ class HierarchicalDecomposer:
         num_domains = len(domain_groups)
         has_unclassified = bool(unclassified)
         has_comparison = any(kw in query_lower for kw in [
-            "compare", "versus", "vs", "difference between", "vs.", "or"
-        ])
+            "compare", "versus", "difference between", "vs."
+        ]) or any(token in query_lower.split() for token in ["vs", "or"])
         has_negotiation = any(kw in query_lower for kw in [
             "negotiate", "batna", "bargain", "leverage", "counter", "offer"
         ])

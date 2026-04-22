@@ -28,6 +28,7 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     HTTPException,
+    Request,
     WebSocket,
     WebSocketDisconnect,
     Query,
@@ -36,6 +37,7 @@ from pydantic import BaseModel, Field
 
 from app.agents.orchestrator import run_agent_loop
 from app.core.security import security_mesh
+from app.core.router_cost_tracker import route_with_cost
 from app.workers.celery_app import celery_app_instance as celery_app
 from app.workers.orchestrator_tasks import (
     run_orchestrator_task,
@@ -68,6 +70,7 @@ class TaskSubmitResponse(BaseModel):
     poll_after_s: float = Field(default=1.0, description="Recommended poll interval")
     priority_score: float = Field(default=None, description="Phase 22: Urgency x Role-Authority score")
     queue_target: str = Field(default=None, description="Phase 22: Celery queue targeted")
+    priority_breakdown: Optional[dict] = Field(default=None, description="Phase 22: Score breakdown")
 
 
 class TaskStatusResponse(BaseModel):
@@ -92,7 +95,7 @@ class TaskStatusResponse(BaseModel):
         "Estimated latency: 2-30s depending on query complexity."
     ),
 )
-async def submit_orchestrator_task(request: ChatRequest):
+async def submit_orchestrator_task(request: ChatRequest, http_request: Request):
     """
     ASYNC submission endpoint.
 
@@ -121,14 +124,23 @@ async def submit_orchestrator_task(request: ChatRequest):
     try:
         # .delay() returns AsyncResult — task is already queued in RabbitMQ
         # [Phase 22] Compute query priority and route to appropriate queue
+        session_id = getattr(http_request.state, "session_id", None)
+        user_id = http_request.headers.get("X-User-ID") or session_id or f"user:{request.user_role.lower()}"
+        routing = route_with_cost(
+            query=request.query,
+            domain_hint=request.domain,
+        )
+
         from app.core.query_priority_scorer import compute_priority
         priority_result = compute_priority(
             query=request.query,
             user_role=request.user_role,
-            routing_tier="simple",
+            routing_tier=routing.tier.value,
             domain=request.domain,
             urgency=request.urgency,
             contract_type=request.contract_type,
+            is_critical_report=request.urgency.lower() == "critical",
+            user_id=user_id,
         )
         celery_kwargs = priority_result.to_celery_kwargs()
 
@@ -137,6 +149,13 @@ async def submit_orchestrator_task(request: ChatRequest):
                 "query": request.query,
                 "user_role": request.user_role,
                 "domain": request.domain,
+                "urgency": request.urgency,
+                "priority_score": round(priority_result.score, 3),
+                "queue_target": priority_result.queue,
+                "priority_breakdown": priority_result.breakdown.to_dict(),
+                "routing_tier": routing.tier.value,
+                "user_id": user_id,
+                "session_id": session_id,
             },
             **celery_kwargs
         )
@@ -158,6 +177,7 @@ async def submit_orchestrator_task(request: ChatRequest):
             poll_after_s=1.0,
             priority_score=round(priority_result.score, 3),
             queue_target=priority_result.queue,
+            priority_breakdown=priority_result.breakdown.to_dict(),
         )
 
     except Exception as e:

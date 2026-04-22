@@ -908,6 +908,20 @@ patch: |
                 if len(rec.patch_lines) > 6:
                     logger.info(f"    ... +{len(rec.patch_lines)-6} more lines")
 
+    def summarize_recommendations(self, recommendations: List[Recommendation]) -> Dict[str, Any]:
+        """Structured summary for dashboards/tool responses."""
+        summary = {
+            "count": len(recommendations or []),
+            "by_priority": {},
+            "by_category": {},
+            "by_status": {},
+        }
+        for rec in recommendations or []:
+            summary["by_priority"][rec.priority] = summary["by_priority"].get(rec.priority, 0) + 1
+            summary["by_category"][rec.category] = summary["by_category"].get(rec.category, 0) + 1
+            summary["by_status"][rec.status] = summary["by_status"].get(rec.status, 0) + 1
+        return summary
+
 
 # ---------------------------------------------------------------------------
 SYSTEM_PROMPT = """

@@ -8,6 +8,8 @@ class SAPAuthContext(BaseModel):
     """
     role_id: str
     description: str
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
     
     # Pillar 1: Scope Filtering (Row-level access based on Org Structure)
     allowed_company_codes: List[str]  # e.g., BUKRS

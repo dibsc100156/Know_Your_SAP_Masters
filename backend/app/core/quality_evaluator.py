@@ -1,79 +1,119 @@
 from typing import Dict, List
+
 from app.core.harness_runs import HarnessRun, PhaseState
+
 
 class QualityEvaluator:
     """
     Computes Quality Metrics (correctness_score, trajectory_adherence)
-    by running evaluations against the stored trace data of a HarnessRun.
+    from both persisted phase states and the structured trajectory log.
     """
+
+    EXPECTED_TRAJECTORY_ORDER = [
+        "phase_0_meta_path",
+        "phase_1_schema_rag",
+        "phase_18_exploration",
+        "phase_1_5_graph_discovery",
+        "phase_2_sql_pattern",
+        "phase_4_5_self_critique",
+        "phase_5_5_validation_harness",
+        "phase_6_execution",
+        "phase_8_finalization",
+    ]
 
     @staticmethod
     def evaluate_run(run: HarnessRun) -> Dict[str, float]:
         if not run:
-            return {"correctness_score": 0.0, "trajectory_adherence": 0.0}
-        
-        adherence = QualityEvaluator._compute_trajectory_adherence(run.phase_states)
+            return {
+                "correctness_score": 0.0,
+                "trajectory_adherence": 0.0,
+                "phase_coverage": 0.0,
+                "trajectory_event_count": 0.0,
+            }
+
+        adherence = QualityEvaluator._compute_trajectory_adherence(run)
         correctness = QualityEvaluator._compute_correctness_score(run)
-        
+        phase_coverage = QualityEvaluator._compute_phase_coverage(run.phase_states)
+        trajectory_event_count = float(len(run.trajectory_log or []))
+
         return {
             "correctness_score": round(correctness, 2),
-            "trajectory_adherence": round(adherence, 2)
+            "trajectory_adherence": round(adherence, 2),
+            "phase_coverage": round(phase_coverage, 2),
+            "trajectory_event_count": trajectory_event_count,
         }
 
     @staticmethod
-    def _compute_trajectory_adherence(phases: List[PhaseState]) -> float:
-        if not phases:
-            return 0.0
-        
+    def _compute_trajectory_adherence(run: HarnessRun) -> float:
         score = 1.0
-        
+        phases = run.phase_states or []
+        events = run.trajectory_log or []
+
         for phase in phases:
             if phase.status == "failed":
-                score -= 0.15
+                score -= 0.12
             if phase.validator_fired:
-                score -= 0.10
+                score -= 0.08
             if phase.error and not phase.validator_fired:
-                score -= 0.2
-                
-        # Sequence adherence penalty for out-of-order execution
-        phase_order = {
-            "phase_1": 1, "phase_1_5": 1.5, "phase_2": 2, "phase_2b": 2.2, 
-            "phase_3": 3, "phase_4": 4, "phase_4_5": 4.5, "phase_5": 5, 
-            "phase_5_5": 5.5, "phase_6": 6, "phase_7": 7, "phase_8": 8
-        }
-        
-        last_num = -1.0
-        for p in phases:
-            # map keys like "phase_1.5" to "phase_1_5" just in case
-            safe_phase = p.phase.replace(".", "_")
-            if safe_phase in phase_order:
-                current_num = phase_order[safe_phase]
-                if current_num < last_num:
-                    score -= 0.2 # Backtracking penalty
-                last_num = current_num
+                score -= 0.15
 
+        last_idx = -1
+        for event in events:
+            step = event.get("step", "")
+            if step in QualityEvaluator.EXPECTED_TRAJECTORY_ORDER:
+                idx = QualityEvaluator.EXPECTED_TRAJECTORY_ORDER.index(step)
+                if idx < last_idx:
+                    score -= 0.12
+                last_idx = max(last_idx, idx)
+            decision = str(event.get("decision", "")).lower()
+            if decision in {"fail", "error"}:
+                score -= 0.08
+            elif decision == "skip":
+                score -= 0.03
+
+        coverage = QualityEvaluator._compute_phase_coverage(phases)
+        if events:
+            matched = sum(1 for e in events if e.get("step") in QualityEvaluator.EXPECTED_TRAJECTORY_ORDER)
+            coverage = max(coverage, matched / len(QualityEvaluator.EXPECTED_TRAJECTORY_ORDER))
+
+        score = (score * 0.75) + (coverage * 0.25)
         return max(0.0, min(1.0, score))
+
+    @staticmethod
+    def _compute_phase_coverage(phases: List[PhaseState]) -> float:
+        if not phases:
+            return 0.0
+        completed = sum(1 for p in phases if p.status in {"completed", "skipped"})
+        return max(0.0, min(1.0, completed / 8.0))
 
     @staticmethod
     def _compute_correctness_score(run: HarnessRun) -> float:
         if run.status == "failed":
             return 0.0
-            
+
         base_score = float(run.confidence_score) if run.confidence_score else 0.8
-        
-        # Penalties based on final phase outcomes
-        if not run.phase_states:
+        events = run.trajectory_log or []
+        phases = run.phase_states or []
+
+        if not phases and not events:
             return 0.0
-            
-        last_phase = run.phase_states[-1]
-        if last_phase.status != "completed":
-            base_score -= 0.4
-            
-        # Check sentinel blocks in artifacts or errors
-        for p in run.phase_states:
-            if p.phase == "sentinel" and p.status == "failed":
-                base_score -= 0.8
-            if "sentinel" in p.phase.lower() and p.error:
-                base_score -= 0.8
-                
+
+        if phases:
+            last_phase = phases[-1]
+            if last_phase.status not in {"completed", "skipped"}:
+                base_score -= 0.25
+
+        for phase in phases:
+            if "sentinel" in phase.phase.lower() and (phase.status == "failed" or phase.error):
+                base_score -= 0.5
+            if phase.validator_fired:
+                base_score -= 0.05
+
+        for event in events:
+            decision = str(event.get("decision", "")).lower()
+            if decision in {"fail", "error"}:
+                base_score -= 0.06
+            if event.get("step") == "phase_8_finalization" and decision == "success":
+                base_score += 0.03
+
         return max(0.0, min(1.0, base_score))

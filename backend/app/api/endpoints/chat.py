@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
@@ -10,11 +10,12 @@ from app.core.eval_alerting import EvalAlertMonitor
 router = APIRouter()
 
 # Import the real 8-phase orchestrator
+from app.agents.deep_research import run_deep_research
 from app.agents.orchestrator import run_agent_loop
 from app.core.security import security_mesh
 from app.core.quality_evaluator import QualityEvaluator
 from app.core.harness_runs import get_harness_runs
-from app.core.complexity_router import get_routing_decision
+from app.core.router_cost_tracker import route_with_cost, get_router_cost_tracker
 
 
 # =============================================================================
@@ -29,6 +30,15 @@ class ChatRequest(BaseModel):
     # Phase 22: Dynamic Query Prioritization
     urgency: str = Field(default="normal", description="Urgency: critical | high | normal | low")
     contract_type: str = Field(default="standard", description="SLA: enterprise premium standard")
+
+
+class DeepResearchRequest(BaseModel):
+    query: str = Field(..., description="Natural language research question about SAP data")
+    domain: str = Field(default="auto", description="Routing domain hint")
+    user_role: str = Field(default="AP_CLERK", description="SAP Role Key")
+    research_depth: int = Field(default=3, ge=1, le=5, description="How aggressively to materialize and verify evidence")
+    max_evidence: int = Field(default=15, ge=5, le=30, description="Maximum evidence items to retain in the pack")
+    time_horizon: str = Field(default="auto", description="Optional research horizon, e.g. auto | 30d | 90d | 1y | 3y")
 
 
 class ChatResponse(BaseModel):
@@ -64,6 +74,10 @@ class ChatResponse(BaseModel):
     # Self-heal events
     self_heal: Optional[Dict[str, Any]] = None
 
+    # Phase 18: Exploration & Discovery
+    exploration: Optional[Dict[str, Any]] = None
+    decomposition_plan: Optional[Dict[str, Any]] = None
+
     # Meta
     execution_time_ms: Optional[int] = None
     token_tracking: Optional[Dict[str, Any]] = None
@@ -81,6 +95,8 @@ class ChatResponse(BaseModel):
     agent_summary: Optional[Dict[str, Any]] = None  # {agent_name: {status, record_count, ...}}
     domain_coverage: Optional[List[str]] = None     # ["bp_agent", "mm_agent", ...]
     conflicts: Optional[List[Dict[str, Any]]] = None  # value conflicts across agents
+    model_driven_plan: Optional[Dict[str, Any]] = None
+    model_driven_plan_history: Optional[List[Dict[str, Any]]] = None
     complexity_score: Optional[float] = None
 
     # Phase L5: Complexity Routing intelligence returned to frontend
@@ -91,8 +107,16 @@ class ChatResponse(BaseModel):
     sentinel: Optional[Dict[str, Any]] = None      # {verdict, flags, session_tightness}
     sentinel_stats: Optional[Dict[str, Any]] = None  # per-engine detection counts
 
+    # Phase 19: Agent-as-Tool Dynamic Override
+    tool_mode: Optional[bool] = None
+    tool_mode_reason: Optional[str] = None
+
     # Harness Runs tracking
     run_id: Optional[str] = None                  # Redis harness run identifier
+
+    # Phase 21: Formal Revision Loop
+    formal_trace: Optional[List[Dict[str, Any]]] = None
+    revision_summary: Optional[Dict[str, Any]] = None
 
     # Synthesis validation summary (populated when use_swarm=True)
     validation_summary: Optional[Dict[str, Any]] = None  # {agents_validated, agents_passed, agents_failed, per_agent}
@@ -100,7 +124,19 @@ class ChatResponse(BaseModel):
     # Phase 22: Dynamic Query Prioritization
     priority_score: Optional[float] = None  # Urgency x Role-Authority score
     queue_target: Optional[str] = None      # Celery queue: agent | priority
+    priority_breakdown: Optional[Dict[str, Any]] = None
+
+    # Phase 23 / 24 platform extras
+    guardrails: Optional[Dict[str, Any]] = None
+    episodic_context: Optional[str] = None
+    episodic_memory: Optional[Dict[str, Any]] = None
+    prior_turns: Optional[int] = None
+    prior_tables: Optional[List[str]] = None
     urgency: Optional[str] = None            # Urgency level applied
+
+    # Phase 20: Resource-Aware Cost Router
+    cost_stats: Optional[Dict[str, Any]] = None
+    routing_bypass_reason: Optional[str] = None
 
     # Role context returned for frontend display
     role_applied: str
@@ -112,20 +148,26 @@ class ChatResponse(BaseModel):
 
 
 @router.post("/chat/master-data", response_model=ChatResponse)
-async def chat_master_data_endpoint(request: ChatRequest):
+async def chat_master_data_endpoint(request: ChatRequest, http_request: Request):
     """
     Unified endpoint — wires directly to the 8-phase orchestrator.
     Returns the full richness of Phases 1-8 for the modernized frontend.
     """
     # Validate role
     try:
-        auth_context = security_mesh.get_context(request.user_role)
+        base_context = security_mesh.get_context(request.user_role)
+        session_id = getattr(http_request.state, "session_id", None)
+        user_id = http_request.headers.get("X-User-ID") or session_id or f"user:{request.user_role.lower()}"
+        auth_context = base_context.model_copy(update={
+            "session_id": session_id,
+            "user_id": user_id,
+        })
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
     try:
-        # [Phase L5] Compute routing before calling orchestrator
-        routing = get_routing_decision(
+        # [Phase L5 + Phase 20] Compute cost-aware routing before calling orchestrator
+        routing = route_with_cost(
             query=request.query,
             domain_hint=request.domain,
         )
@@ -139,6 +181,8 @@ async def chat_master_data_endpoint(request: ChatRequest):
             domain=request.domain,
             urgency=request.urgency,
             contract_type=request.contract_type,
+            is_critical_report=request.urgency.lower() == "critical",
+            user_id=user_id,
         )
 
         result = run_agent_loop(
@@ -151,12 +195,17 @@ async def chat_master_data_endpoint(request: ChatRequest):
                                    # frontend. Keep disabled until the SupervisorAgent is updated
                                    # to return the full 8-phase result dict.
             use_swarm=request.use_swarm,  # Multi-Agent Domain Swarm vs monolithic orchestrator
-            routing=routing,           # Phase L5: pre-computed complexity routing
+            routing=routing,           # Phase L5+20: pre-computed cost-aware routing
         )
+
+        router_tracker = get_router_cost_tracker()
+        result.setdefault("cost_stats", router_tracker.get_cost_stats())
+        result["routing_bypass_reason"] = router_tracker.get_bypass_alert()
 
         # [Phase 22] Attach priority metadata to result
         result["priority_score"] = round(priority_result.score, 3)
         result["queue_target"] = priority_result.queue
+        result["priority_breakdown"] = priority_result.breakdown.to_dict()
         result["urgency"] = request.urgency
 
         # [Phase L4] Record query metrics for monitoring dashboard
@@ -227,6 +276,8 @@ async def chat_master_data_endpoint(request: ChatRequest):
             qm_semantic=result.get("qm_semantic"),
             negotiation_brief=neg_brief,
             self_heal=result.get("self_heal"),
+            exploration=result.get("exploration"),
+            decomposition_plan=result.get("decomposition_plan"),
             execution_time_ms=result.get("execution_time_ms"),
             token_tracking=result.get("token_tracking"),
             confidence_score=result.get("confidence_score"),
@@ -237,25 +288,74 @@ async def chat_master_data_endpoint(request: ChatRequest):
             agent_summary=result.get("agent_summary"),
             domain_coverage=result.get("domain_coverage"),
             conflicts=result.get("conflicts"),
+            model_driven_plan=result.get("model_driven_plan"),
+            model_driven_plan_history=result.get("model_driven_plan_history"),
             complexity_score=result.get("complexity_score"),
             routing_tier=routing.tier.value if routing else None,
             routing_score=routing.score if routing else None,
             sentinel=result.get("sentinel"),
             sentinel_stats=result.get("sentinel_stats"),
+            tool_mode=result.get("tool_mode"),
+            tool_mode_reason=result.get("tool_mode_reason"),
             run_id=result.get("run_id"),
+            formal_trace=result.get("formal_trace"),
+            revision_summary=result.get("revision_summary"),
             validation_summary=result.get("validation_summary"),
             role_applied=auth_context.role_id,
-            user_id=f"user:{auth_context.role_id.lower()}",
+            user_id=auth_context.user_id or f"user:{auth_context.role_id.lower()}",
             quality_metrics=quality_metrics,
             trajectory_log=result.get("trajectory_log"),
             # Phase 22: Dynamic Query Prioritization
             priority_score=result.get("priority_score"),
             queue_target=result.get("queue_target"),
+            priority_breakdown=result.get("priority_breakdown"),
+            guardrails=result.get("guardrails"),
+            episodic_context=result.get("episodic_context"),
+            episodic_memory=result.get("episodic_memory"),
+            prior_turns=result.get("prior_turns"),
+            prior_tables=result.get("prior_tables"),
             urgency=result.get("urgency"),
+            cost_stats=result.get("cost_stats"),
+            routing_bypass_reason=result.get("routing_bypass_reason"),
         )
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Orchestrator error: {str(e)}")
+
+
+@router.post("/chat/deep-research")
+async def deep_research_endpoint(request: DeepResearchRequest, http_request: Request):
+    """Deep Research entrypoint.
+
+    Runs the new evidence-first workflow, currently with live search-stage wiring
+    to meta-paths, graph embeddings, and graph traversal.
+    """
+    try:
+        base_context = security_mesh.get_context(request.user_role)
+        session_id = getattr(http_request.state, "session_id", None)
+        user_id = http_request.headers.get("X-User-ID") or session_id or f"user:{request.user_role.lower()}"
+        auth_context = base_context.model_copy(update={
+            "session_id": session_id,
+            "user_id": user_id,
+        })
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    try:
+        result = run_deep_research(
+            question=request.query,
+            auth_context=auth_context,
+            context={
+                "domain": request.domain,
+                "user_role": request.user_role,
+                "research_depth": request.research_depth,
+                "max_evidence": request.max_evidence,
+                "time_horizon": request.time_horizon,
+            },
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Deep Research error: {str(e)}")
 
 
 @router.get("/domains")

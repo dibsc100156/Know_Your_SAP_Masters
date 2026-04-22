@@ -1,0 +1,122 @@
+{
+  "f3": {
+    "scenarios": [
+      {
+        "scenario": "simple-vendor",
+        "baseline_precision": 0.556,
+        "bootstrap_precision": 0.833,
+        "refined_precision": 0.833,
+        "baseline_recall": 1.0,
+        "bootstrap_recall": 1.0,
+        "refined_recall": 1.0,
+        "bootstrap_tools": [
+          "meta_path_match",
+          "schema_lookup",
+          "graph_enhanced_schema_discovery",
+          "sql_pattern_lookup",
+          "sql_validate",
+          "sql_execute"
+        ],
+        "refined_tools": [
+          "meta_path_match",
+          "schema_lookup",
+          "graph_enhanced_schema_discovery",
+          "sql_pattern_lookup",
+          "sql_validate",
+          "sql_execute"
+        ],
+        "iterations": 2
+      },
+      {
+        "scenario": "cross-module-temporal",
+        "baseline_precision": 1.0,
+        "bootstrap_precision": 1.0,
+        "refined_precision": 1.0,
+        "baseline_recall": 1.0,
+        "bootstrap_recall": 1.0,
+        "refined_recall": 1.0,
+        "bootstrap_tools": [
+          "meta_path_match",
+          "schema_lookup",
+          "graph_enhanced_schema_discovery",
+          "sql_pattern_lookup",
+          "temporal_graph_search",
+          "all_paths_explore",
+          "steiner_tree_explore",
+          "sql_validate",
+          "sql_execute"
+        ],
+        "refined_tools": [
+          "meta_path_match",
+          "schema_lookup",
+          "graph_enhanced_schema_discovery",
+          "sql_pattern_lookup",
+          "temporal_graph_search",
+          "all_paths_explore",
+          "steiner_tree_explore",
+          "sql_validate",
+          "sql_execute"
+        ],
+        "iterations": 2
+      },
+      {
+        "scenario": "cross-module-no-temporal",
+        "baseline_precision": 0.889,
+        "bootstrap_precision": 1.0,
+        "refined_precision": 1.0,
+        "baseline_recall": 1.0,
+        "bootstrap_recall": 1.0,
+        "refined_recall": 1.0,
+        "bootstrap_tools": [
+          "meta_path_match",
+          "schema_lookup",
+          "graph_enhanced_schema_discovery",
+          "sql_pattern_lookup",
+          "all_paths_explore",
+          "steiner_tree_explore",
+          "sql_validate",
+          "sql_execute"
+        ],
+        "refined_tools": [
+          "meta_path_match",
+          "schema_lookup",
+          "graph_enhanced_schema_discovery",
+          "sql_pattern_lookup",
+          "all_paths_explore",
+          "steiner_tree_explore",
+          "sql_validate",
+          "sql_execute"
+        ],
+        "iterations": 2
+      }
+    ],
+    "summary": {
+      "avg_baseline_precision": 0.815,
+      "avg_refined_precision": 0.944,
+      "precision_delta": 0.129
+    }
+  },
+  "phase12": {
+    "runs": [
+      {
+        "run_id": "q1",
+        "legacy_correctness": 0.86,
+        "current_correctness": 0.85,
+        "current_trajectory_adherence": 0.86,
+        "trajectory_event_count": 4.0
+      },
+      {
+        "run_id": "q2",
+        "legacy_correctness": 0.95,
+        "current_correctness": 0.77,
+        "current_trajectory_adherence": 0.92,
+        "trajectory_event_count": 6.0
+      }
+    ],
+    "summary": {
+      "avg_legacy_correctness": 0.905,
+      "avg_current_correctness": 0.81,
+      "avg_current_trajectory_adherence": 0.89
+    }
+  }
+}

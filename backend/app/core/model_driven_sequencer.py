@@ -29,9 +29,20 @@ class ModelDrivenPlan:
     skipped_tools: List[str]
     rationale: List[str] = field(default_factory=list)
     signals: Dict[str, Any] = field(default_factory=dict)
+    iteration: int = 1
 
     def allows(self, tool_name: str) -> bool:
         return tool_name in set(self.selected_tools)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "enabled": self.enabled,
+            "selected_tools": self.selected_tools,
+            "skipped_tools": self.skipped_tools,
+            "rationale": self.rationale,
+            "signals": self.signals,
+            "iteration": self.iteration,
+        }
 
 
 TOOL_ORDER = {
@@ -177,4 +188,66 @@ def build_model_driven_plan(
         skipped_tools=skipped,
         rationale=rationale,
         signals=signals,
+    )
+
+
+def refine_model_driven_plan(
+    plan: ModelDrivenPlan,
+    routing: RoutingDecision,
+    query: str,
+    domain: str,
+    tables_involved: List[str],
+    completed_tools: List[str],
+    temporal_mode: str = "none",
+) -> ModelDrivenPlan:
+    """
+    Lightweight iterative refinement pass over the bootstrap F3 plan.
+
+    The initial plan is produced before discovery. Once schema/graph steps reveal
+    more state, this refiner can expand the plan without weakening guardrails.
+    """
+    if not plan or not plan.enabled:
+        return plan
+
+    selected = list(plan.selected_tools)
+    rationale = list(plan.rationale)
+    signals = dict(plan.signals)
+
+    def ensure(tool_name: str, why: str) -> None:
+        if tool_name not in selected:
+            selected.append(tool_name)
+            rationale.append(f"{tool_name}: {why}")
+
+    if not tables_involved:
+        ensure("graph_enhanced_schema_discovery", "no grounded tables yet after initial discovery")
+        ensure("sql_pattern_lookup", "still need a validated SQL generation path")
+
+    if len(tables_involved) >= 2:
+        ensure("all_paths_explore", "multiple grounded tables discovered; join-path reasoning is now justified")
+
+    if temporal_mode != "none":
+        ensure("temporal_graph_search", "temporal mode already active; keep temporal path analysis in the plan")
+
+    # Validation and execution guardrails always remain explicit.
+    ensure("sql_validate", "guardrail remains mandatory after iterative replanning")
+    ensure("sql_execute", "execution stays explicit after validation")
+
+    selected = sorted(dict.fromkeys(selected), key=lambda name: TOOL_ORDER.get(name, 999))
+    enabled_pool = set(routing.enabled_tools or selected)
+    skipped = sorted(enabled_pool.difference(selected))
+    signals.update({
+        "domain": domain,
+        "tables_involved": len(tables_involved),
+        "completed_tools": completed_tools,
+        "temporal_mode": temporal_mode,
+        "iterative_refinement": True,
+    })
+
+    return ModelDrivenPlan(
+        enabled=True,
+        selected_tools=selected,
+        skipped_tools=skipped,
+        rationale=rationale,
+        signals=signals,
+        iteration=(plan.iteration or 1) + 1,
     )

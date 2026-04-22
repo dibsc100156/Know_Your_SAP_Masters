@@ -44,21 +44,25 @@
 **Key refs:** `backend/app/core/graph_store.py`, `memgraph_adapter.py`, `backend/hybrid_graph_signoff.py`, `docs/HYBRID_GRAPH_SIGNOFF.md`, `docs/MEMGRAPH_MIGRATION_GUIDE.md`
 
 ### 3) Phase 18 — Exploration & Discovery
-- [ ] Finish dynamic foreign-key probing flow
-- [ ] Finish hierarchical task decomposition for complex queries
-- [ ] Wire exploration outputs into orchestrator decisions cleanly
-- [ ] Add tests for discovery on unseen or weak-schema queries
-- [ ] Document when exploration is triggered vs skipped
+- [x] Finish dynamic foreign-key probing flow
+- [x] Finish hierarchical task decomposition for complex queries
+- [x] Wire exploration outputs into orchestrator decisions cleanly
+- [x] Add tests for discovery on unseen or weak-schema queries
+- [x] Document when exploration is triggered vs skipped
+
+**Implementation note (2026-04-22):** Phase 18 is now wired through the live orchestrator path. Schema RAG misses no longer return early; they continue into Phase 18/Phase 5 fallback flow. `exploration_engine.explore(...)` now fires when a query is not on the meta-path fast path and any of the following hold: no tables found, weak schema confidence (`< 0.60`), COMPLEX/EXPERT routing tier, or field-probe signals such as bank/tax/address/contact/WBS/budget queries. Exploration results merge new tables into `tables_involved`, and `decompose_query(...)` now produces a live `decomposition_plan` for multi-table queries. Targeted unittest coverage was added in `backend/tests/test_phase18_exploration.py`, and a substring bug in comparison detection (`"or"`) was fixed in `hierarchical_decomposer.py`.
 
 **Done when:** Complex/unseen queries can trigger discovery safely and produce measurable routing gains.
 **Key refs:** `backend/app/agents/orchestrator.py`, related exploration components
 
 ### 4) Phase 19 — Agent-as-Tool Dynamic Override
-- [ ] Implement tool-mode suppression on Sentinel/CIBA trigger
-- [ ] Ensure risky/autonomous branches are downgraded deterministically
-- [ ] Add tests for `block`, `tighten`, and override edge cases
-- [ ] Expose override state in trace/debug output
-- [ ] Document operator expectations
+- [x] Implement tool-mode suppression on Sentinel/CIBA trigger
+- [x] Ensure risky/autonomous branches are downgraded deterministically
+- [x] Add tests for `block`, `tighten`, and override edge cases
+- [x] Expose override state in trace/debug output
+- [x] Document operator expectations
+
+**Implementation note (2026-04-22):** core live wiring is now in place. The swarm path evaluates Sentinel/CIBA before autonomy runs, parallel dispatch routes through `agent_tool_mode.wrap_agent_execution(...)`, synthesis falls back to `dedup_only` tool-mode merging, API responses expose `tool_mode` + `tool_mode_reason`, and targeted unittest coverage was added in `backend/tests/test_phase19_agent_tool_mode.py`. Operator guidance is now documented in `docs/PHASE19_OPERATOR_GUIDE.md`.
 
 **Done when:** Sentinel/CIBA can reliably clamp agent autonomy without breaking safe tool execution.
 **Key refs:** `backend/app/core/security_sentinel.py`, `backend/app/api/endpoints/ciba.py`, `backend/app/agents/orchestrator.py`
@@ -68,49 +72,61 @@
 ## P1 — High-Value Next
 
 ### 5) Phase 20 — Resource-Aware Cost Router
-- [ ] Finalize per-tier routing cost tracking
-- [ ] Enforce bypass logic when routing overhead exceeds threshold
-- [ ] Emit per-query budget/cost trace data
-- [ ] Validate that low-complexity queries stay cheap
+- [x] Finalize per-tier routing cost tracking
+- [x] Enforce bypass logic when routing overhead exceeds threshold
+- [x] Emit per-query budget/cost trace data
+- [x] Validate that low-complexity queries stay cheap
+
+**Implementation note (2026-04-22):** Phase 20 is now on the live API path. `chat.py` uses `route_with_cost(...)` instead of bypassing the cost router with direct `get_routing_decision(...)`, and responses now surface `cost_stats` plus `routing_bypass_reason`. Targeted unittest coverage in `backend/tests/test_phase20_router_cost_tracker.py` now covers both bypass-on-budget-breach/cache-hit behavior and the cheap-query under-budget path.
 
 **Done when:** Router cost is observable and tier bypasses work as intended.
 
 ### 6) Phase 21 — Formal Revision Loop
-- [ ] Finish `RevisionLoop` / `FormalRevisionLoop` integration
-- [ ] Implement exit conditions and convergence detection
-- [ ] Enforce `max_iterations=3`
-- [ ] Capture revision trace in debug/quality outputs
+- [x] Finish `RevisionLoop` / `FormalRevisionLoop` integration
+- [x] Implement exit conditions and convergence detection
+- [x] Enforce `max_iterations=3`
+- [x] Capture revision trace in debug/quality outputs
+
+**Implementation note (2026-04-22):** Phase 21 is now wired through the live orchestrator path. `run_agent_loop()` configures `FormalRevisionLoop` with explicit confidence/stability exit conditions, bounds critique/validation/execution heal attempts to `max_iterations=3`, records bounded revision events in the formal CoT trace, and returns both `formal_trace` and `revision_summary` through the API response model. Targeted unittest coverage was added in `backend/tests/test_phase21_formal_revision_loop.py`.
 
 **Done when:** Revision is iterative but bounded, and traces show why the loop stopped.
 
 ### 7) Phase 22 — Dynamic Query Prioritization
-- [ ] Build urgency × recency × role-authority scoring
-- [ ] Wire scoring into Celery queue selection/prioritization
-- [ ] Add tests for starvation/fairness edge cases
-- [ ] Document queue policy
+- [x] Build urgency × recency × role-authority scoring
+- [x] Wire scoring into Celery queue selection/prioritization
+- [x] Add tests for starvation/fairness edge cases
+- [x] Document queue policy
+
+**Implementation note (2026-04-22):** Phase 22 now drives the live API + Celery submission path. Sync and async chat endpoints compute priority with real routing tier + request user identity, critical requests now map into the `priority` queue, `apply_async(...)` is called with explicit `queue`/`priority`/`routing_key`, and task metadata carries `priority_score`, `queue_target`, and `priority_breakdown`. Targeted unittest coverage in `backend/tests/test_phase22_query_prioritization.py` now covers user-id recency isolation, critical request priority routing, async submit metadata, fairness recency-penalty behavior, and expert low-urgency anti-jump behavior. Queue policy is documented in `docs/PHASE22_QUEUE_POLICY.md`.
 
 **Done when:** Higher-value work is scheduled earlier without starving normal jobs.
 
 ### 8) Phase 11 — Meta-Harness Loop
-- [ ] Close the remaining gaps in collect → analyze → YAML → approve → patch
-- [ ] Verify rule proposals can be safely reviewed and applied
-- [ ] Improve reporting for generated recommendations
+- [x] Close the remaining gaps in collect → analyze → YAML → approve → patch
+- [x] Verify rule proposals can be safely reviewed and applied
+- [x] Improve reporting for generated recommendations
+
+**Implementation note (2026-04-22):** Meta-Harness now exposes structured recommendation summaries via `summarize_recommendations(...)`, and `meta_harness_propose` returns that summary alongside YAML output for review. Targeted unittest coverage was added in `backend/tests/test_phase11_meta_harness_loop.py` for summary generation and approve-and-apply patch flow.
 
 **Done when:** Failure clusters can produce actionable proposals that are easy to approve and apply.
 
 ### 9) Phase 12 / 12b — Quality Evaluator + Trajectory Log
-- [ ] Finalize correctness and trajectory scoring pipeline
-- [ ] Persist complete trajectory logs for evaluated runs
-- [ ] Surface quality metrics in dashboard/debug outputs
-- [ ] Add benchmark comparison before/after metrics
+- [x] Finalize correctness and trajectory scoring pipeline
+- [x] Persist complete trajectory logs for evaluated runs
+- [x] Surface quality metrics in dashboard/debug outputs
+- [x] Add benchmark comparison before/after metrics
+
+**Implementation note (2026-04-22):** Phase 12/12b now persists quality metadata as part of `HarnessRun` instead of loose hash fields, increments/stores `trajectory_event_count`, and evaluates quality from both `phase_states` and the structured `trajectory_log`. The monolithic orchestrator now records major trajectory events for graph discovery, SQL pattern retrieval, self-critique, validation harness, execution, and finalization, and API responses surface richer `quality_metrics` plus the full `trajectory_log`. Targeted unittest coverage was added in `backend/tests/test_phase12_quality_trajectory.py`. Benchmark artifacts now live in `backend/benchmark_f3_phase12.py`, `backend/reports/benchmark_f3_phase12.json`, and `docs/F3_PHASE12_BENCHMARK.md`.
 
 **Done when:** Query runs have consistent quality scores and traceable trajectories.
 
 ### 10) F3 — Model-Driven Tool Sequencing
-- [ ] Upgrade bootstrap planner into a true iterative tool-calling loop
-- [ ] Keep hard validation/execution guardrails intact
-- [ ] Expose generated tool plan in API/debug output
-- [ ] Benchmark against current orchestrator flow
+- [x] Upgrade bootstrap planner into a true iterative tool-calling loop
+- [x] Keep hard validation/execution guardrails intact
+- [x] Expose generated tool plan in API/debug output
+- [x] Benchmark against current orchestrator flow
+
+**Implementation note (2026-04-22):** F3 now supports lightweight iterative replanning in the live orchestrator. The initial description-aware plan is built up front, then refined after schema/exploration and graph discovery using newly grounded tables + completed tool state. Validation/execution remain explicit guardrail steps in both bootstrap and refined plans. Sync API responses now surface `model_driven_plan` and `model_driven_plan_history` for debugging/inspection. Coverage added in `backend/tests/test_f3_tool_sequencing.py`. Benchmark artifacts now live in `backend/benchmark_f3_phase12.py`, `backend/reports/benchmark_f3_phase12.json`, and `docs/F3_PHASE12_BENCHMARK.md`.
 
 **Done when:** Sequencing is iterative, observable, and demonstrably better than bootstrap mode.
 **Key refs:** `backend/app/core/model_driven_sequencer.py`, `backend/app/agents/orchestrator.py`
@@ -141,16 +157,20 @@
 ## P2 — Important but Can Follow
 
 ### 14) Phase 23 — Safety Guardrails (Standalone layer)
-- [ ] Separate standalone safety guardrails from Sentinel internals
-- [ ] Clarify responsibilities between policy, detection, and enforcement
-- [ ] Add tests for layered behavior
+- [x] Separate standalone safety guardrails from Sentinel internals
+- [x] Clarify responsibilities between policy, detection, and enforcement
+- [x] Add tests for layered behavior
+
+**Implementation note (2026-04-22):** the live orchestrator now runs through `safety_guardrails.py` via the legacy adapter path rather than treating Sentinel logic as a monolith. Guardrail evaluations now preserve layered debug data (`guardrails.mode`, `guardrails.verdict`, `guardrails.profile`) in API responses so policy/detection/enforcement boundaries are inspectable without changing the enforcement contract. Targeted unittest coverage was added in `backend/tests/test_phase23_24_platform_extras.py` for adapter-level guardrail behavior.
 
 **Done when:** Safety logic is modular and easier to evolve independently.
 
 ### 15) Phase 24 — Episodic Memory Store
-- [ ] Build Redis-backed session scratchpad for last 5 query/result pairs
-- [ ] Define retention and privacy boundaries
-- [ ] Integrate into routing/revision only where useful
+- [x] Build Redis-backed session scratchpad for last 5 query/result pairs
+- [x] Define retention and privacy boundaries
+- [x] Integrate into routing/revision only where useful
+
+**Implementation note (2026-04-22):** Phase 24 is now live on the request path. The orchestrator loads bounded per-session history/context, dedup checks, duplicate-turn lookup, recent query/result pairs, and prior table hints before planning; it records the completed turn back into the episodic store and updates scratchpad state (`last_domain`, `last_routing_tier`, `last_tables`) after execution. Sync API responses now surface `episodic_context`, `episodic_memory`, `prior_turns`, and `prior_tables`, including the active backend, retention limits (TTL/history/context window), `recent_query_pairs`, duplicate-turn metadata, and scratchpad hints. Targeted unittest coverage was added in `backend/tests/test_phase23_24_platform_extras.py`.
 
 **Done when:** Sessions have a bounded short-term memory that improves continuity without leaking scope.
 

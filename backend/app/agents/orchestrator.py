@@ -68,6 +68,8 @@ import re
 
 import time
 
+import hashlib
+
 from typing import Dict, Any, List, Optional, Union
 
 
@@ -93,6 +95,8 @@ from app.core.memory_layer import sap_memory
 from app.core.self_healer import self_healer
 
 from app.core.schema_auto_discover import schema_auto_discoverer
+from app.core.exploration_engine import exploration_engine
+from app.core.hierarchical_decomposer import decompose_query
 
 from app.core.self_improver import self_improver
 from app.core.complexity_router import (
@@ -108,6 +112,7 @@ from app.core.router_cost_tracker import (
 )
 from app.core.model_driven_sequencer import (
     build_model_driven_plan,
+    refine_model_driven_plan,
     should_enable_model_driven_mode,
 )
 
@@ -499,6 +504,13 @@ def run_agent_loop(
 
     """
 
+    session_id = getattr(auth_context, "session_id", None) or auth_context.role_id + "_" + str(abs(hash(query)) % 100000)
+    user_id = getattr(auth_context, "user_id", None) or f"user:{auth_context.role_id.lower()}"
+    auth_context = auth_context.model_copy(update={
+        "session_id": session_id,
+        "user_id": user_id,
+    })
+
     # ============================================================================
 
     # [Phase 6] SWARM GATE — Delegate to Multi-Agent Domain Swarm if enabled
@@ -531,13 +543,141 @@ def run_agent_loop(
     # ============================================================================
     if use_swarm:
         from app.agents.swarm import run_swarm
+        from app.agents.swarm.agent_tool_mode import get_agent_tool_mode
+        from app.core.ciba_approval_store import get_ciba_store
+        from app.core.safety_guardrails import get_sentinel, ThreatSeverity
+
+        sentinel = get_sentinel()
+        agent_tool_mode = get_agent_tool_mode()
+        sentinel_profile = None
+        tool_mode_state = None
+
+        sentinel_verdict = sentinel.evaluate(
+            query=query,
+            auth_context=auth_context,
+            session_id=session_id,
+            tables_accessed=[],
+            domains_accessed=[domain],
+            graph_hop_depth=0,
+            row_count=0,
+            temporal_mode="none",
+            denied_table_access=False,
+        )
+
+        if sentinel_verdict.threat_detected:
+            sev_label = sentinel_verdict.severity.value.upper()
+            logger.info(
+                f"\n[!!] SECURITY SENTINEL [{sev_label}]: "
+                f"{sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else 'unknown'} detected before swarm gate!"
+            )
+            for ev in sentinel_verdict.evidence[:3]:
+                logger.info(f"    Evidence: {ev}")
+
+            sentinel_profile = sentinel.get_session_profile(session_id)
+
+            if sentinel_verdict.severity in (ThreatSeverity.HIGH, ThreatSeverity.CRITICAL):
+                sentinel.alert_security_team(sentinel_verdict, session_id, auth_context.role_id)
+
+            if sentinel_verdict.recommended_action == "block":
+                ciba = get_ciba_store()
+                if ciba.is_query_approved(session_id, query):
+                    logger.info("[CIBA] Query previously approved— proceeding in tool mode despite sentinel block.")
+                    tool_mode_state = agent_tool_mode.evaluate_sentinel(sentinel_verdict, sentinel_profile, session_id)
+                elif ciba.is_query_denied(session_id, query):
+                    logger.warning("[!!] Query previously denied by CIBA— hard rejection.")
+                    return {
+                        "answer": ("Your query was denied by a security approver and cannot be re-submitted for another 30 minutes. Contact your SAP security admin if you believe this is an error."),
+                        "tables_used": [],
+                        "executed_sql": None,
+                        "masked_fields": [],
+                        "data": [],
+                        "tool_trace": [],
+                        "status": "ciba_denied",
+                        "ciba_request_id": None,
+                        "confidence_score": None,
+                        "tool_mode": False,
+                        "tool_mode_reason": None,
+                        "sentinel": {
+                            "threat_detected": True,
+                            "threat_type": sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else None,
+                            "severity": sentinel_verdict.severity.value if sentinel_verdict.severity else None,
+                            "confidence": round(sentinel_verdict.confidence, 3),
+                            "evidence": sentinel_verdict.evidence[:4],
+                            "session_flags": sentinel_verdict.session_flags,
+                            "tightness_level": getattr(sentinel_profile, "tightness_level", 0),
+                        },
+                    }
+                else:
+                    threat_val = sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else "UNKNOWN"
+                    severity_val = sentinel_verdict.severity.value if sentinel_verdict.severity else "HIGH"
+                    evidence_val = (sentinel_verdict.evidence[0] if sentinel_verdict.evidence else "Sentinel blocked this query.")
+                    ciba_req = ciba.create_approval_request(
+                        session_id=session_id,
+                        user_id=auth_context.user_id or f"user:{auth_context.role_id.lower()}",
+                        role_id=auth_context.role_id,
+                        query=query,
+                        generated_sql="",
+                        threat_type=threat_val,
+                        threat_detail=evidence_val,
+                        severity=severity_val,
+                        evidence=sentinel_verdict.evidence,
+                        recommended_action=sentinel_verdict.recommended_action,
+                        tables_requested=[],
+                    )
+                    logger.warning("[!!] CIBA hard block— approval request {} created. Waiting for approver.".format(ciba_req.request_id))
+                    return {
+                        "answer": ("Your query has been blocked by the Security Sentinel and requires supervisor approval before execution.\n\nThreat: {} | Severity: {}\n\nReason: {}\n\nYour request ID: {}\nUse the CIBA /pending endpoint or your approval inbox to review and act on this request.").format(threat_val, severity_val, evidence_val, ciba_req.request_id),
+                        "tables_used": [],
+                        "executed_sql": None,
+                        "masked_fields": [],
+                        "data": [],
+                        "tool_trace": [],
+                        "status": "ciba_pending",
+                        "ciba_request_id": ciba_req.request_id,
+                        "confidence_score": None,
+                        "tool_mode": False,
+                        "tool_mode_reason": "ciba_pending",
+                        "sentinel": {
+                            "threat_detected": True,
+                            "threat_type": threat_val,
+                            "severity": severity_val,
+                            "confidence": round(sentinel_verdict.confidence, 3),
+                            "evidence": sentinel_verdict.evidence[:4],
+                            "session_flags": sentinel_verdict.session_flags,
+                            "tightness_level": getattr(sentinel_profile, "tightness_level", 0),
+                        },
+                    }
+            elif sentinel_verdict.recommended_action == "tighten":
+                sentinel.apply_tightening_to_auth_context(sentinel_verdict, auth_context)
+                logger.info("[!!] AuthContext tightened (soft block) for role {}".format(auth_context.role_id))
+                tool_mode_state = agent_tool_mode.evaluate_sentinel(sentinel_verdict, sentinel_profile, session_id)
+
+        if tool_mode_state is None:
+            tool_mode_state = agent_tool_mode.evaluate_ciba(session_id, query, auth_context.role_id)
+
         result = run_swarm(
             query=query,
             auth_context=auth_context,
             domain_hint=domain,
             verbose=verbose,
             run_id=swarm_run_id,
+            agent_tool_mode=agent_tool_mode,
         )
+
+        tool_mode_state = agent_tool_mode.get_session_state(session_id)
+        result["tool_mode"] = bool(tool_mode_state and tool_mode_state.active)
+        result["tool_mode_reason"] = tool_mode_state.reason if tool_mode_state and tool_mode_state.active else None
+        result.setdefault("sentinel", {
+            "threat_detected": sentinel_verdict.threat_detected,
+            "threat_type": sentinel_verdict.threat_type.value if sentinel_verdict.threat_type else None,
+            "severity": sentinel_verdict.severity.value if sentinel_verdict.severity else None,
+            "confidence": round(sentinel_verdict.confidence, 3),
+            "evidence": sentinel_verdict.evidence[:4],
+            "session_flags": sentinel_verdict.session_flags,
+            "tightness_level": getattr(sentinel.get_session_profile(session_id), "tightness_level", 0) if sentinel_verdict.threat_detected else 0,
+        })
+        result.setdefault("sentinel_stats", sentinel.get_threat_stats() if hasattr(sentinel, "get_threat_stats") else {})
+
         # Complete harness run with swarm result metadata
         if swarm_run_id and hr_run:
             try:
@@ -574,8 +714,16 @@ def run_agent_loop(
     revision_loop = create_revision_loop(
         query_signature=query,
         max_iterations=3,
-    )
+    ).until_confidence(0.90).until_result_stable(2)
     cot_tracer = CoTTracer()
+
+    def _record_revision_iteration(stage: str, sql_text: str = "", confidence: Optional[float] = None, metadata: Optional[Dict[str, Any]] = None) -> bool:
+        revision_loop.record_iteration({
+            "stage": stage,
+            **(metadata or {}),
+        })
+        sql_hash = hashlib.sha1(sql_text.encode("utf-8")).hexdigest() if sql_text else None
+        return revision_loop.check_convergence(sql_hash=sql_hash, confidence=confidence)
 
     # ============================================================================
     # [Phase L5] TRIVIAL tier — skip all steps, return direct pattern match
@@ -594,6 +742,7 @@ def run_agent_loop(
             "tool_trace": [],
             "execution_time_ms": int((time.time() - start_time) * 1000),
             "formal_trace": revision_loop.get_formal_trace(),
+            "revision_summary": revision_loop.get_summary(),
             "cost_stats": get_router_cost_tracker().get_cost_stats(),
         }
 
@@ -678,6 +827,8 @@ def run_agent_loop(
     # Initialize variables used by sentinel BEFORE sentinel evaluation
 
     tables_involved: List[str] = []
+    exploration_result = None
+    decomposition_plan = None
 
     temporal_mode: str = "none"
 
@@ -690,25 +841,38 @@ def run_agent_loop(
 
     sentinel = get_sentinel()
 
-    session_id = auth_context.role_id + "_" + str(hash(query) % 100000)  # simplified session key
+    session_id = auth_context.session_id or session_id
 
 
     # [Phase 24] Episodic Memory — load prior context + dedup check
     from app.core.episodic_memory import get_memory_store
     mem = get_memory_store()
+    try:
+        mem.update_session_meta(
+            session_id,
+            role_id=auth_context.role_id,
+            user_id=getattr(auth_context, "user_id", None),
+        )
+    except Exception:
+        pass
 
     # Deduplicate near-identical queries within this session
     is_dup, dedup_sig = mem.check_dedup(session_id, query)
+    duplicate_record = mem.find_recent_duplicate(session_id, query, limit=10) if is_dup else None
     if is_dup:
         logger.info(f"[Episodic] Duplicate query detected (sig={dedup_sig[:12]}...) — loading cached context")
+        if domain == "auto" and duplicate_record and duplicate_record.domain and duplicate_record.domain != "auto":
+            domain = duplicate_record.domain
 
     # Load prior conversation context for multi-turn continuity
-    ctx_snippet = mem.get_context_snippet(session_id, max_turns=6)
+    ctx_snippet = mem.get_recent_context_for_prompt(session_id, max_turns=6)
     prior_history = mem.get_history(session_id, limit=5)
+    recent_query_pairs = mem.get_recent_query_pairs(session_id, limit=5)
+    scratchpad_state = mem.get_all_scratchpad(session_id)
     prior_tables: List[str] = []
     if prior_history:
         for rec in prior_history:
-            prior_tables.extend(rec.get("tables_used", []) if isinstance(rec, dict) else [])
+            prior_tables.extend(rec.tables_used if hasattr(rec, "tables_used") else rec.get("tables_used", []))
     prior_tables = list(dict.fromkeys(prior_tables))  # dedup preserve order
 
     # Build context string for schema/pattern lookup hints
@@ -717,6 +881,13 @@ def run_agent_loop(
     if prior_history:
         episodic_context += f"[Prior queries in this session: {len(prior_history)}]  "
         episodic_context += f"[Prior tables accessed: {prior_tables}]\n"
+    if duplicate_record:
+        episodic_context += (
+            f"[Duplicate turn detected: turn={duplicate_record.turn_id}, domain={duplicate_record.domain}, "
+            f"tables={duplicate_record.tables_used}]\n"
+        )
+    if scratchpad_state:
+        episodic_context += f"[Scratchpad hints]: {scratchpad_state}\n"
     if ctx_snippet:
         episodic_context += f"[Recent context]: {ctx_snippet}"
     # Run threat evaluation BEFORE query executes
@@ -833,22 +1004,52 @@ def run_agent_loop(
         available_tools=list_tools(),
     ) if should_enable_model_driven_mode(routing) else None
     planned_tools = set(model_driven_plan.selected_tools) if model_driven_plan else set()
+    model_driven_plan_history: List[Dict[str, Any]] = []
+    sequencer_completed_tools: List[str] = []
+
+    def _record_model_plan(stage: str) -> None:
+        if model_driven_plan and model_driven_plan.enabled:
+            model_driven_plan_history.append({"stage": stage, **model_driven_plan.to_dict()})
+
+    def _refine_model_plan(stage: str) -> None:
+        nonlocal model_driven_plan, planned_tools
+        if not model_driven_plan or not model_driven_plan.enabled:
+            return
+        refined = refine_model_driven_plan(
+            plan=model_driven_plan,
+            routing=routing,
+            query=query,
+            domain=domain,
+            tables_involved=tables_involved,
+            completed_tools=sequencer_completed_tools,
+            temporal_mode=temporal_mode,
+        )
+        if refined.to_dict() != model_driven_plan.to_dict():
+            model_driven_plan = refined
+            planned_tools = set(model_driven_plan.selected_tools)
+            _record_model_plan(stage)
+            _traj(
+                "feature_3_model_driven_replan",
+                "replanned",
+                "Model-driven tool sequence refined using newly discovered execution state",
+                {
+                    "stage": stage,
+                    "selected_tools": model_driven_plan.selected_tools,
+                    "iteration": model_driven_plan.iteration,
+                },
+            )
 
     if model_driven_plan and model_driven_plan.enabled:
         logger.info(
             f"[Feature 3] Model-driven sequencing enabled for {routing.tier.value}: "
             f"{' -> '.join(model_driven_plan.selected_tools)}"
         )
+        _record_model_plan("bootstrap")
         tool_trace.append({
             "tool": "model_driven_plan",
             "status": "success",
             "message": "Description-aware tool sequence generated",
-            "metadata": {
-                "selected_tools": model_driven_plan.selected_tools,
-                "skipped_tools": model_driven_plan.skipped_tools,
-                "rationale": model_driven_plan.rationale,
-                "signals": model_driven_plan.signals,
-            },
+            "metadata": model_driven_plan.to_dict(),
         })
         _traj(
             "feature_3_model_driven_plan",
@@ -929,6 +1130,8 @@ def run_agent_loop(
                 "message": result.message, "metadata": result.metadata}
 
         tool_trace.append(step)
+        if tool not in {"model_driven_plan"} and result.status != ToolStatus.SKIPPED and tool not in sequencer_completed_tools:
+            sequencer_completed_tools.append(tool)
 
         if verbose:
 
@@ -1420,27 +1623,13 @@ def run_agent_loop(
 
         if schema_result.status == ToolStatus.ERROR:
 
-            return {
-
-                "answer": schema_result.message,
-
-                "tables_used": [],
-
-                "executed_sql": None,
-
-                "masked_fields": [],
-
-                "data": [],
-
-                "tool_trace": tool_trace,
-
-                "formal_trace": revision_loop.get_formal_trace(),
-
-                "cost_stats": get_router_cost_tracker().get_cost_stats(),
-
-                "execution_time_ms": int((time.time() - start_time) * 1000),
-
-            }
+            logger.info(f"    [SchemaRAG] Miss/failure -> continuing with Phase 18/5 fallbacks: {schema_result.message}")
+            schema_result = ToolResult(
+                status=ToolStatus.SUCCESS,
+                message=schema_result.message,
+                data={"tables_used": [], "schemas": []},
+                metadata={**(schema_result.metadata or {}), "phase18_fallback": True},
+            )
 
 
 
@@ -1555,6 +1744,86 @@ def run_agent_loop(
 
 
         # =========================================================================
+        # STEP 1.25: [Phase 18] EXPLORATION & DISCOVERY
+        # =========================================================================
+        schema_rag_confidence = min(1.0, len(tables_involved) / 4.0) if tables_involved else 0.0
+        field_probe_signal = any(keyword in query.lower() for keyword in [
+            "bank", "iban", "tax", "address", "contact", "email", "phone",
+            "tolerance", "safety stock", "procurement type", "shipping condition",
+            "wbs", "budget", "cost center",
+        ])
+        should_explore = (
+            not meta_path_used and (
+                not tables_involved
+                or schema_rag_confidence < 0.60
+                or routing.tier in {RoutingTier.COMPLEX, RoutingTier.EXPERT}
+                or field_probe_signal
+            )
+        )
+
+        if should_explore:
+            logger.info("\n[1.25/5] [Phase 18] Exploration & Discovery — exploration_engine.explore()")
+            try:
+                exploration_result = exploration_engine.explore(
+                    query=query,
+                    auth_context=auth_context,
+                    domain=domain,
+                    already_found=tables_involved,
+                    schema_rag_confidence=schema_rag_confidence,
+                )
+                if exploration_result.tables_found:
+                    merged = 0
+                    for table in exploration_result.tables_found:
+                        if table not in tables_involved:
+                            tables_involved.append(table)
+                            merged += 1
+                    logger.info(
+                        f"    [EXPLORE] merged={merged} new_tables={exploration_result.new_tables[:5]} "
+                        f"probes={exploration_result.probes_used} conf={exploration_result.confidence:.2f}"
+                    )
+                decomposition_plan = decompose_query(
+                    query=query,
+                    tables_discovered=tables_involved,
+                    auth_context=auth_context,
+                    exploration_tables=exploration_result.new_tables,
+                    meta_path_used=meta_path_used,
+                )
+                logger.info(
+                    f"    [DECOMPOSE] type={decomposition_plan.task_type.value} "
+                    f"primary={decomposition_plan.primary_agent} order={decomposition_plan.execution_order} "
+                    f"conf={decomposition_plan.confidence:.2f}"
+                )
+            except Exception as e:
+                logger.info(f"    [EXPLORE] Exploration/decomposition failed: {e}")
+                exploration_result = None
+                decomposition_plan = None
+        else:
+            logger.info(
+                "\n[--] [Phase 18] Exploration & Discovery skipped "
+                f"(tables={len(tables_involved)}, schema_conf={schema_rag_confidence:.2f}, tier={routing.tier.value})"
+            )
+
+        if decomposition_plan is None and not meta_path_used and len(tables_involved) >= 2:
+            try:
+                decomposition_plan = decompose_query(
+                    query=query,
+                    tables_discovered=tables_involved,
+                    auth_context=auth_context,
+                    exploration_tables=(exploration_result.new_tables if exploration_result else []),
+                    meta_path_used=meta_path_used,
+                )
+                logger.info(
+                    f"    [DECOMPOSE] type={decomposition_plan.task_type.value} "
+                    f"primary={decomposition_plan.primary_agent} order={decomposition_plan.execution_order} "
+                    f"conf={decomposition_plan.confidence:.2f}"
+                )
+            except Exception as e:
+                logger.info(f"    [DECOMPOSE] Secondary decomposition failed: {e}")
+                decomposition_plan = None
+
+        _refine_model_plan("post_schema_and_exploration")
+
+        # =========================================================================
 
         # STEP 1.5: GRAPH-ENHANCED SCHEMA DISCOVERY (Pillar 5½)
 
@@ -1591,8 +1860,12 @@ def run_agent_loop(
             )
 
         trace("graph_enhanced_schema_discovery", graph_result)
-
-
+        _traj(
+            "phase_1_5_graph_discovery",
+            "success" if graph_result.status == ToolStatus.SUCCESS else "fail",
+            "Graph-enhanced schema discovery evaluated structural expansion candidates",
+            {"tables": graph_result.data.get("tables_discovered", []) if graph_result.data else []},
+        )
 
         if graph_result.status == ToolStatus.SUCCESS:
 
@@ -1619,6 +1892,8 @@ def run_agent_loop(
                       f"{[t for t in graph_tables if t not in schema_result.data['tables_used']]}")
 
 
+
+            _refine_model_plan("post_graph_discovery")
 
             # Show top structural discovery
 
@@ -1689,8 +1964,12 @@ def run_agent_loop(
             )
 
         trace("sql_pattern_lookup", sql_result)
-
-
+        _traj(
+            "phase_2_sql_pattern",
+            "success" if sql_result.status == ToolStatus.SUCCESS else "fail",
+            "SQL pattern retrieval completed",
+            {"patterns": len(sql_result.data.get("patterns", [])) if sql_result.data else 0},
+        )
 
         base_sql = ""
 
@@ -2548,16 +2827,16 @@ def run_agent_loop(
 
     # =========================================================================
 
-        # [Phase 21] Record CoT step: self-critique
-        revision_loop.record_step(
-            phase=RevisionPhase.SELF_CRITIQUE,
-            action="Self-critique initiated",
-            evidence=[],
-            justification="Phase 6: LLM critique of generated SQL before execution",
-            tags=["critique", "validation"],
-        )
+    # [Phase 21] Record CoT step: self-critique
+    revision_loop.record_step(
+        phase=RevisionPhase.SELF_CRITIQUE,
+        action="Self-critique initiated",
+        evidence=[],
+        justification="Phase 6: LLM critique of generated SQL before execution",
+        tags=["critique", "validation"],
+    )
 
-        logger.info("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
+    logger.info("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
 
     
 
@@ -2603,6 +2882,13 @@ def run_agent_loop(
 
     
 
+    _traj(
+        "phase_4_5_self_critique",
+        "success" if critique_result.get("passed") else "fail",
+        "Critique agent evaluated generated SQL",
+        {"score": critique_result.get("score"), "issues": critique_result.get("issues", [])[:3]},
+    )
+
     trace("critique_agent", ToolResult(
 
         status=ToolStatus.SUCCESS if critique_result["passed"] else ToolStatus.ERROR,
@@ -2625,21 +2911,41 @@ def run_agent_loop(
 
             logger.info(f"        • {issue}")
 
-        logger.info("    [!!] Attempting self-heal...")
+        can_attempt_heal = revision_loop.should_continue()
+        if can_attempt_heal:
+            logger.info("    [!!] Attempting self-heal...")
+            _record_revision_iteration(
+                stage="critique_heal",
+                sql_text=generated_sql,
+                confidence=critique_result["score"] / 7.0,
+                metadata={"issues": critique_result["issues"][:3]},
+            )
+            revision_loop.record_step(
+                phase=RevisionPhase.HEAL_ATTEMPT,
+                action="Self-healer invoked after critique failure",
+                evidence=critique_result["issues"][:4],
+                justification="Critique gate failed; bounded revision attempt triggered",
+                tags=["critique", "heal", "bounded_loop"],
+            )
+        else:
+            logger.info("    [WARN] FormalRevisionLoop blocked additional critique heal attempts (max_iterations/exit condition reached).")
 
         # Use self-healer to auto-correct based on detected issues
 
         combined_error = "; ".join(critique_result["issues"])
 
-        corrected_sql, heal_reason, heal_code = self_healer.heal(
+        if can_attempt_heal:
+            corrected_sql, heal_reason, heal_code = self_healer.heal(
 
-            sql=generated_sql,
+                sql=generated_sql,
 
-            error=combined_error,
+                error=combined_error,
 
-            schema_context=schema_context,
+                schema_context=schema_context,
 
-        )
+            )
+        else:
+            corrected_sql, heal_reason, heal_code = generated_sql, "revision_loop_stopped", None
 
         heal_info = {"applied": bool(heal_code), "code": heal_code, "reason": heal_reason}
 
@@ -2673,6 +2979,11 @@ def run_agent_loop(
 
                 },
 
+            )
+
+            revision_loop.check_convergence(
+                sql_hash=hashlib.sha1(corrected_sql.encode("utf-8")).hexdigest(),
+                confidence=re_critique["score"] / 7.0,
             )
 
             if re_critique["passed"]:
@@ -2717,9 +3028,6 @@ def run_agent_loop(
     
 
     # Track if self-healing was applied (for result metadata)
-
-    heal_info: Dict[str, Any] = {"applied": False, "code": None, "reason": None}
-
 
 
     # =========================================================================
@@ -2839,8 +3147,12 @@ def run_agent_loop(
     }, auth_context=auth_context)
 
     trace("sql_execute(dry_run)", val_exec_result)
-
-
+    _traj(
+        "phase_5_5_validation_harness",
+        "success" if val_exec_result.status == ToolStatus.SUCCESS else "fail",
+        "Validation harness dry-run executed",
+        {"status": val_exec_result.status.value, "message": val_exec_result.message[:120] if val_exec_result.message else ""},
+    )
 
     if val_exec_result.status == ToolStatus.ERROR:
 
@@ -2848,17 +3160,33 @@ def run_agent_loop(
 
         logger.info(f"    [!!] Dry-Run Validation failed: {val_error[:60]}")
 
-        logger.info(f"    [!!] Attempting autonomous self-heal...")
+        can_attempt_heal = revision_loop.should_continue()
+        if can_attempt_heal:
+            logger.info(f"    [!!] Attempting autonomous self-heal...")
+            _record_revision_iteration(
+                stage="validation_harness",
+                sql_text=generated_sql,
+                metadata={"error": val_error[:120]},
+            )
+            revision_loop.record_step(
+                phase=RevisionPhase.VALIDATION_HARNESS,
+                action="Validation harness failed; self-healer invoked",
+                evidence=[val_error[:160]],
+                justification="Dry-run failed and bounded revision attempt remained",
+                tags=["validation", "heal", "bounded_loop"],
+            )
+            healed_sql, heal_reason, heal_code = self_healer.heal(
 
-        healed_sql, heal_reason, heal_code = self_healer.heal(
+                sql=generated_sql,
 
-            sql=generated_sql,
+                error=val_error,
 
-            error=val_error,
+                schema_context=schema_context,
 
-            schema_context=schema_context,
-
-        )
+            )
+        else:
+            logger.info("    [WARN] FormalRevisionLoop blocked additional validation-heal attempts (max_iterations/exit condition reached).")
+            healed_sql, heal_reason, heal_code = generated_sql, "revision_loop_stopped", None
 
         heal_info = {"applied": bool(heal_code), "code": heal_code, "reason": heal_reason}
 
@@ -2883,6 +3211,11 @@ def run_agent_loop(
             }, auth_context=auth_context)
 
             trace("sql_execute(dry_run_retry)", reval_exec_result)
+
+            revision_loop.check_convergence(
+                sql_hash=hashlib.sha1(generated_sql.encode("utf-8")).hexdigest(),
+                confidence=0.85 if reval_exec_result.status == ToolStatus.SUCCESS else 0.0,
+            )
 
             if reval_exec_result.status == ToolStatus.SUCCESS:
 
@@ -2975,8 +3308,12 @@ def run_agent_loop(
     }, auth_context=auth_context)
 
     trace("sql_execute", exec_result)
-
-    
+    _traj(
+        "phase_6_execution",
+        "success" if exec_result.status == ToolStatus.SUCCESS else "fail",
+        "Final SQL execution completed",
+        {"status": exec_result.status.value, "message": exec_result.message[:120] if exec_result.message else ""},
+    )
 
     # [Phase 6] Autonomous Recovery — attempt self-heal on execution errors
 
@@ -2986,17 +3323,33 @@ def run_agent_loop(
 
         logger.info(f"    [!!] Execution failed: {exec_error[:60]}")
 
-        logger.info(f"    [!!] Attempting autonomous self-heal...")
+        can_attempt_heal = revision_loop.should_continue()
+        if can_attempt_heal:
+            logger.info(f"    [!!] Attempting autonomous self-heal...")
+            _record_revision_iteration(
+                stage="execution_retry",
+                sql_text=generated_sql,
+                metadata={"error": exec_error[:120]},
+            )
+            revision_loop.record_step(
+                phase=RevisionPhase.EXECUTION,
+                action="Execution failed; self-healer invoked before retry",
+                evidence=[exec_error[:160]],
+                justification="Execution failed and bounded revision attempt remained",
+                tags=["execution", "heal", "bounded_loop"],
+            )
+            healed_sql, heal_reason, heal_code = self_healer.heal(
 
-        healed_sql, heal_reason, heal_code = self_healer.heal(
+                sql=generated_sql,
 
-            sql=generated_sql,
+                error=exec_error,
 
-            error=exec_error,
+                schema_context=schema_context,
 
-            schema_context=schema_context,
-
-        )
+            )
+        else:
+            logger.info("    [WARN] FormalRevisionLoop blocked additional execution-heal attempts (max_iterations/exit condition reached).")
+            healed_sql, heal_reason, heal_code = generated_sql, "revision_loop_stopped", None
 
         heal_info = {"applied": bool(heal_code), "code": heal_code, "reason": heal_reason}
 
@@ -3017,6 +3370,10 @@ def run_agent_loop(
                 exec_result = call_tool("sql_execute", {"sql": generated_sql, "dry_run": True, "max_rows": 1000}, auth_context=auth_context)
 
                 trace("sql_execute(retry)", exec_result)
+                revision_loop.check_convergence(
+                    sql_hash=hashlib.sha1(generated_sql.encode("utf-8")).hexdigest(),
+                    confidence=0.90 if exec_result.status == ToolStatus.SUCCESS else 0.0,
+                )
 
                 # [Phase 16] Store successful validation-heal as production pattern
                 try:
@@ -3172,7 +3529,31 @@ def run_agent_loop(
 
     token_tracker.add_call(prompt_tokens=0, completion_tokens=120 + len(final_answer)//4 + len(generated_sql)//4)
 
-
+    final_confidence = _compute_confidence_score(
+        critique_score=critique_result["score"],
+        data_records=data_records,
+        meta_path_used=meta_path_used,
+        self_heal_applied=heal_info.get("applied", False) if 'heal_info' in dir() else False,
+        temporal_mode=temporal_mode,
+        tables_involved=tables_involved,
+        execution_time_ms=execution_time,
+    )
+    revision_loop.check_convergence(
+        sql_hash=hashlib.sha1(generated_sql.encode("utf-8")).hexdigest(),
+        result_hash=str(len(data_records)),
+        confidence=final_confidence.get("composite"),
+    )
+    revision_loop.record_step(
+        phase=RevisionPhase.FINAL,
+        action="Final response prepared",
+        evidence=[
+            f"iterations={revision_loop.get_summary().get('total_iterations', 0)}",
+            f"confidence={final_confidence.get('composite', 0.0):.3f}",
+            f"rows={len(data_records)}",
+        ],
+        justification="Bounded revision loop completed and final answer assembled",
+        tags=["final", "revision_summary"],
+    )
 
     result_dict = {
 
@@ -3222,6 +3603,46 @@ def run_agent_loop(
 
         "self_heal": heal_info if 'heal_info' in locals() else {"applied": False},
 
+        "exploration": (
+            {
+                "tables_found": exploration_result.tables_found,
+                "new_tables": exploration_result.new_tables,
+                "probes_used": exploration_result.probes_used,
+                "confidence": exploration_result.confidence,
+                "exploration_time_ms": exploration_result.exploration_time_ms,
+                "from_cache": exploration_result.from_cache,
+                "budget_exhausted": exploration_result.budget_exhausted,
+            }
+            if exploration_result else None
+        ),
+
+        "decomposition_plan": (
+            {
+                "task_type": decomposition_plan.task_type.value,
+                "execution_order": decomposition_plan.execution_order,
+                "primary_agent": decomposition_plan.primary_agent,
+                "confidence": decomposition_plan.confidence,
+                "reasoning": decomposition_plan.reasoning,
+                "synthesis_instructions": decomposition_plan.synthesis_instructions,
+                "exploration_candidates": decomposition_plan.exploration_candidates,
+                "cross_module_join": decomposition_plan.cross_module_join,
+                "sub_tasks": [
+                    {
+                        "task_id": task.task_id,
+                        "agent_name": task.agent_name,
+                        "agent_display": task.agent_display,
+                        "tables": task.tables,
+                        "intent_description": task.intent_description,
+                        "depends_on": task.depends_on,
+                        "join_key": task.join_key,
+                        "status": task.status.value,
+                    }
+                    for task in decomposition_plan.sub_tasks
+                ],
+            }
+            if decomposition_plan else None
+        ),
+
         # [Phase 17] Semantic Answer Validation result
         "semantic_validation": semantic_validation,
 
@@ -3244,6 +3665,11 @@ def run_agent_loop(
             "tightness_level": get_sentinel().get_session_profile(session_id).tightness_level if sentinel_verdict.threat_detected else 0,
 
         } if 'sentinel_verdict' in dir() and sentinel_verdict.threat_detected else {"threat_detected": False},
+        "guardrails": {
+            "mode": getattr(sentinel_verdict, "guardrail_mode", "ENFORCING"),
+            "verdict": getattr(sentinel_verdict, "guardrail_verdict", {}),
+            "profile": getattr(sentinel_verdict, "guardrail_profile", {}),
+        },
 
         "graph_scores": graph_scores_data,
 
@@ -3257,23 +3683,9 @@ def run_agent_loop(
 
         "negotiation_brief": negotiation_brief if 'negotiation_brief' in dir() else None,
 
-        "confidence_score": _compute_confidence_score(
-
-            critique_score=critique_result["score"],
-
-            data_records=data_records,
-
-            meta_path_used=meta_path_used,
-
-            self_heal_applied=heal_info.get("applied", False) if 'heal_info' in dir() else False,
-
-            temporal_mode=temporal_mode,
-
-            tables_involved=tables_involved,
-
-            execution_time_ms=execution_time,
-
-        ),
+        "confidence_score": final_confidence,
+        "model_driven_plan": model_driven_plan.to_dict() if model_driven_plan and model_driven_plan.enabled else None,
+        "model_driven_plan_history": model_driven_plan_history or None,
 
         "routing_path": (
 
@@ -3302,6 +3714,10 @@ def run_agent_loop(
         "sentinel_stats": get_sentinel().get_threat_stats() if 'get_sentinel' in dir() else {},
 
         "run_id": current_run_id or "",
+        "formal_trace": revision_loop.get_formal_trace(),
+        "revision_summary": revision_loop.get_summary(),
+        "tool_mode": False,
+        "tool_mode_reason": None,
 
         # [Phase 6] Swarm routing metadata
 
@@ -3499,6 +3915,13 @@ def run_agent_loop(
 
 
 
+    _traj(
+        "phase_8_finalization",
+        "success",
+        "Final response payload assembled",
+        {"tables_used": tables_involved, "row_count": len(data_records)},
+    )
+
     # [Phase 12] QualityEvaluator — compute and store quality metrics from trajectory
 
     if current_run_id:
@@ -3515,9 +3938,7 @@ def run_agent_loop(
 
                 result_dict["quality_metrics"] = eval_result
 
-                hr.hset_run_field(current_run_id, "quality_score", str(eval_result["correctness_score"]))
-
-                hr.hset_run_field(current_run_id, "trajectory_adherence", str(eval_result["trajectory_adherence"]))
+                hr.set_quality_metrics(current_run_id, eval_result)
 
                 if verbose:
 
@@ -3560,9 +3981,25 @@ def run_agent_loop(
     result_dict["episodic_context"] = episodic_context
     result_dict["prior_turns"] = len(prior_history)
     result_dict["prior_tables"] = prior_tables
+    result_dict["episodic_memory"] = {
+        "backend": getattr(mem, "_backend_name", "unknown"),
+        "dedup_hit": is_dup,
+        "dedup_signature": dedup_sig,
+        "duplicate_of_turn": duplicate_record.turn_id if duplicate_record else None,
+        "prior_turns": len(prior_history),
+        "prior_tables": prior_tables,
+        "recent_query_pairs": recent_query_pairs,
+        "scratchpad": scratchpad_state,
+        "context_window": getattr(mem, "context_window", 0),
+        "history_limit": getattr(mem, "query_history_limit", 0),
+        "session_ttl_seconds": getattr(mem, "session_ttl", 0),
+    }
 
     # [Phase 24] Episodic Memory — record this query after execution
     try:
+        mem.set_scratchpad(session_id, "last_domain", domain)
+        mem.set_scratchpad(session_id, "last_routing_tier", routing.tier.value)
+        mem.set_scratchpad(session_id, "last_tables", tables_involved[:10])
         mem.record_query(
             session_id=session_id,
             query=query,

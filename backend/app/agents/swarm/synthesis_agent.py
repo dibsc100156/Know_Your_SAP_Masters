@@ -69,6 +69,8 @@ class SynthesisAgent:
         agent_results: Dict[str, Any],
         auth_context: SAPAuthContext,
         routing,  # RoutingType enum
+        agent_tool_mode=None,
+        session_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Main synthesis entry point.
@@ -88,6 +90,39 @@ class SynthesisAgent:
               - conflicts: Any data conflicts resolved
         """
         start = time.time()
+
+        if agent_tool_mode is not None and agent_tool_mode.should_engage(session_id=session_id):
+            merged = agent_tool_mode.synthesize_in_tool_mode(list(agent_results.values()), query, auth_context)
+            elapsed = int((time.time() - start) * 1000)
+            return {
+                "answer": "Agent autonomy was suppressed for this session, so results were merged in tool mode.",
+                "merged_data": merged.get("data", [])[:100],
+                "total_records_after_merge": merged.get("record_count", 0),
+                "agent_summary": {
+                    name: {
+                        "status": result.get("status", "success"),
+                        "record_count": len(result.get("data", [])),
+                        "tables_used": result.get("tables_used", []),
+                        "execution_time_ms": result.get("execution_time_ms", 0),
+                        "tool_mode": result.get("tool_mode", False),
+                    }
+                    for name, result in agent_results.items()
+                },
+                "domain_coverage": merged.get("agents_contributed", []),
+                "conflicts": [],
+                "execution_time_ms": elapsed,
+                "record_count": merged.get("record_count", 0),
+                "masked_fields": [],
+                "validation_summary": {
+                    "agents_validated": 0,
+                    "agents_passed": 0,
+                    "agents_failed": 0,
+                    "per_agent": {},
+                },
+                "tool_mode": True,
+                "tool_mode_reason": (agent_tool_mode.get_session_state(session_id).reason if session_id and agent_tool_mode.get_session_state(session_id) else None),
+                "synthesis_method": merged.get("synthesis_method", "dedup_only"),
+            }
 
         # Filter out error results
         valid_results = {

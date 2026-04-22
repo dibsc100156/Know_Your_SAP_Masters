@@ -148,6 +148,7 @@ class PriorityResult:
     def to_celery_kwargs(self) -> Dict[str, Any]:
         """Args to pass to .send_task() or .apply_async()."""
         return {
+            "queue": self.queue,
             "priority": self.celery_priority,
             "expires": 300,           # 5-min task expiry if not started
             "routing_key": self.routing_key,
@@ -228,7 +229,8 @@ class QueryPriorityScorer:
         sla_mult = CONTRACT_BONUS.get(contract_type, 1.0)
 
         # Factor 5: Recency boost (if user submitted recent queries)
-        recency_boost = self._compute_recency_boost(user_role, domain)
+        user_key = (user_id or user_role).lower()
+        recency_boost = self._compute_recency_boost(user_key, domain)
 
         # Critical report → 2x score multiplier (P0 executive SLA)
         critical_boost = 1.0
@@ -275,7 +277,7 @@ class QueryPriorityScorer:
         recorded = False
         if self._redis is not None:
             try:
-                self._record_query(user_role, domain)
+                self._record_query(user_key, domain)
                 recorded = True
             except Exception as e:
                 logger.debug(f"[Phase22] Redis recency record failed: {e}")
@@ -304,6 +306,7 @@ class QueryPriorityScorer:
         urgency: str = "normal",
         contract_type: Optional[str] = None,
         is_critical_report: bool = False,
+        user_id: Optional[str] = None,
     ) -> PriorityResult:
         """
         Alias for compute_priority() — uses only request-level data
@@ -317,6 +320,7 @@ class QueryPriorityScorer:
             urgency=urgency,
             contract_type=contract_type,
             is_critical_report=is_critical_report,
+            user_id=user_id,
         )
 
     # ── Priority Queue Stats ─────────────────────────────────────────────────
@@ -494,6 +498,7 @@ def compute_priority(
     urgency: str = "normal",
     contract_type: Optional[str] = None,
     is_critical_report: bool = False,
+    user_id: Optional[str] = None,
 ) -> PriorityResult:
     """Convenience function — delegates to the singleton scorer."""
     return get_priority_scorer().compute_from_request(
@@ -504,4 +509,5 @@ def compute_priority(
         urgency=urgency,
         contract_type=contract_type,
         is_critical_report=is_critical_report,
+        user_id=user_id,
     )
