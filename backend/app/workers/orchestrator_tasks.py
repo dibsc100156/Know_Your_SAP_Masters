@@ -37,95 +37,90 @@ import logging
 import time
 from typing import Optional
 
-from celery import shared_task  # ← bind at call time, not import time
+from celery import shared_task
 from celery.exceptions import SoftTimeLimitExceeded, TimeLimitExceeded
 
-# Import the orchestrator — this is the expensive CPU-bound work
-# that Celery offloads from the FastAPI request thread.
 from app.agents.orchestrator import run_agent_loop
+from app.core.agent_notifications import get_notification_store
+from app.core.long_running_jobs import get_long_running_job_store
 from app.core.security import security_mesh
-
-# NOTE: celery_app is imported LAZILY inside each task / helper below.
-# Do NOT import it at module level — that creates a circular import deadlock:
-#   celery_app.py:54 imports orchestrator_tasks
-#   → orchestrator_tasks top-level tries @app.task(..., app=celery_app)
-#   → app not yet defined → NameError.
-# Lazy import (inside get_task_result etc.) avoids the deadlock.
 
 logger = logging.getLogger(__name__)
 
-# ── Shared result metadata ─────────────────────────────────────────────────────
-# Keys stored in Redis alongside Celery result:
-#   celery.result.meta.task_id = <id>
-#   celery.result.meta.status  = PENDING / STARTED / SUCCESS / FAILURE / RETRY
-#   sap_masters.task.result    = <result_dict>
-#   sap_masters.task.started   = <timestamp>
-#   sap_masters.task.query     = <query>
+
+def _emit_task_notification(*, title: str, message: str, user_id: Optional[str], session_id: Optional[str], task_id: str, severity: str = "info", category: str = "task", dedup_key: Optional[str] = None, metadata: Optional[dict] = None) -> None:
+    try:
+        get_notification_store().create_notification(
+            title=title,
+            message=message,
+            category=category,
+            severity=severity,
+            user_id=user_id,
+            session_id=session_id,
+            task_id=task_id,
+            dedup_key=dedup_key,
+            metadata=metadata or {},
+        )
+    except Exception as e:
+        logger.warning("[CeleryTask:%s] notification emit failed: %s", task_id, e)
 
 
-# ── Core orchestrator task ────────────────────────────────────────────────────
 
-@shared_task(
-    bind=True,
-    name="app.workers.orchestrator_tasks.run_orchestrator_task",
-    max_retries=2,               # Retry up to 2 times on failure
-    default_retry_delay=5,       # Wait 5s before retry
-    autoretry_for=(ConnectionError, SoftTimeLimitExceeded, TimeLimitExceeded),
-    retry_backoff=True,          # Exponential backoff on retry
-    retry_backoff_max=60,
-    acks_late=True,              # Only ack after success (not on dispatch)
-    reject_on_worker_lost=True,   # Requeue if worker dies
-    time_limit=300,              # 5 min hard cap
-    soft_time_limit=240,         # 4 min warning
-    track_started=True,           # Track STARTED state in result backend
-)
-def run_orchestrator_task(
-    self,                     # bind=True gives us self (Task)
+def _execute_orchestrator_task(
+    self,
+    *,
     query: str,
-    user_role: str = "AP_CLERK",
-    domain: str = "auto",
-    urgency: str = "normal",  # Phase 22: urgency level for priority scoring
-    use_supervisor: bool = False,  # NOTE: use_supervisor=True returns simplified result without confidence_score, critique, etc.
+    user_role: str,
+    domain: str,
+    urgency: str,
+    priority_score: Optional[float],
+    queue_target: Optional[str],
+    priority_breakdown: Optional[dict],
+    routing_tier: Optional[str],
+    user_id: Optional[str],
+    session_id: Optional[str],
+    use_supervisor: bool,
+    long_running: bool,
+    time_limit_ms: int,
 ) -> dict:
-    """
-    Celery task: run the full 8-phase agentic orchestrator.
-
-    This is the heavy lifting — runs in a Celery worker process, not the
-    FastAPI request thread. Workers can be scaled horizontally:
-
-        celery -A app.workers.celery_app worker \\
-            --loglevel=info --concurrency=8 --pool=prefork
-
-    Args:
-        query:          Natural language question
-        user_role:      SAP role key (AP_CLERK, PROCUREMENT_MANAGER_EU, CFO_GLOBAL, HR_ADMIN)
-        domain:         Routing domain (auto, purchasing, business_partner, etc.)
-        use_supervisor: Whether to try domain agents before orchestrator
-
-    Returns:
-        Full orchestrator result dict — same shape as run_agent_loop() return.
-        Includes: answer, sql_generated, tables_used, tool_trace, data,
-                  confidence_score, routing_path, temporal, qm_semantic,
-                  negotiation_brief, self_heal, masked_fields, etc.
-
-    Raises:
-        SoftTimeLimitExceeded: Query took >4 min — logged, retried once.
-        TimeLimitExceeded:      Query took >5 min — killed, retried once.
-        ConnectionError:        Broker/Redis unreachable — retried with backoff.
-    """
     start_time = time.time()
     task_id = self.request.id
+    job_store = get_long_running_job_store()
 
     logger.info(
         f"[CeleryTask:{task_id}] START query='{query[:60]}...' "
-        f"role={user_role} domain={domain}"
+        f"role={user_role} domain={domain} long_running={long_running}"
     )
 
-    # ── 1. Get AuthContext ────────────────────────────────────────────────────
+    job_store.mark_started(task_id, worker=self.request.hostname)
+    _emit_task_notification(
+        title="Agent task started",
+        message=f"Task {task_id[:8]} is now running.",
+        user_id=user_id,
+        session_id=session_id,
+        task_id=task_id,
+        dedup_key=f"started:{task_id}",
+        metadata={"status": "started", "long_running": long_running},
+    )
+
     try:
-        auth_context = security_mesh.get_context(user_role)
+        auth_context = security_mesh.get_context(user_role).model_copy(update={
+            "user_id": user_id or f"user:{user_role.lower()}",
+            "session_id": session_id,
+        })
     except ValueError as e:
         logger.error(f"[CeleryTask:{task_id}] Invalid role {user_role}: {e}")
+        job_store.mark_failed(task_id, str(e), status="role_error")
+        _emit_task_notification(
+            title="Agent task failed",
+            message=f"Task {task_id[:8]} failed before execution: invalid role.",
+            user_id=user_id,
+            session_id=session_id,
+            task_id=task_id,
+            severity="error",
+            dedup_key=f"failed:{task_id}",
+            metadata={"status": "role_error", "error": str(e)},
+        )
         return {
             "answer": f"Invalid role: {user_role}",
             "error": str(e),
@@ -133,30 +128,42 @@ def run_orchestrator_task(
             "status": "role_error",
         }
 
-    # ── 2. Run orchestrator ──────────────────────────────────────────────────
-    # This is the CPU-bound work — runs in the Celery worker.
-    # SoftTimeLimitExceeded is caught and retried automatically.
+    job_store.heartbeat(task_id, status="started")
+
     try:
         result = run_agent_loop(
             query=query,
             auth_context=auth_context,
             domain=domain,
-            verbose=False,           # Task logs → celery worker log, not API response
+            verbose=False,
             use_supervisor=use_supervisor,
         )
     except SoftTimeLimitExceeded:
         elapsed = int(time.time() - start_time)
-        logger.warning(
-            f"[CeleryTask:{task_id}] SoftTimeLimitExceeded "
-            f"at {elapsed}s — will retry (attempt {self.request.retries + 1})"
+        job_store.mark_retry(task_id, retries=self.request.retries + 1, error="SoftTimeLimitExceeded")
+        _emit_task_notification(
+            title="Agent task retrying",
+            message=f"Task {task_id[:8]} hit soft timeout at {elapsed}s and will retry.",
+            user_id=user_id,
+            session_id=session_id,
+            task_id=task_id,
+            severity="warning",
+            dedup_key=f"retry:{task_id}:{self.request.retries + 1}",
+            metadata={"status": "retry", "retries": self.request.retries + 1},
         )
-        raise  # Celery handles retry
-
+        raise
     except TimeLimitExceeded:
         elapsed = int(time.time() - start_time)
-        logger.error(
-            f"[CeleryTask:{task_id}] TimeLimitExceeded "
-            f"at {elapsed}s — failing without retry"
+        job_store.mark_failed(task_id, "TimeLimitExceeded", status="timeout")
+        _emit_task_notification(
+            title="Agent task timed out",
+            message=f"Task {task_id[:8]} timed out after {elapsed}s.",
+            user_id=user_id,
+            session_id=session_id,
+            task_id=task_id,
+            severity="error",
+            dedup_key=f"timeout:{task_id}",
+            metadata={"status": "timeout", "long_running": long_running},
         )
         return {
             "answer": (
@@ -169,10 +176,20 @@ def run_orchestrator_task(
             "execution_time_ms": elapsed * 1000,
             "status": "timeout",
         }
-
     except Exception as e:
         elapsed = int(time.time() - start_time)
         logger.exception(f"[CeleryTask:{task_id}] Unexpected error at {elapsed}s: {e}")
+        job_store.mark_failed(task_id, str(e), status="error")
+        _emit_task_notification(
+            title="Agent task failed",
+            message=f"Task {task_id[:8]} failed: {str(e)[:120]}",
+            user_id=user_id,
+            session_id=session_id,
+            task_id=task_id,
+            severity="error",
+            dedup_key=f"failed:{task_id}",
+            metadata={"status": "error", "error": str(e)},
+        )
         return {
             "answer": f"Internal error: {str(e)}",
             "error": str(e),
@@ -181,17 +198,35 @@ def run_orchestrator_task(
             "status": "error",
         }
 
-    # ── 3. Attach metadata ───────────────────────────────────────────────────
     elapsed_ms = int((time.time() - start_time) * 1000)
     result["task_id"] = task_id
     result["status"] = "success"
     result["urgency"] = urgency
+    result["priority_score"] = priority_score
+    result["queue_target"] = queue_target
+    result["priority_breakdown"] = priority_breakdown
+    result["routing_tier"] = result.get("routing_tier") or routing_tier
+    result["role_applied"] = auth_context.role_id
+    result["user_id"] = auth_context.user_id or f"user:{auth_context.role_id.lower()}"
     result["celery"] = {
         "worker": self.request.hostname,
         "retries": self.request.retries,
         "elapsed_ms": elapsed_ms,
-        "time_limit_ms": 300000,
+        "time_limit_ms": time_limit_ms,
+        "long_running": long_running,
     }
+
+    job_store.mark_completed(task_id, result)
+    _emit_task_notification(
+        title="Agent task completed",
+        message=f"Task {task_id[:8]} completed successfully in {elapsed_ms}ms.",
+        user_id=result.get("user_id"),
+        session_id=session_id,
+        task_id=task_id,
+        severity="success",
+        dedup_key=f"success:{task_id}",
+        metadata={"status": "success", "execution_time_ms": elapsed_ms, "long_running": long_running},
+    )
 
     logger.info(
         f"[CeleryTask:{task_id}] DONE in {elapsed_ms}ms "
@@ -202,14 +237,106 @@ def run_orchestrator_task(
     return result
 
 
-# ── Synchronous convenience task (for low-latency / simple cases) ─────────────
+@shared_task(
+    bind=True,
+    name="app.workers.orchestrator_tasks.run_orchestrator_task",
+    max_retries=2,
+    default_retry_delay=5,
+    autoretry_for=(ConnectionError, SoftTimeLimitExceeded, TimeLimitExceeded),
+    retry_backoff=True,
+    retry_backoff_max=60,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    time_limit=300,
+    soft_time_limit=240,
+    track_started=True,
+)
+def run_orchestrator_task(
+    self,
+    query: str,
+    user_role: str = "AP_CLERK",
+    domain: str = "auto",
+    urgency: str = "normal",
+    priority_score: Optional[float] = None,
+    queue_target: Optional[str] = None,
+    priority_breakdown: Optional[dict] = None,
+    routing_tier: Optional[str] = None,
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    use_supervisor: bool = False,
+    long_running: bool = False,
+) -> dict:
+    return _execute_orchestrator_task(
+        self,
+        query=query,
+        user_role=user_role,
+        domain=domain,
+        urgency=urgency,
+        priority_score=priority_score,
+        queue_target=queue_target,
+        priority_breakdown=priority_breakdown,
+        routing_tier=routing_tier,
+        user_id=user_id,
+        session_id=session_id,
+        use_supervisor=use_supervisor,
+        long_running=long_running,
+        time_limit_ms=300000,
+    )
+
+
+@shared_task(
+    bind=True,
+    name="app.workers.orchestrator_tasks.run_orchestrator_long_task",
+    max_retries=2,
+    default_retry_delay=15,
+    autoretry_for=(ConnectionError, SoftTimeLimitExceeded, TimeLimitExceeded),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    acks_late=True,
+    reject_on_worker_lost=True,
+    time_limit=21600,
+    soft_time_limit=21000,
+    track_started=True,
+)
+def run_orchestrator_long_task(
+    self,
+    query: str,
+    user_role: str = "AP_CLERK",
+    domain: str = "auto",
+    urgency: str = "normal",
+    priority_score: Optional[float] = None,
+    queue_target: Optional[str] = None,
+    priority_breakdown: Optional[dict] = None,
+    routing_tier: Optional[str] = None,
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    use_supervisor: bool = False,
+    long_running: bool = True,
+) -> dict:
+    return _execute_orchestrator_task(
+        self,
+        query=query,
+        user_role=user_role,
+        domain=domain,
+        urgency=urgency,
+        priority_score=priority_score,
+        queue_target=queue_target,
+        priority_breakdown=priority_breakdown,
+        routing_tier=routing_tier,
+        user_id=user_id,
+        session_id=session_id,
+        use_supervisor=use_supervisor,
+        long_running=long_running,
+        time_limit_ms=21600000,
+    )
+
 
 @shared_task(
     bind=True,
     name="app.workers.orchestrator_tasks.run_orchestrator_sync_task",
-    max_retries=0,              # No retries for sync mode
-    time_limit=120,             # 2 min hard cap for sync
-    acks_late=False,           # Ack immediately (fire-and-forget semantics)
+    max_retries=0,
+    time_limit=120,
+    acks_late=False,
 )
 def run_orchestrator_sync_task(
     self,
@@ -217,23 +344,12 @@ def run_orchestrator_sync_task(
     user_role: str = "AP_CLERK",
     domain: str = "auto",
 ) -> dict:
-    """
-    Synchronous variant — same as run_orchestrator_task but:
-      - No retries
-      - Shorter time limit (2 min)
-      - Faster ack (no late ack)
-
-    Use for: streaming SSE responses, quick ad-hoc queries.
-    For high-throughput: use run_orchestrator_task with async polling.
-    """
     return run_orchestrator_task.delay(
         query=query,
         user_role=user_role,
         domain=domain,
-    )  # Returns AsyncResult — call .get() in the API to block
+    )
 
-
-# ── System health / memory cleanup tasks ──────────────────────────────────────
 
 @shared_task(
     name="app.workers.orchestrator_tasks.cleanup_memory_task",
@@ -241,16 +357,8 @@ def run_orchestrator_sync_task(
     time_limit=30,
 )
 def cleanup_memory_task() -> dict:
-    """
-    Periodic task: clean up stale dialog sessions and old query history
-    from Redis. Run via Celery Beat every 5 minutes.
-
-    Keeps memory layer lean without blocking the main request path.
-    """
     try:
         from app.core.memory_layer import sap_memory
-        # Prune old entries from query history
-        # (implemented in sap_memory — placeholder for now)
         logger.info("[CleanupTask] Memory layer cleanup complete")
         return {"status": "ok", "task": "cleanup_memory"}
     except Exception as e:
@@ -261,40 +369,21 @@ def cleanup_memory_task() -> dict:
 # ── Task result helpers (used by API layer) ────────────────────────────────────
 
 def get_task_result(task_id: str, timeout: float = 0.0) -> dict:
-    """
-    Fetch a Celery task result from Redis.
-
-    Args:
-        task_id: Celery task UUID (returned by send_task)
-        timeout: 0.0 = non-blocking (raise if not ready)
-                 >0 = wait up to N seconds
-                 None = wait forever
-
-    Returns:
-        The result dict from run_orchestrator_task
-
-    Raises:
-        celery.exceptions.AsyncResultNotReady
-        celery.exceptions.AsyncResultFailed
-    """
     from celery.result import AsyncResult
-    # Lazy import breaks the circular import deadlock:
-    # celery_app is imported here at call time, not at module load time.
     from app.workers.celery_app import celery_app_instance as celery_app
+
     result = AsyncResult(task_id, app=celery_app)
     if timeout > 0:
         return result.get(timeout=timeout)
     elif timeout is None:
         return result.get()
     else:
-        # Non-blocking
         if not result.ready():
             raise AsyncResultNotReadyError(f"Task {task_id} not ready")
         if result.failed():
-            raise result.result  # re-raise the exception
+            raise result.result
         return result.result
 
 
 class AsyncResultNotReadyError(Exception):
-    """Raised when polling a Celery task that hasn't completed yet."""
     pass

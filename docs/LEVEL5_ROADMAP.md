@@ -41,6 +41,9 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - Phase 22 fairness tests + queue policy are now documented/covered in `docs/PHASE22_QUEUE_POLICY.md` and `backend/tests/test_phase22_query_prioritization.py`
 - F3 + Phase 12 benchmark artifacts now live in `backend/benchmark_f3_phase12.py`, `backend/reports/benchmark_f3_phase12.json`, and `docs/F3_PHASE12_BENCHMARK.md`
 - Meta-Harness reporting/apply flow now has targeted close-out coverage in `backend/tests/test_phase11_meta_harness_loop.py`
+- Agent Inbox + Push Notifications are now live via `backend/app/core/agent_notifications.py`, `/chat/notifications*` endpoints, and targeted coverage in `backend/tests/test_phase17_agent_notifications.py`
+- Long-running agent infrastructure is now live via `backend/app/core/long_running_jobs.py`, `run_orchestrator_long_task`, `/chat/jobs*`, and `/tasks/{task_id}/resume`
+- End-to-end validation sweep is now repeatable via `backend/end_to_end_validation_sweep.py` with report output at `backend/reports/end_to_end_validation_sweep.json`
 
 **April 21 commits:**
 - `eba82a6` — Feature 4: Plain-English Safeguards + Feature 5: Scatter-Gather Swarm
@@ -314,9 +317,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 1 | 🔴 P0 | Real SAP HANA activation (`HANA_MODE=pool`) — replace mock as the default runtime | M7 | 🚧 Planned |
 | 2 | 🔴 P0 | Hybrid graph runtime load/perf sign-off (Memgraph + NX mirror, p95 target) | Ops | ✅ Complete |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Complete |
-| 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | 🚧 Planned |
+| 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | ✅ Complete (notification store + user/session endpoints Apr 22) |
 | 4 | 🟡 P1 | BAPI Workflow Harness (Read-to-Write) | P1 | 🚧 Planned |
-| 5 | 🟡 P1 | Long-Running Agent Infrastructure (6hr runs) | P1 | 🚧 Planned |
+| 5 | 🟡 P1 | Long-Running Agent Infrastructure (6hr runs) | P1 | ✅ Complete (durable job store + 6h queue + resume/cancel Apr 22) |
 | 6 | 🟢 P2 | Ralph Wiggum PR Review Loop | P2 | 📋 Planned |
 | 7 | 🟢 P2 | Doc-Gardening Agent (stale doc scanner) | P2 | 📋 Planned |
 | 8 | 🟢 P2 | Observability Query Interface (LogQL/PromQL) | P2 | 📋 Planned |
@@ -344,6 +347,8 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `backend/app/core/message_bus.py` | Redis pub/sub + streams (Phase 13) |
 | `backend/app/core/negotiation_protocol.py` | 4-phase Negotiation Engine (Phase 13b) |
 | `backend/app/core/agent_inbox.py` | AgentInbox per-agent inbox listener (19.7KB) |
+| `backend/app/core/agent_notifications.py` | User/session-scoped task lifecycle notifications + unread badge store |
+| `backend/app/core/long_running_jobs.py` | Durable long-running job state + resume/retry/cancel metadata |
 | `backend/app/core/quality_evaluator.py` | QualityEvaluator — correctness_score + trajectory_adherence |
 | `backend/app/core/meta_harness_loop.py` | Meta-Harness Loop (45KB) |
 | `backend/app/core/failure_trigger.py` | Phase 11 failure trigger (12.6KB) |

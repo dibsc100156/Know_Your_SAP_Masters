@@ -132,9 +132,11 @@
 **Key refs:** `backend/app/core/model_driven_sequencer.py`, `backend/app/agents/orchestrator.py`
 
 ### 11) Agent Inbox + Push Notifications
-- [ ] Define notification triggers and delivery model
-- [ ] Wire inbox events into useful user-facing updates
-- [ ] Avoid noisy/redundant pushes
+- [x] Define notification triggers and delivery model
+- [x] Wire inbox events into useful user-facing updates
+- [x] Avoid noisy/redundant pushes
+
+**Implementation note (2026-04-22):** Added `backend/app/core/agent_notifications.py` for Redis-backed user/session-scoped notifications with in-memory fallback and dedup. Async chat endpoints now expose `/notifications`, `/notifications/summary`, read, and read-all flows. Task lifecycle events (queued, started, completed, failed, retrying, cancelled, resumed) now emit user-facing notifications, and coverage was added in `backend/tests/test_phase17_agent_notifications.py`. Operator notes live in `docs/AGENT_INBOX_PUSH_NOTIFICATIONS.md`.
 
 **Done when:** Important agent events reach the user with low noise.
 
@@ -146,9 +148,11 @@
 **Done when:** One write workflow works safely with clear approvals and auditability.
 
 ### 13) Long-Running Agent Infrastructure (6hr runs)
-- [ ] Define durable run state model
-- [ ] Add resume/retry/cancel behavior
-- [ ] Validate long-horizon worker stability
+- [x] Define durable run state model
+- [x] Add resume/retry/cancel behavior
+- [x] Validate long-horizon worker stability
+
+**Implementation note (2026-04-22):** Added `backend/app/core/long_running_jobs.py` for durable job state and payload persistence, introduced a `longrun` Celery queue plus `run_orchestrator_long_task` (6h envelope), and added `/jobs`, `/jobs/{task_id}`, and `/tasks/{task_id}/resume` control endpoints. Existing revoke now updates durable state, and targeted coverage was added in `backend/tests/test_phase25_long_running_jobs.py`. Design notes live in `docs/LONG_RUNNING_AGENT_INFRA.md`.
 
 **Done when:** Multi-hour jobs can survive restarts and be inspected safely.
 
@@ -194,14 +198,16 @@
 ## Cross-Cutting Validation
 
 ### 19) End-to-end validation sweep
-- [ ] Run benchmark after major P0/P1 items land
-- [ ] Compare confidence, latency, and correctness vs current baseline
-- [ ] Record regressions and rollback path if needed
+- [x] Run benchmark after major P0/P1 items land
+- [x] Compare confidence, latency, and correctness vs current baseline
+- [x] Record regressions and rollback path if needed
+
+**Implementation note (2026-04-22):** Added `backend/end_to_end_validation_sweep.py` and generated `backend/reports/end_to_end_validation_sweep.json`. The sweep currently exercises notifications, long-running job control, cost routing, prioritization, meta-harness, quality trajectory, F3 sequencing, and episodic/safety extras in one repeatable command.
 
 ### 20) Documentation sync
-- [ ] Keep `docs/LEVEL5_ROADMAP.md` aligned with actual status
-- [ ] Add/update architecture docs for each major completed item
-- [ ] Remove stale claims when features are only partial
+- [x] Keep `docs/LEVEL5_ROADMAP.md` aligned with actual status
+- [x] Add/update architecture docs for each major completed item
+- [x] Remove stale claims when features are only partial
 
 ---
 

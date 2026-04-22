@@ -138,6 +138,12 @@ priority_queue = Queue(
     routing_key="priority",
     max_priority=10,
 )
+longrun_queue = Queue(
+    "longrun",
+    exchange=Exchange("sap_masters", type="direct"),
+    routing_key="longrun",
+    max_priority=6,
+)
 # Domain agent queues (for swarm autoscaling)
 pur_queue = Queue(
     "pur_queue",
@@ -183,7 +189,7 @@ cross_queue = Queue(
 )
 
 all_queues = (
-    agent_queue, system_queue, priority_queue,
+    agent_queue, system_queue, priority_queue, longrun_queue,
     pur_queue, bp_queue, mm_queue, sd_queue, qm_queue, wm_queue, cross_queue,
 )
 celery_app_instance.conf.task_queues = all_queues
@@ -199,6 +205,11 @@ celery_app_instance.conf.task_routes = {
         "queue": "system",
         "routing_key": "system",
         "priority": 10,
+    },
+    "app.workers.orchestrator_tasks.run_orchestrator_long_task": {
+        "queue": "longrun",
+        "routing_key": "longrun",
+        "priority": 5,
     },
     "app.workers.orchestrator_tasks.run_orchestrator_sync_task": {
         "queue": "priority",
