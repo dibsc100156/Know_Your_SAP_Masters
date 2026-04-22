@@ -100,6 +100,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 2d | Phase 8 Negotiation Briefing | CLV, PSI, churn risk, BATNA synthesis | ✅ Complete |
 | 3 | Graph RAG | All-ranked-paths → best JOIN via NetworkX + AllPathsExplorer | ✅ Complete |
 | **L5** | **Complexity Routing** | TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing — 9-step skip guards + adaptive voting threshold | ✅ Complete |
+| **1+** | **Prompt Chain Controller Architecture** | `ChainStep` + chain controller + quality gates + retry/stop policy + trace surfacing (C1.1–C1.5) | ✅ Complete |
 | 4 | SQL Assembly | MANDT injection + AuthContext + Temporal filters | ✅ Complete |
 | 5 | Critique Gate | 7-point SQL validation (SELECT-only, MANDT, JOIN sanity, LIMIT) | ✅ Complete |
 | 5.5 | Validation Harness | `SELECT COUNT(*)` dry-run → syntax validation → autonomous fix | ✅ Complete |
@@ -116,6 +117,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 11 | Meta-Harness Loop | `meta_harness_loop.py` — collect→analyze→YAML→approve→patch with structured reporting/apply coverage | ✅ Complete |
 | 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from phase states + structured trajectory log; live persistence/surfacing + benchmark artifacts expanded Apr 22 | ✅ Complete |
 | 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ Complete |
+| 13+ | Retrieval Quality Architecture | `RetrievalBundle` + reranker + retrieval critic + query-aware retrieval profiles + trace surfacing (R13.1–R13.5) | 🟡 Partial |
 | 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ Complete |
 | **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition with live orchestrator merge + surfaced decomposition plan | ✅ Complete |
 | **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy; live wiring, tests, and operator guide now complete | ✅ Complete |
@@ -124,7 +126,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue; live sync/async API wiring, fairness tests, and queue policy docs complete | ✅ Complete |
 | **23** | **Safety Guardrails (Standalone)** | `safety_guardrails.py` now owns the live layered safety contract behind the sentinel adapter; guardrail verdict/profile surfaced in API | ✅ Complete |
 | **24** | **Episodic Memory Store** | Redis-backed session scratchpad with live context/dedup integration, duplicate-turn lookup, recent query/result pairs, and surfaced episodic metadata in API | ✅ Complete |
-| **24+** | **Unified Memory Architecture Follow-Through** | `MemoryContext` + memory orchestrator + write-back router + policy layer + trace surfacing (M8.1–M8.5) | ✅ Complete |
+| **24+** | **Unified Memory Architecture Follow-Through** | `MemoryContext` + memory orchestrator + write-back router + policy layer + trace surfacing (M8.1–M8.5) | 🟡 Partial |
 
 ---
 
@@ -319,7 +321,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | ✅ Complete (fairness tests + queue policy Apr 22) |
 | 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | ✅ Complete |
 | 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | ✅ Complete |
-| 24+ | 🟡 P2 | Unified Memory Architecture Follow-Through — `MemoryContext` + orchestrator + policy + write-back + trace | M8.1–M8.5 | ✅ Complete (live read/write path + API trace surfacing Apr 22) |
+| 24+ | 🟡 P2 | Unified Memory Architecture Follow-Through — `MemoryContext` + orchestrator + policy + write-back + trace | M8.1–M8.5 | 🟡 Partial (design defined Apr 22; follows live Phase 24) |
+| 13+ | 🟡 P2 | Retrieval Quality Architecture — `RetrievalBundle` + reranker + critic + retrieval profiles + trace | R13.1–R13.5 | 🟡 Partial (design defined Apr 22; sharpens Pattern 13 retrieval quality) |
+| 1+ | 🟡 P1 | Prompt Chain Controller Architecture — `ChainStep` + controller + quality gates + retry/stop + trace | C1.1–C1.5 | ✅ Complete (live chain trace + step verdicts wired Apr 22) |
 | 1 | 🔴 P0 | Real SAP HANA activation (`HANA_MODE=pool`) — replace mock as the default runtime | M7 | 🚧 Planned |
 | 2 | 🔴 P0 | Hybrid graph runtime load/perf sign-off (Memgraph + NX mirror, p95 target) | Ops | ✅ Complete |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Complete |
@@ -359,6 +363,10 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `backend/app/core/memory_orchestrator.py` | Read-path composition across episodic + persistent memory layers |
 | `backend/app/core/memory_policy.py` | Central retention + visibility/redaction policy for memory slices |
 | `backend/app/core/memory_writeback.py` | Event-driven write-back router for episodic/persistent memory |
+| `backend/app/core/chain_types.py` | Formal `ChainStep` / gate / retry / stop contracts |
+| `backend/app/core/chain_quality_gates.py` | Explicit PASS/RETRY/HALT quality gate engine |
+| `backend/app/core/chain_retry_policy.py` | Central retry/stop decision policy |
+| `backend/app/core/chain_controller.py` | Prompt chain controller with live step verdict tracing |
 | `backend/app/core/pr_review_loop.py` | Ralph Wiggum PR review harness with bounded self/specialist review |
 | `backend/app/core/doc_gardening_agent.py` | Stale-doc / broken-reference scanner with confidence+risk labels |
 | `backend/app/core/observability_interface.py` | Safe LogQL/PromQL-style facade over monitoring + harness traces |

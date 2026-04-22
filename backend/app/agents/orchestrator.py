@@ -832,6 +832,48 @@ def run_agent_loop(
 
     temporal_mode: str = "none"
 
+    from app.core.chain_controller import ChainController
+    from app.core.chain_types import ChainOutput, ChainStep, QualityGate, RetryBudget, StopCondition
+
+    chain_controller = ChainController([
+        ChainStep(
+            name="schema_lookup",
+            label="Schema Lookup",
+            quality_gate=QualityGate(min_items=1, allow_empty=True),
+            retry_budget=RetryBudget(max_retries=1),
+            stop_condition=StopCondition(halt_on_error=False, halt_on_retry_exhausted=False),
+        ),
+        ChainStep(
+            name="graph_enhanced_schema_discovery",
+            label="Graph Discovery",
+            quality_gate=QualityGate(min_items=1, allow_empty=True),
+            retry_budget=RetryBudget(max_retries=0),
+            stop_condition=StopCondition(halt_on_error=False, halt_on_retry_exhausted=False),
+        ),
+        ChainStep(
+            name="sql_pattern_lookup",
+            label="SQL Pattern Lookup",
+            quality_gate=QualityGate(min_items=1, allow_empty=True),
+            retry_budget=RetryBudget(max_retries=1),
+            stop_condition=StopCondition(halt_on_error=False, halt_on_retry_exhausted=False),
+        ),
+        ChainStep(
+            name="retrieval_quality",
+            label="Retrieval Quality Fusion",
+            quality_gate=QualityGate(min_items=1, min_score=0.55, allow_empty=False),
+            retry_budget=RetryBudget(max_retries=0),
+            stop_condition=StopCondition(halt_on_error=False, halt_on_retry_exhausted=False),
+        ),
+        ChainStep(
+            name="critique_gate",
+            label="Critique Gate",
+            quality_gate=QualityGate(min_items=1, min_score=5.0 / 7.0, allow_empty=False),
+            retry_budget=RetryBudget(max_retries=1),
+            stop_condition=StopCondition(halt_on_error=False, halt_on_retry_exhausted=False),
+            required=True,
+        ),
+    ])
+
 
 
     # [Phase 6] Security Sentinel — Proactive Threat Evaluation
@@ -1613,6 +1655,15 @@ def run_agent_loop(
         tables_involved = schema_result.data["tables_used"]
 
         logger.info(f"    Tables found: {tables_involved}")
+        chain_controller.evaluate_step(
+            "schema_lookup",
+            ChainOutput(
+                status=schema_result.status.value,
+                item_count=len(tables_involved),
+                score=min(1.0, len(tables_involved) / 4.0) if tables_involved else 0.0,
+                metadata={"message": schema_result.message},
+            ),
+        )
 
         if current_run_id:
 
@@ -1890,9 +1941,16 @@ def run_agent_loop(
 
             logger.info(f"    [WARN] Graph embedding search returned no results: {graph_result.message}")
 
-
-
-
+        chain_controller.evaluate_step(
+            "graph_enhanced_schema_discovery",
+            ChainOutput(
+                status=graph_result.status.value,
+                item_count=len((graph_result.data or {}).get("tables_discovered", []) if graph_result.data else []),
+                score=((graph_result.data or {}).get("tables", [{}])[0].get("composite_score", 0.0)
+                       if graph_result.status == ToolStatus.SUCCESS and (graph_result.data or {}).get("tables") else 0.0),
+                metadata={"message": graph_result.message},
+            ),
+        )
 
         # =========================================================================
 
@@ -1947,6 +2005,16 @@ def run_agent_loop(
             "SQL pattern retrieval completed",
             {"patterns": len(sql_result.data.get("patterns", [])) if sql_result.data else 0},
         )
+        chain_controller.evaluate_step(
+            "sql_pattern_lookup",
+            ChainOutput(
+                status=sql_result.status.value,
+                item_count=len(sql_result.data.get("patterns", [])) if sql_result.data else 0,
+                score=(1.0 - float((sql_result.data.get("patterns", [{}])[0].get("distance", 1.0)) or 1.0)
+                       if sql_result.status == ToolStatus.SUCCESS and sql_result.data and sql_result.data.get("patterns") else 0.0),
+                metadata={"message": sql_result.message},
+            ),
+        )
 
         from app.core.retrieval_quality import RetrievalQualityScorer
         retrieval_quality_context = RetrievalQualityScorer().assess(
@@ -1965,6 +2033,16 @@ def run_agent_loop(
             ]
             tables_involved = list(dict.fromkeys(ranked_tables))
             logger.info(f"    [RetrievalQuality] Ranked tables: {tables_involved[:5]} | composite={retrieval_quality_context.composite_score:.3f}")
+
+        chain_controller.evaluate_step(
+            "retrieval_quality",
+            ChainOutput(
+                status="success",
+                item_count=len(retrieval_quality_context.recommended_tables),
+                score=retrieval_quality_context.composite_score,
+                metadata={"recommended_pattern": retrieval_quality_context.summary().get("recommended_pattern")},
+            ),
+        )
 
         base_sql = ""
 
@@ -2896,7 +2974,15 @@ def run_agent_loop(
 
     ))
 
-    
+    chain_controller.evaluate_step(
+        "critique_gate",
+        ChainOutput(
+            status="success" if critique_result["passed"] else "error",
+            item_count=1,
+            score=(critique_result.get("score", 0) / 7.0),
+            metadata={"issues": critique_result.get("issues", [])[:3]},
+        ),
+    )
 
     if not critique_result["passed"]:
 
@@ -3976,6 +4062,10 @@ def run_agent_loop(
     if 'retrieval_quality_context' in locals() and retrieval_quality_context is not None:
         result_dict["retrieval_quality"] = retrieval_quality_context.summary()
         result_dict["retrieval_trace"] = retrieval_quality_context.trace
+
+    chain_result = chain_controller.result()
+    result_dict["chain_trace"] = chain_result.trace
+    result_dict["step_verdicts"] = chain_result.step_verdicts
 
     result_dict["episodic_context"] = episodic_context
     result_dict["prior_turns"] = len(prior_history)
