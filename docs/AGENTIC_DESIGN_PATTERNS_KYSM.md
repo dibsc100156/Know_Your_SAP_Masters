@@ -1,9 +1,11 @@
 # Agentic Design Patterns — KYSM Implementation Guide
-**Last Updated:** April 20, 2026 (Phases L5, 14, 20, 21, 22, 23, 24 wired) | Project: Know Your SAP Masters (KYSM)
+**Last Updated:** April 22, 2026 | Project: Know Your SAP Masters (KYSM)
 
 ---
 
 ## Overview
+
+**Status labels used in this guide:** ✅ Complete | 🟡 Partial | 🚧 Planned
 
 Three YouTube videos were analyzed to extract actionable agentic design patterns for KYSM:
 
@@ -13,24 +15,77 @@ Three YouTube videos were analyzed to extract actionable agentic design patterns
 | V2 | AI Agent Design Patterns (Part 1) | Google Cloud / Annie Wang | 329,596 | 11,995 | 8 min | 🔴 HIGH |
 | V3 | 3 Advanced AI Agent Design Patterns (Part 2) | Google Cloud / Annie Wang | 63,136 | 2,306 | 8 min | 🔴 HIGH |
 
-**Source:** Google engineer publication (400-page book) + Google ADK official patterns.
+**Source basis:** Google engineer material (including the referenced 400-page book) + official Google ADK patterns.
 
 ---
 
 ## 23 Agentic Design Patterns — KYSM Mapping
 
-### Pattern 1: Prompt Chaining ✅ EXISTING (Partial)
-**What it is:** Break a big task into smaller steps, run one after another. Each step validates the previous before passing data forward.
+### Pattern 1: Prompt Chaining 🟡 Partial
+**What it is:** Break a larger task into smaller sequential steps, with each handoff validated before the next step proceeds.
 
-**KYSM status:** Partial — orchestrator Steps 1→2→3→... are a form of prompt chaining, but without explicit step-count limits or validation gates between each step.
+**KYSM status:** The orchestrator already behaves like a chained pipeline — Steps 1→2→3→... run in a stable sequence and pass structured outputs forward.
 
-**Gap:** No formal "chain with quality gate" — the step outputs are passed forward but there's no per-step rejection that halts the chain before reaching Step 8.
+**Gap:** KYSM still lacks first-class per-step quality gates, retry budgets, and stop conditions. A weak intermediate result can travel too far downstream before the system halts or revises.
 
-**What KYSM has:** Steps are sequential but orchestration is stateless per call; no per-step retry budget.
+**Architecture closure plan:**
+1. **Introduce a formal `ChainStep` contract** — each step should declare its input shape, output shape, quality gate, retry budget, and stop condition.
+2. **Add a dedicated chain controller** — move step execution into a `chain_controller.py` layer that owns handoffs, retries, halts, and recovery decisions.
+3. **Make quality gates explicit** — every major step should return a structured verdict (`PASS`, `RETRY`, `HALT`, `ESCALATE`) rather than relying on implicit downstream behavior.
+4. **Centralize retry/stop policy** — retry budgets and stop conditions should live in one policy layer, not be scattered across orchestrator branches.
+5. **Surface chain trace metadata** — expose `chain_trace` / `step_verdicts` metadata so the API can show where the chain passed, retried, or halted.
+
+**Mini-roadmap — Prompt Chain Controller Architecture:**
+
+**C1.1 — ChainStep Contract**
+- **Goal:** Standardize each orchestrator step as a first-class typed unit.
+- **Files:** `backend/app/core/chain_types.py`, `backend/app/core/chain_contract.py`
+- **Core classes:** `ChainStep`, `ChainInput`, `ChainOutput`, `QualityGate`, `RetryBudget`, `StopCondition`
+- **Interface:** `execute_step(step, state, context) -> ChainOutput`
+
+**C1.2 — Chain Controller**
+- **Goal:** Own step sequencing, state transitions, and control-flow decisions.
+- **Files:** `backend/app/core/chain_controller.py`
+- **Core classes:** `ChainController`, `ChainState`, `ChainRunResult`
+- **Interface:** `run_chain(plan, context) -> ChainRunResult`
+
+**C1.3 — Quality Gate Engine**
+- **Goal:** Evaluate whether a step result is good enough to proceed.
+- **Files:** `backend/app/core/chain_quality_gates.py`
+- **Core classes:** `QualityGateEngine`, `GateVerdict`, `GateRule`
+- **Interface:** `evaluate_step_result(step_output, gate) -> GateVerdict`
+
+**C1.4 — Retry + Stop Policy**
+- **Goal:** Make retries and halts explicit, bounded, and explainable.
+- **Files:** `backend/app/core/chain_retry_policy.py`
+- **Core classes:** `RetryPolicy`, `StopPolicy`, `RetryDecision`
+- **Interface:** `next_action(step_state, gate_verdict) -> RetryDecision`
+
+**C1.5 — Chain Trace + API Surfacing**
+- **Goal:** Make chain behavior inspectable in API/frontend responses.
+- **Files:** `backend/app/api/schemas/chain_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `ChainTrace`, `ChainTraceEntry`
+- **Interface:** `to_chain_trace(run_result) -> ChainTrace`
+
+**Build order / dependencies:**
+- **Step 1:** **C1.1** first — the controller cannot exist without a stable step contract.
+- **Step 2:** **C1.2** next — sequencing logic should be centralized before adding richer gates/policies.
+- **Step 3:** **C1.3** after C1.1/C1.2 — gates need a stable step/result contract to evaluate against.
+- **Step 4:** **C1.5** after C1.2/C1.3 — trace surfacing is most useful once verdicts are explicit.
+- **Step 5:** **C1.4** last — retry/stop policy is safest to formalize once controller and gate behavior are already visible.
+
+**Safest-first implementation sequence:**
+1. **C1.1 — ChainStep Contract** (low blast radius, high leverage)
+2. **C1.2 — Chain Controller** (control flow consolidation)
+3. **C1.3 — Quality Gate Engine** (explicit pass/retry/halt semantics)
+4. **C1.5 — Chain Trace + API Surfacing** (observability before stricter retry/stop enforcement)
+5. **C1.4 — Retry + Stop Policy** (highest behavioral impact because it changes runtime flow)
+
+**What KYSM has:** A reliable sequential pipeline, but not yet a formal chain controller.
 
 ---
 
-### Pattern 2: Routing ✅ LIVE (Phase L5)
+### Pattern 2: Routing ✅ Complete
 **What it is:** Smart triage — direct queries to the right specialist agent or execution path based on query characteristics.
 
 **KYSM status:** Phase L5 (Complexity Router) implements 4-tier routing:
@@ -39,11 +94,11 @@ Three YouTube videos were analyzed to extract actionable agentic design patterns
 - `COMPLEX` (0.30–0.50) → Full orchestrator incl. Graph RAG + Voting Executor
 - `EXPERT` (≥ 0.50) → Multi-Agent Domain Swarm
 
-**Gap:** Phase L5 only handles skip guards and tier assignment. It does **not** do hierarchical task decomposition — it doesn't break "find vendor open POs with material data" into sub-agent tasks. See Pattern 18.
+**Note:** Routing is now split across Phase L5 and Phase 18. L5 handles tiering and skip guards, while Phase 18 adds hierarchical task decomposition and surfaced decomposition plans for more exploratory queries.
 
 ---
 
-### Pattern 3: Parallelization ✅ LIVE (Phase 14 / Phase 10)
+### Pattern 3: Parallelization ✅ Complete
 **What it is:** Split work into independent tasks → run concurrently → merge results.
 
 **KYSM status:**
@@ -54,34 +109,87 @@ Three YouTube videos were analyzed to extract actionable agentic design patterns
 
 ---
 
-### Pattern 4: Reflection / Critique ✅ LIVE (Phase 14 PATH_B)
+### Pattern 4: Reflection / Critique ✅ Complete
 **What it is:** Generator produces output → critic evaluates against strict conditions → loops back if conditions not met.
 
-**KYSM status:** Voting Executor PATH_B uses `critique_agent.critique()` — evaluates SQL against 7-point validation rules. Phase 14's PATH_D (Healed Pattern) is essentially a cached reflection result.
+**KYSM status:** Voting Executor PATH_B uses `critique_agent.critique()` for structured SQL review, and Phase 21 now formalizes the revision loop on the live orchestrator/API path with bounded retries (`max_iterations=3`), explicit exit conditions, and surfaced `formal_trace` / `revision_summary` metadata.
 
-**Gap:** The loop (generator → critique → revision → re-critique) is not a formal separate loop pattern. Self-healer initiates heal, then there's an implicit re-critique, but no explicit max-iteration cap or formal exit condition definition. See Pattern 22 (Phase 21 — Formal Revision Loop, 8-phase CoT trace, convergence detection).
-
----
-
-### Pattern 5: Tool Use 🔴 EXISTING (Tool Registry)
-**What it is:** Agent discovers, authorizes, executes tools with fallbacks.
-
-**KYSM status:** TOOL_REGISTRY has 12 tools including `orchestrator_tools.py` implementations. MCP is referenced but not wired.
-
-**Gap:** No tool authorization layer — every tool in TOOL_REGISTRY is pre-authorized. A production system needs per-role tool allowlisting and usage audit logging separate from the auth context.
+**Note:** The core reflection loop is now in place. Future improvements are more about widening coverage and tuning than about missing architecture.
 
 ---
 
-### Pattern 6: Planning ✅ EXISTING (Partial)
-**What it is:** Milestones, dependencies, and constraints laid out before execution begins.
+### Pattern 5: Tool Use 🟡 Partial
+**What it is:** Agent discovers, authorizes, executes tools, and falls back cleanly when a tool path is unavailable.
 
-**KYSM status:** Partial — orchestrator has a fixed execution order (Steps 0–8), which is a predefined plan. Meta-path library provides pre-computed JOIN plans. But there is no dynamic planning layer that reorders steps based on query intent.
+**KYSM status:** TOOL_REGISTRY provides a solid execution surface, and the core orchestrator tools are wired into real query flow.
 
-**Gap:** Dynamic re-planning based on intermediate results (e.g., Schema RAG finds unexpected tables → Graph traversal should run before SQL Pattern RAG). Currently the plan is fixed at call time.
+**Gap:** Tool policy is still too static. KYSM needs role-aware allowlisting, clearer fallback strategy, and stronger audit logging around tool selection and use.
 
 ---
 
-### Pattern 7: Multi-Agent Collaboration ✅ LIVE (Phase 10 / Phase 13)
+### Pattern 6: Planning 🟡 Partial
+**What it is:** Lay out milestones, dependencies, and constraints before execution begins, then adapt the plan when new evidence appears.
+
+**KYSM status:** KYSM has a strong default plan: fixed orchestrator stages plus pre-computed meta-path and JOIN templates.
+
+**Gap:** Planning is still mostly static. The system does not yet re-plan aggressively when intermediate findings suggest a better execution order.
+
+**Architecture closure plan:**
+1. **Introduce a formal `ExecutionPlan` contract** — planning should produce a first-class plan object with ordered steps, dependencies, assumptions, and revision state.
+2. **Add a replanning engine** — intermediate findings (for example, schema surprises, low-confidence retrieval, or graph expansion) should be able to trigger explicit plan revision rather than just flowing through a fixed path.
+3. **Model dependency and cost tradeoffs** — replanning should weigh latency, confidence gain, and execution cost before changing the next step order.
+4. **Centralize replan policy** — thresholds for when to revise, skip, expand, or halt should live in one policy layer instead of being scattered across orchestrator branches.
+5. **Surface plan trace metadata** — expose `plan_trace` / `replan_events` metadata so the API can show when and why the execution plan changed.
+
+**Mini-roadmap — Adaptive Replanning Architecture:**
+
+**P6.1 — ExecutionPlan Contract**
+- **Goal:** Standardize initial plans and revised plans as first-class objects.
+- **Files:** `backend/app/core/planning_types.py`, `backend/app/core/planning_contract.py`
+- **Core classes:** `ExecutionPlan`, `PlanStep`, `PlanDependency`, `PlanRevision`
+- **Interface:** `build_initial_plan(query, context) -> ExecutionPlan`
+
+**P6.2 — Replanning Engine**
+- **Goal:** Let new evidence revise the remaining plan instead of forcing a fixed sequence.
+- **Files:** `backend/app/core/replanner.py`
+- **Core classes:** `Replanner`, `PlanningState`, `ReplanTrigger`
+- **Interface:** `revise_plan(plan, findings, context) -> ExecutionPlan`
+
+**P6.3 — Dependency + Cost Model**
+- **Goal:** Score whether a replan is worth the latency and complexity it introduces.
+- **Files:** `backend/app/core/plan_cost_model.py`, `backend/app/core/plan_dependencies.py`
+- **Core classes:** `DependencyGraph`, `CostEstimate`, `BenefitScore`
+- **Interface:** `score_replan(plan, findings) -> BenefitScore`
+
+**P6.4 — Replan Policy Layer**
+- **Goal:** Make replan triggers and guardrails explicit and explainable.
+- **Files:** `backend/app/core/plan_policy.py`
+- **Core classes:** `ReplanPolicy`, `TriggerThreshold`, `PlanGuardrail`
+- **Interface:** `should_replan(plan, findings, score) -> bool`
+
+**P6.5 — Plan Trace + API Surfacing**
+- **Goal:** Make planning and replanning visible in API/frontend responses.
+- **Files:** `backend/app/api/schemas/plan_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `PlanTrace`, `ReplanEvent`
+- **Interface:** `to_plan_trace(plan) -> PlanTrace`
+
+**Build order / dependencies:**
+- **Step 1:** **P6.1** first — replanning cannot be formalized until the system has a stable plan object.
+- **Step 2:** **P6.2** next — revision logic should exist before cost/policy refinement is layered on top.
+- **Step 3:** **P6.5** after P6.1/P6.2 — trace surfacing is safest once the system can emit real plan revisions.
+- **Step 4:** **P6.3** after P6.2 — cost/dependency scoring is most useful once replans actually exist.
+- **Step 5:** **P6.4** last — policy thresholds should be tuned only after plan revision behavior is observable.
+
+**Safest-first implementation sequence:**
+1. **P6.1 — ExecutionPlan Contract** (low blast radius, high leverage)
+2. **P6.2 — Replanning Engine** (core adaptive behavior)
+3. **P6.5 — Plan Trace + API Surfacing** (observability before aggressive tuning)
+4. **P6.3 — Dependency + Cost Model** (smarter replan scoring)
+5. **P6.4 — Replan Policy Layer** (highest behavioral impact because it governs when plan changes are allowed)
+
+---
+
+### Pattern 7: Multi-Agent Collaboration ✅ Complete
 **What it is:** Manager + roles + shared memory across agents.
 
 **KYSM status:**
@@ -93,21 +201,78 @@ Three YouTube videos were analyzed to extract actionable agentic design patterns
 
 ---
 
-### Pattern 8: Memory Management 🟡 EXISTING (Partial)
-**What it is:** Short-term (session), episodic (conversation), and long-term (persistent) memory layers.
+### Pattern 8: Memory Management 🟡 Partial
+**What it is:** Coordinate short-term session state, episodic conversational recall, and long-term learned memory as one coherent system.
 
 **KYSM status:**
-- **Long-term:** Qdrant `sql_patterns` collection (Phase 16 healed patterns), `healed_pattern_store.py`
-- **Short-term:** Auth context per-call, no session scratchpad
-- **Episodic:** None
+- **Long-term:** Qdrant-backed learned patterns via Phase 16 (`sql_patterns`, `healed_pattern_store.py`)
+- **Short-term / session:** Auth context plus Redis-backed session scratchpad via Phase 24
+- **Episodic:** Duplicate-turn lookup, recent query/result pairs, scratchpad-aware prompt context, and surfaced episodic metadata are now live in the orchestrator path
 
-**Gap:** No episodic memory per session. When a user asks a follow-up query ("same for customer 123"), the orchestrator doesn't recall the prior query's context from the same session. This creates friction in multi-turn conversations.
+**Gap:** Memory is materially better, but still not unified. Short-term state, episodic recall, and long-term learned patterns now cooperate more closely without yet forming one clean, end-to-end memory architecture.
 
-✅ **RESOLVED — Phase 24:** Episodic Memory Store (Redis-backed session scratchpad) records query history, conversation context, agent scratchpad, and query deduplication. Fire-and-forget with in-memory fallback. `backend/app/core/episodic_memory.py` (35KB).
+**Architecture closure plan:**
+1. **Introduce a unified `MemoryContext` contract** — every query should receive one composed memory object instead of stitching together session scratchpad, episodic lookups, and learned patterns ad hoc.
+2. **Add a memory orchestration layer** — a `memory_orchestrator.py` / `memory_manager.py` should decide what to read from session, episodic, and long-term stores; rank it; deduplicate it; and enforce a prompt/token budget.
+3. **Define explicit write-back rules** — decide what gets written to session memory, episodic memory, and long-term learned memory after success, failure, healing, approval, or user correction.
+4. **Separate memory from policy** — retention, privacy, auditability, and role-based visibility rules should live in a memory-policy layer rather than being scattered across individual memory stores.
+5. **Surface memory trace metadata** — expose lightweight `memory_trace` / `memory_sources` metadata in API responses so the system can explain which memory layers influenced a result.
+
+**Mini-roadmap — Unified Memory Architecture:**
+
+**M8.1 — MemoryContext Contract**
+- **Goal:** Standardize how memory reaches the orchestrator.
+- **Files:** `backend/app/core/memory_context.py`, `backend/app/core/memory_types.py`
+- **Core classes:** `MemoryContext`, `MemorySlice`, `MemorySource`, `MemoryBudget`
+- **Interface:** `compose_memory_context(session_id, query, auth_context, limits) -> MemoryContext`
+
+**M8.2 — Memory Orchestrator**
+- **Goal:** Read across session, episodic, and long-term stores and assemble the final prompt-ready memory bundle.
+- **Files:** `backend/app/core/memory_orchestrator.py`, `backend/app/core/memory_ranker.py`
+- **Core classes:** `MemoryOrchestrator`, `MemoryRanker`, `MemoryDeduper`
+- **Interface:** `build_context(query, session_id, auth_context) -> MemoryContext`
+
+**M8.3 — Memory Write-Back Router**
+- **Goal:** Make memory persistence event-driven and explicit.
+- **Files:** `backend/app/core/memory_writeback.py`
+- **Core classes:** `MemoryWriteRouter`, `MemoryEvent`, `MemoryWriteDecision`
+- **Interface:** `record_query(...)`, `record_result(...)`, `record_feedback(...)`, `record_heal(...)`
+
+**M8.4 — Memory Policy Layer**
+- **Goal:** Centralize retention, privacy, auditability, and role-aware visibility rules.
+- **Files:** `backend/app/core/memory_policy.py`
+- **Core classes:** `MemoryPolicy`, `RetentionRule`, `VisibilityRule`, `MemoryRedactionPolicy`
+- **Interface:** `filter_memory_for_role(...)`, `retention_for(event_type)`, `redact_memory_slice(...)`
+
+**M8.5 — Memory Trace + API Surfacing**
+- **Goal:** Make memory usage inspectable in API and frontend output.
+- **Files:** `backend/app/api/schemas/memory_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `MemoryTrace`, `MemoryTraceEntry`
+- **Interface:** `to_memory_trace(context) -> MemoryTrace`
+
+**Build order / dependencies:**
+- **Step 1:** **M8.1** first — everything else depends on a stable `MemoryContext` contract.
+- **Step 2:** **M8.2** next — the orchestrator can only compose memory cleanly once the contract exists.
+- **Step 3:** **M8.4** after M8.1/M8.2 — policy should shape memory filtering before write paths get more complex.
+- **Step 4:** **M8.5** after M8.2 — trace surfacing is safest once the read/composition path is stable.
+- **Step 5:** **M8.3** last — write-back is the riskiest change because it affects persistence semantics across all memory layers.
+
+**Safest-first implementation sequence:**
+1. **M8.1 — MemoryContext Contract** (low blast radius, high leverage)
+2. **M8.2 — Memory Orchestrator** (read-path consolidation)
+3. **M8.5 — Memory Trace + API Surfacing** (observability before more writes)
+4. **M8.4 — Memory Policy Layer** (tighten retention/visibility rules centrally)
+5. **M8.3 — Memory Write-Back Router** (most sensitive because it changes persistence behavior)
+
+**Recommended LEVEL5_ROADMAP.md wording:**
+- Add a follow-on row after Phase 24 in **Priority Build Order**.
+- Suggested item: **Unified Memory Architecture Follow-Through — `MemoryContext` + orchestrator + policy + write-back + trace**.
+- Suggested phase label: **24+ / M8.1–M8.5**.
+- Suggested status: **🟡 Partial** — design defined, Phase 24 live, broader memory unification still pending.
 
 ---
 
-### Pattern 9: Learning & Adaptation ✅ LIVE (Phase 16)
+### Pattern 9: Learning & Adaptation ✅ Complete
 **What it is:** Feedback → prompts/policies/tests updated automatically.
 
 **KYSM status:** Phase 16 stores healed SQL patterns in Qdrant. PATH_D in Voting Executor applies prior healed patterns as a 4th vote path. Reuse counter tracks how often each pattern is applied.
@@ -116,68 +281,222 @@ Three YouTube videos were analyzed to extract actionable agentic design patterns
 
 ---
 
-### Pattern 10: Goal Setting & Monitoring ✅ LIVE (Phase L4)
-**What it is:** KPIs, drift detection, and course-correction.
+### Pattern 10: Goal Setting & Monitoring 🟡 Partial
+**What it is:** Define success targets, detect drift, and course-correct while work is still in flight.
 
-**KYSM status:** Phase L4 (Monitoring Dashboard) — 9 metric compute methods: throughput, success rates, latency (p50/p95/p99/p999), voting, self-heal, semantic trust, CIBA, Sentinel, swarm, domain+role breakdowns.
+**KYSM status:** Phase L4 gives KYSM strong aggregate observability across throughput, latency, voting, self-heal, semantic trust, CIBA, Sentinel, swarm, and domain/role breakdowns.
 
-**Gap:** No active goal tracking per query. Monitoring is post-hoc aggregate analysis. There's no per-query goal state (e.g., "I intended to return 50 rows of vendor data") against which drift could be measured mid-execution.
+**Gap:** Monitoring is still much stronger after the fact than during execution. KYSM does not yet maintain a clear per-query goal state that can drive mid-flight correction.
+
+**Architecture closure plan:**
+1. **Introduce a formal `QueryGoal` contract** — each request should carry explicit success targets, constraints, and failure thresholds instead of relying only on post-hoc metrics.
+2. **Add a goal-state tracker** — execution should maintain live goal state across planning, retrieval, generation, validation, and masking.
+3. **Add drift detection + correction hooks** — when the system drifts away from the goal (for example, low result density, wrong table mix, weak confidence, or incomplete coverage), it should trigger a corrective action rather than merely logging the miss.
+4. **Centralize goal policy** — success criteria, thresholds, and escalation rules should live in one policy layer rather than being embedded across individual phases.
+5. **Surface goal trace metadata** — expose `goal_state` / `goal_trace` metadata so the API can explain what the system was trying to achieve and when it corrected course.
+
+**Mini-roadmap — Per-Query Goal State Architecture:**
+
+**G10.1 — QueryGoal Contract**
+- **Goal:** Represent intent, success targets, and constraints as a first-class runtime object.
+- **Files:** `backend/app/core/query_goal.py`, `backend/app/core/goal_types.py`
+- **Core classes:** `QueryGoal`, `GoalConstraint`, `GoalTarget`, `GoalThreshold`
+- **Interface:** `build_query_goal(query, auth_context, session_context) -> QueryGoal`
+
+**G10.2 — Goal State Tracker**
+- **Goal:** Maintain live goal progress through the execution pipeline.
+- **Files:** `backend/app/core/goal_tracker.py`
+- **Core classes:** `GoalTracker`, `GoalState`, `GoalCheckpoint`
+- **Interface:** `update_goal_state(goal_state, phase_event) -> GoalState`
+
+**G10.3 — Drift Detection + Correction Hooks**
+- **Goal:** Detect when execution diverges from the goal and trigger corrective action.
+- **Files:** `backend/app/core/goal_drift_detector.py`
+- **Core classes:** `GoalDriftDetector`, `DriftSignal`, `CorrectionAction`
+- **Interface:** `detect_drift(goal_state, execution_state) -> list[DriftSignal]`
+
+**G10.4 — Goal Policy Layer**
+- **Goal:** Centralize success criteria, tolerances, and escalation thresholds.
+- **Files:** `backend/app/core/goal_policy.py`
+- **Core classes:** `GoalPolicy`, `GoalRule`, `EscalationThreshold`
+- **Interface:** `evaluate_goal_policy(goal_state, drift_signals) -> CorrectionAction`
+
+**G10.5 — Goal Trace + API Surfacing**
+- **Goal:** Make live goal tracking visible in API/frontend responses.
+- **Files:** `backend/app/api/schemas/goal_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `GoalTrace`, `GoalTraceEntry`
+- **Interface:** `to_goal_trace(goal_state) -> GoalTrace`
+
+**Build order / dependencies:**
+- **Step 1:** **G10.1** first — there is no goal tracking without a stable goal contract.
+- **Step 2:** **G10.2** next — execution needs a live goal state before drift or correction can be meaningful.
+- **Step 3:** **G10.5** after G10.1/G10.2 — trace surfacing is safest once real goal-state transitions exist.
+- **Step 4:** **G10.3** after G10.2 — drift detection should evaluate a live tracked state, not static metrics.
+- **Step 5:** **G10.4** last — policy thresholds are safest to tune once goal-state and drift behavior are observable.
+
+**Safest-first implementation sequence:**
+1. **G10.1 — QueryGoal Contract** (low blast radius, high leverage)
+2. **G10.2 — Goal State Tracker** (core runtime visibility)
+3. **G10.5 — Goal Trace + API Surfacing** (observability before stronger correction behavior)
+4. **G10.3 — Drift Detection + Correction Hooks** (introduces active course correction)
+5. **G10.4 — Goal Policy Layer** (highest behavioral impact because it decides when and how to intervene)
 
 ---
 
-### Pattern 11: Exception Handling & Recovery ✅ LIVE (Phase 6)
-**What it is:** Classify error → backoff → fallbacks.
+### Pattern 11: Exception Handling & Recovery 🟡 Partial
+**What it is:** Classify failures, apply recovery logic, and fall back safely when the first path breaks.
 
-**KYSM status:** Phase 6 self-healer maps error codes (ORA-00918, ORA-01476, etc.) to heal strategies (6 strategies: add_alias, fix_where, remove_dupe, etc.). Validation harness (Phase 5.5) catches syntax errors before execution.
+**KYSM status:** Phase 6 self-healing plus the Phase 5.5 validation harness give KYSM strong deterministic recovery for known SQL failure modes.
 
-**Gap:** Exception classification is static (rule-based). When the self-healer exhausts all strategies, there's no escalation to a human-in-the-loop — the query just fails. CIBA (Phase 15) can block, but cannot serve as a recovery escalation path for persistent heal failures.
+**Gap:** Recovery is still mostly rule-based. Once the known heal strategies are exhausted, KYSM lacks a more graceful escalation path than hard failure or block.
+
+**Architecture closure plan:**
+1. **Introduce a formal `RecoveryCase` contract** — failures should be represented as structured recovery cases with error class, severity, attempted repairs, and escalation options.
+2. **Add a recovery orchestrator** — after self-heal exhaustion, a dedicated layer should choose between retry, fallback, narrow-scope execution, human review, or graceful partial response.
+3. **Add escalation routing** — the system should route unresolved cases into the right recovery lane instead of collapsing everything into failure or block.
+4. **Centralize recovery policy** — retry limits, escalation thresholds, and fallback priorities should live in one policy layer rather than being scattered across exception handlers.
+5. **Surface recovery trace metadata** — expose `recovery_trace` / `recovery_path` metadata so the API can explain what failed, what was attempted, and why the final escalation path was chosen.
+
+**Mini-roadmap — Recovery Escalation Architecture:**
+
+**E11.1 — RecoveryCase Contract**
+- **Goal:** Standardize how execution failures are represented after validation or self-heal.
+- **Files:** `backend/app/core/recovery_case.py`, `backend/app/core/recovery_types.py`
+- **Core classes:** `RecoveryCase`, `RecoveryAttempt`, `RecoverySeverity`, `RecoveryOption`
+- **Interface:** `build_recovery_case(error, context, attempts) -> RecoveryCase`
+
+**E11.2 — Recovery Orchestrator**
+- **Goal:** Choose the next recovery path once simple healing is no longer enough.
+- **Files:** `backend/app/core/recovery_orchestrator.py`
+- **Core classes:** `RecoveryOrchestrator`, `RecoveryState`, `RecoveryResult`
+- **Interface:** `resolve_recovery(case, context) -> RecoveryResult`
+
+**E11.3 — Escalation Router**
+- **Goal:** Route unresolved failures into retry, fallback, partial answer, human review, or hard stop.
+- **Files:** `backend/app/core/recovery_router.py`
+- **Core classes:** `EscalationRouter`, `EscalationLane`, `RecoveryDecision`
+- **Interface:** `route_recovery(case, policy) -> RecoveryDecision`
+
+**E11.4 — Recovery Policy Layer**
+- **Goal:** Make escalation thresholds and fallback ordering explicit and tunable.
+- **Files:** `backend/app/core/recovery_policy.py`
+- **Core classes:** `RecoveryPolicy`, `FallbackRule`, `EscalationThreshold`
+- **Interface:** `evaluate_recovery_policy(case, state) -> RecoveryDecision`
+
+**E11.5 — Recovery Trace + API Surfacing**
+- **Goal:** Make recovery behavior inspectable in API/frontend responses.
+- **Files:** `backend/app/api/schemas/recovery_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `RecoveryTrace`, `RecoveryTraceEntry`
+- **Interface:** `to_recovery_trace(recovery_result) -> RecoveryTrace`
+
+**Build order / dependencies:**
+- **Step 1:** **E11.1** first — recovery routing needs a stable case model.
+- **Step 2:** **E11.2** next — orchestration logic should exist before richer routing/policy layers are added.
+- **Step 3:** **E11.5** after E11.1/E11.2 — trace surfacing is safest once real recovery outcomes exist.
+- **Step 4:** **E11.3** after E11.2 — escalation routing should operate on a live orchestrated recovery state.
+- **Step 5:** **E11.4** last — policy tuning is safest once recovery paths are visible and testable.
+
+**Safest-first implementation sequence:**
+1. **E11.1 — RecoveryCase Contract** (low blast radius, high leverage)
+2. **E11.2 — Recovery Orchestrator** (core graceful-escalation behavior)
+3. **E11.5 — Recovery Trace + API Surfacing** (observability before stricter routing)
+4. **E11.3 — Escalation Router** (introduces explicit recovery lanes)
+5. **E11.4 — Recovery Policy Layer** (highest behavioral impact because it governs escalation thresholds and fallback ordering)
 
 ---
 
-### Pattern 12: Human-in-the-Loop ✅ LIVE (Phase 15)
-**What it is:** Review cues and approval gates for high-risk operations.
+### Pattern 12: Human-in-the-Loop 🟡 Partial
+**What it is:** Put a human review surface around higher-risk operations instead of forcing fully autonomous execution.
 
-**KYSM status:** Phase 15 CIBA — Sentinel verdict BLOCK → approval request created → async approve/deny via Redis-backed store → 1hr auto-approval for repeated queries.
+**KYSM status:** Phase 15 CIBA gives KYSM async approval gating, repeat-query memory, and supervisor review for blocked requests.
 
-**What KYSM has over standard HITL:** Auto-approve/deny hash for repeated queries (queries that were previously approved/denied bypass the approval flow).
+**What KYSM already does well:** Repeated queries can inherit prior approve/deny outcomes instead of reopening the same review loop every time.
 
-**Gap:** HITL is binary (approve/deny). There's no "modify and approve" workflow (e.g., supervisor approves with a modified SQL filter). The current CIBA design only gates or blocks — it doesn't support query rewriting.
-
----
-
-### Pattern 13: Retrieval (RAG) ✅ LIVE (Phase M6)
-**What it is:** Parse → chunk → embed → rerank.
-
-**KYSM status:**
-- Schema RAG: Qdrant `sap_schema` collection (DDIC metadata)
-- SQL Pattern RAG: Qdrant `sql_patterns` collection (68+ proven patterns, 18 domains)
-- Graph Table Context: Qdrant `graph_table_context` collection (text embeddings)
-- Graph Node Embeddings: Qdrant `graph_node_embeddings` collection (Node2Vec)
-- QM Semantic: Qdrant `qm_semantic_notifications` collection (50 mock QM notifications)
-
-**Gap:** No reranking layer after initial retrieval. All KYSM RAG uses cosine similarity directly. A cross-encoder reranker would improve result quality significantly, especially for Schema RAG where field-level matching matters.
+**Gap:** The human input surface is still binary. A reviewer can approve or deny, but not edit, narrow, or conditionally approve a request.
 
 ---
 
-### Pattern 14: Inter-Agent Communication ✅ LIVE (Phase 13)
-**What it is:** Protocols, IDs, and expiry for message routing between agents.
+### Pattern 13: Retrieval (RAG) 🟡 Partial
+**What it is:** Parse, embed, retrieve, and then rerank so the strongest context reaches the generation path.
 
-**KYSM status:** Redis pub/sub + streams MessageBus with 6 message types (QUERY, RESPONSE, ASSERTION, CHALLENGE, NEGOTIATE, COMMIT). TTL-based message expiry. AgentRegistry with subscription topics.
+**KYSM status:** Retrieval coverage is broad across schema metadata, SQL patterns, graph context, graph node embeddings, and QM semantic search.
 
-**Gap:** Messages are fire-and-forget in pub/sub mode. There's no delivery guarantee confirmation — if a domain agent crashes mid-query, the synthesis agent waits indefinitely (10s timeout via `wait_for_message`). Crash recovery leaves orphaned messages in Redis streams.
+**Gap:** Ranking is still mostly single-stage cosine retrieval. KYSM does not yet apply a stronger reranker or retrieval critic to sharpen final context quality.
+
+**Architecture closure plan:**
+1. **Introduce a unified `RetrievalBundle` contract** — retrieval should hand one structured candidate bundle to downstream logic instead of passing around loosely ranked hits from separate stores.
+2. **Add a dedicated reranker layer** — run a stronger reranker over the merged candidate set before prompt assembly so final context quality is not determined by raw cosine similarity alone.
+3. **Add a retrieval critic** — evaluate the reranked set for coverage, relevance, diversity, and missing-context risk before it reaches generation.
+4. **Make retrieval query-aware** — use intent/domain-aware retrieval profiles so schema, SQL pattern, graph, and QM retrieval do not all behave like a single generic search path.
+5. **Surface retrieval trace metadata** — expose `retrieval_trace` / `retrieval_critic` metadata in API responses so context selection is inspectable and debuggable.
+
+**Mini-roadmap — Retrieval Quality Architecture:**
+
+**R13.1 — RetrievalBundle Contract**
+- **Goal:** Standardize the retrieval handoff into one composed candidate set.
+- **Files:** `backend/app/core/retrieval_bundle.py`, `backend/app/core/retrieval_types.py`
+- **Core classes:** `RetrievalBundle`, `RetrievalCandidate`, `RetrievalScore`
+- **Interface:** `collect_candidates(query, auth_context, limits) -> RetrievalBundle`
+
+**R13.2 — Reranker Layer**
+- **Goal:** Reorder the merged candidate set with a stronger relevance model.
+- **Files:** `backend/app/core/retrieval_reranker.py`
+- **Core classes:** `RetrievalReranker`, `CrossEncoderReranker`
+- **Interface:** `rerank(bundle, query, top_k) -> RetrievalBundle`
+
+**R13.3 — Retrieval Critic**
+- **Goal:** Score the final retrieval set for coverage quality before generation.
+- **Files:** `backend/app/core/retrieval_critic.py`
+- **Core classes:** `RetrievalCritic`, `CriticVerdict`, `CoverageGap`
+- **Interface:** `critique_retrieval(bundle, query, intent) -> CriticVerdict`
+
+**R13.4 — Query-Aware Retrieval Profiles**
+- **Goal:** Route different query shapes through different retrieval mixes and thresholds.
+- **Files:** `backend/app/core/retrieval_profiles.py`
+- **Core classes:** `RetrievalProfile`, `RetrievalProfileRouter`
+- **Interface:** `select_retrieval_profile(query, intent, domain) -> RetrievalProfile`
+
+**R13.5 — Retrieval Trace + API Surfacing**
+- **Goal:** Make retrieval decisions inspectable in API/frontend responses.
+- **Files:** `backend/app/api/schemas/retrieval_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `RetrievalTrace`, `RetrievalTraceEntry`
+- **Interface:** `to_retrieval_trace(bundle, critic_verdict) -> RetrievalTrace`
+
+**Build order / dependencies:**
+- **Step 1:** **R13.1** first — all later reranking and critique logic depends on a stable retrieval handoff.
+- **Step 2:** **R13.2** next — reranking should improve the read path before more policy/critic complexity is added.
+- **Step 3:** **R13.5** after R13.2 — add observability early so reranker behavior is inspectable.
+- **Step 4:** **R13.3** after R13.1/R13.2 — the critic should evaluate the reranked bundle, not the raw candidate list.
+- **Step 5:** **R13.4** last — profile routing is safest once the bundle, reranker, and critic contracts are already stable.
+
+**Safest-first implementation sequence:**
+1. **R13.1 — RetrievalBundle Contract** (low blast radius, high leverage)
+2. **R13.2 — Reranker Layer** (improves quality on the read path)
+3. **R13.5 — Retrieval Trace + API Surfacing** (observability before heavier routing logic)
+4. **R13.3 — Retrieval Critic** (quality gating once ranking is stable)
+5. **R13.4 — Query-Aware Retrieval Profiles** (highest coordination cost across retrieval subsystems)
 
 ---
 
-### Pattern 15: Resource-Aware Optimization 🔴 MISSING
+### Pattern 14: Inter-Agent Communication 🟡 Partial
+**What it is:** Give agents a structured way to exchange requests, assertions, challenges, and results.
+
+**KYSM status:** The Redis-backed MessageBus already gives KYSM typed messages, expiry, topic routing, and negotiation traffic between agents.
+
+**Gap:** Reliability semantics are still light. KYSM does not yet have strong delivery acknowledgment, replay guarantees, or robust orphan-message cleanup.
+
+---
+
+### Pattern 15: Resource-Aware Optimization ✅ Complete
 **What it is:** Route by cost/complexity — cheap models for simple tasks, expensive models for complex ones. Track routing cost vs. query execution savings.
 
-**KYSM status:** ✅ IMPLEMENTED — April 20, 2026.
+**KYSM status:** Phase 20 is live on the API path. `chat.py` uses `route_with_cost(...)`, the router enforces per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms, EXPERT=∞), adaptive bypass is active, and `cost_stats` / `routing_bypass_reason` are surfaced for inspection. See `backend/app/core/router_cost_tracker.py`.
 
-Phase 20 (Resource-Aware Cost Router) wraps ComplexityRouter with per-tier latency budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms, EXPERT=∞) and adaptive bypass via LRU decision cache. If routing overhead exceeds budget, falls back to pre-computed DEFAULT_DECISIONS. See `backend/app/core/router_cost_tracker.py`.
+**Note:** The core optimization pattern is now implemented; remaining work is operational tuning, not foundational wiring.
 
 ---
 
-### Pattern 16: Reasoning Techniques (CoT/ToT) 🔴 MISSING (Prompt Engineering)
+### Pattern 16: Reasoning Techniques (CoT/ToT) 🚧 Planned
 **What it is:** Chain-of-Thought, Tree-of-Thoughts, self-consistency, agent debate.
 
 **KYSM status:** Not explicitly implemented. Prompt templates exist but no formal reasoning trace extraction.
@@ -186,214 +505,253 @@ Phase 20 (Resource-Aware Cost Router) wraps ComplexityRouter with per-tier laten
 
 **Recommendation:** Add optional CoT mode via a `reasoning_depth` parameter in the API — when `reasoning_depth=detailed`, the orchestrator generates a step-by-step trace stored in the result dict and visible in the frontend.
 
+**Architecture closure plan:**
+1. **Introduce a formal `ReasoningTrace` contract** — reasoning output should be represented as a structured trace rather than ad hoc explanation text.
+2. **Add a reasoning runtime layer** — the orchestrator should be able to emit step-by-step reasoning checkpoints during planning, retrieval, SQL assembly, validation, and response synthesis.
+3. **Separate reasoning depth from execution depth** — lightweight runs should stay cheap, while detailed runs can opt into richer trace capture without changing the core execution path.
+4. **Add reasoning policy controls** — govern when detailed traces are allowed, how much detail is surfaced, and what must stay redacted for safety/compliance.
+5. **Surface reasoning trace metadata** — expose `reasoning_trace` / `reasoning_summary` fields in API responses so the frontend can render step-by-step decision flow.
+
+**Mini-roadmap — Reasoning Trace Architecture:**
+
+**T16.1 — ReasoningTrace Contract**
+- **Goal:** Standardize how reasoning steps are represented and returned.
+- **Files:** `backend/app/core/reasoning_trace.py`, `backend/app/core/reasoning_types.py`
+- **Core classes:** `ReasoningTrace`, `ReasoningStep`, `ReasoningSummary`, `ReasoningDepth`
+- **Interface:** `build_reasoning_trace(run_state) -> ReasoningTrace`
+
+**T16.2 — Reasoning Runtime Hooks**
+- **Goal:** Capture step-by-step reasoning checkpoints across the orchestrator path.
+- **Files:** `backend/app/core/reasoning_runtime.py`
+- **Core classes:** `ReasoningRuntime`, `ReasoningCheckpoint`, `ReasoningCapture`
+- **Interface:** `record_reasoning_step(phase, decision, evidence) -> None`
+
+**T16.3 — Reasoning Policy Layer**
+- **Goal:** Control which traces can be captured and surfaced at each reasoning depth.
+- **Files:** `backend/app/core/reasoning_policy.py`
+- **Core classes:** `ReasoningPolicy`, `ReasoningRule`, `TraceRedactionRule`
+- **Interface:** `filter_reasoning_trace(trace, policy) -> ReasoningTrace`
+
+**T16.4 — Result Dict + API Surfacing**
+- **Goal:** Store reasoning output in the result dict and return it cleanly through API/frontend layers.
+- **Files:** `backend/app/api/schemas/reasoning_trace.py`, `backend/app/api/endpoints/chat.py`
+- **Core classes:** `ReasoningTraceResponse`, `ReasoningTraceEntry`
+- **Interface:** `attach_reasoning_trace(result_dict, trace) -> dict`
+
+**T16.5 — Frontend Reasoning Viewer**
+- **Goal:** Make reasoning traces visible and readable in the frontend.
+- **Files:** `frontend/app.py`, `frontend/components/reasoning_trace.py`
+- **Core classes:** `ReasoningTracePanel`, `ReasoningTraceRow`
+- **Interface:** `render_reasoning_trace(trace) -> UI`
+
+**Build order / dependencies:**
+- **Step 1:** **T16.1** first — reasoning capture needs a stable trace schema.
+- **Step 2:** **T16.2** next — runtime hooks should exist before policy or UI layering is added.
+- **Step 3:** **T16.4** after T16.1/T16.2 — result-dict/API surfacing is safest once real traces exist.
+- **Step 4:** **T16.3** after T16.2 — policy should filter an actual trace, not speculative output.
+- **Step 5:** **T16.5** last — frontend rendering is easiest once trace shape and API surfacing are stable.
+
+**Safest-first implementation sequence:**
+1. **T16.1 — ReasoningTrace Contract** (low blast radius, high leverage)
+2. **T16.2 — Reasoning Runtime Hooks** (core trace capture)
+3. **T16.4 — Result Dict + API Surfacing** (makes traces inspectable quickly)
+4. **T16.3 — Reasoning Policy Layer** (controls detail and redaction)
+5. **T16.5 — Frontend Reasoning Viewer** (user-facing visualization once the backend trace is stable)
+
 ---
 
-### Pattern 17: Evaluation & Monitoring 🟡 EXISTING (Partial)
-**What it is:** Golden sets, SLA measurement, drift detection.
+### Pattern 17: Evaluation & Monitoring 🟡 Partial
+**What it is:** Use golden sets, SLA tracking, and drift detection to continuously validate behavior.
 
-**KYSM status:**
-- Phase L4: Real-time monitoring dashboard
-- Phase 12: QualityEvaluator (correctness_score, trajectory_adherence)
-- benchmark_50.py: 50-query benchmark suite ( GREEN, 0 failures)
+**KYSM status:** KYSM has live monitoring, QualityEvaluator signals, and a strong benchmark baseline (`benchmark_50.py`: 50/50 green).
 
-**Gap:** No golden set evaluation pipeline. The 50-query benchmark is a one-time manual run. A production CI/CD pipeline needs automated golden set evaluation on every commit, with regression alerts.
+**Gap:** Evaluation is still episodic rather than continuous. KYSM does not yet run an automated golden-set regression gate on every meaningful change.
+
+**Architecture closure plan:**
+1. **Introduce a formal `GoldenSet` contract** — evaluation datasets should be versioned, typed, and mapped to the capabilities they are meant to protect.
+2. **Add an automated evaluation runner** — meaningful code/config changes should trigger targeted golden-set execution automatically rather than relying on manual benchmark runs.
+3. **Add change-impact detection** — the system should decide which golden sets to run based on what actually changed (routing, retrieval, graph, safety, frontend, etc.).
+4. **Centralize regression gate policy** — pass/fail thresholds, tolerance bands, and block/warn behavior should live in one policy layer.
+5. **Surface evaluation trace metadata** — expose `eval_gate`, `golden_set_results`, and regression summaries so failures are inspectable in CI and runtime dashboards.
+
+**Mini-roadmap — Automated Golden-Set Regression Architecture:**
+
+**V17.1 — GoldenSet Contract**
+- **Goal:** Standardize evaluation corpora, expected outcomes, and coverage tags.
+- **Files:** `backend/app/evals/golden_set.py`, `backend/app/evals/golden_types.py`
+- **Core classes:** `GoldenSet`, `GoldenCase`, `ExpectedOutcome`, `CoverageTag`
+- **Interface:** `load_golden_set(name) -> GoldenSet`
+
+**V17.2 — Evaluation Runner**
+- **Goal:** Execute golden sets automatically and collect structured results.
+- **Files:** `backend/app/evals/eval_runner.py`
+- **Core classes:** `EvalRunner`, `EvalRun`, `EvalResult`
+- **Interface:** `run_golden_set(golden_set, scope) -> EvalRun`
+
+**V17.3 — Change-Impact Detector**
+- **Goal:** Select the smallest meaningful eval scope based on what changed.
+- **Files:** `backend/app/evals/change_impact.py`
+- **Core classes:** `ChangeImpactDetector`, `ImpactArea`, `EvalScope`
+- **Interface:** `detect_eval_scope(changed_files, changed_components) -> EvalScope`
+
+**V17.4 — Regression Gate Policy**
+- **Goal:** Decide whether a change passes, warns, or blocks based on golden-set outcomes.
+- **Files:** `backend/app/evals/regression_gate.py`
+- **Core classes:** `RegressionGate`, `GateThreshold`, `RegressionVerdict`
+- **Interface:** `evaluate_regression_gate(eval_run, policy) -> RegressionVerdict`
+
+**V17.5 — Eval Trace + CI Surfacing**
+- **Goal:** Make golden-set execution visible in CI, API metadata, and monitoring panels.
+- **Files:** `backend/app/evals/eval_trace.py`, `backend/app/api/schemas/eval_gate.py`, `.github/workflows/ci.yml`
+- **Core classes:** `EvalTrace`, `EvalGateSummary`
+- **Interface:** `to_eval_gate_summary(eval_run, verdict) -> EvalGateSummary`
+
+**Build order / dependencies:**
+- **Step 1:** **V17.1** first — automated regression needs a stable evaluation corpus contract.
+- **Step 2:** **V17.2** next — golden-set execution must exist before gating or impact-based selection matters.
+- **Step 3:** **V17.5** after V17.1/V17.2 — trace surfacing is safest once real eval runs exist.
+- **Step 4:** **V17.3** after V17.2 — change-impact selection should optimize an existing eval runner, not replace it.
+- **Step 5:** **V17.4** last — regression thresholds are safest to enforce once results and traces are observable.
+
+**Safest-first implementation sequence:**
+1. **V17.1 — GoldenSet Contract** (low blast radius, high leverage)
+2. **V17.2 — Evaluation Runner** (core automation path)
+3. **V17.5 — Eval Trace + CI Surfacing** (observability before hard gating)
+4. **V17.3 — Change-Impact Detector** (keeps regression runs targeted and affordable)
+5. **V17.4 — Regression Gate Policy** (highest operational impact because it can block changes)
 
 ---
 
-### Pattern 18: Guardrails & Safety ✅ LIVE (Phase 6c + Phase 23)
+### Pattern 18: Guardrails & Safety ✅ Complete
 **What it is:** PII detection, prompt injection prevention, sandboxing.
 
 **KYSM status:**
 - Phase 6c: Proactive Threat Sentinel (6 threat engines)
-- Phase 23: Safety Guardrails standalone layer (8 engines: SQL injection, PII leak, cross-module escalation, denied-table probe, data exfiltration, temporal inference, role impersonation, output PII leak) — `backend/app/core/safety_guardrails.py` (52KB) — behavioral anomaly detection
+- Phase 23: `safety_guardrails.py` now owns the live layered safety contract behind the sentinel adapter, with guardrail verdict/profile surfaced in API responses
 - Phase 5: Critique Gate (7-point SQL validation)
 - AuthContext column-level masking (Pillar 1)
 
-**Gap:** Sentinel is inline with execution (pre-execution gate). Separating safety guardrails as an independent layer (above the orchestrator) would improve maintainability and allow safety policies to be updated without touching the orchestrator. See Phase 23.
-
-**What Google ADK recommends vs. KYSM:** ADK treats guardrails as a deployment-time configuration, not an inline code path. KYSM should decouple `security_sentinel.py` into two layers: (1) `safety_guardrails.py` — standalone pre-execution gate, (2) `threat_sentinel.py` — behavioral anomaly detector during execution.
+**Note:** The architectural split that was previously missing is now in place. Further work here is about policy tuning and coverage expansion, not structural separation.
 
 ---
 
-### Pattern 19: Prioritization ✅ LIVE (Phase 22)
+### Pattern 19: Prioritization ✅ Complete
 **What it is:** Value × effort × urgency × risk — dynamically reorder the work queue.
 
 **KYSM status:**
-- Phase 22: Dynamic Query Prioritization — urgency × role_authority × complexity × SLA × recency scoring
-  - Formula: `priority_score = urgency × role_authority × complexity × SLA × recency × critical_boost`
-  - Queue routing: is_critical OR score ≥ 8.0 → priority queue; else agent queue
-  - Celery task priority 0-10 mapped from score bands
-  - `backend/app/core/query_priority_scorer.py` (18KB) In a production SAP system, queries from FI_ACCOUNTANT (finance) and SECURITY_AUDITOR role should be prioritized over AP_CLERK if both hit the queue simultaneously. There is no priority scoring engine.
+- Phase 22 provides live sync/async query prioritization with urgency × recency × role_authority scoring
+- Celery task priority 0-10 is mapped from score bands
+- Fairness tests and queue policy documentation are in place (`docs/PHASE22_QUEUE_POLICY.md`, `backend/tests/test_phase22_query_prioritization.py`)
+- File: `backend/app/core/query_priority_scorer.py`
 
-**Phase 22** addresses this.
+**Note:** The prioritization pattern is now wired through the live path; follow-on work is about policy refinement, not missing implementation.
 
 ---
 
-### Pattern 20: Exploration & Discovery 🔴 MISSING
+### Pattern 20: Exploration & Discovery ✅ Complete
 **What it is:** Map the problem space, cluster related entities, probe unknowns before committing to a solution path.
 
-**KYSM status:** Not implemented. KYSM is locked to a predefined graph schema (114 nodes, 47 edges). Any query that falls outside the 14 meta-paths and 114 known tables must fallback to Schema RAG, which is expensive and slow for novel queries.
+**KYSM status:** Phase 18 is now live with dynamic FK probing, hierarchical task decomposition, live orchestrator merge, and surfaced decomposition planning. KYSM still maintains its graph foundations, but the discovery path is no longer just a roadmap concept.
 
-**Gap:** The predefined graph schema cannot grow automatically. When a new SAP module is deployed (e.g., SAP S/4HANA for Real Estate RE-FX), DD08L (FK relationships) changes but KYSM's graph is not updated. The system has no mechanism to discover and incorporate new table relationships without manual graph rebuilding.
-
-**Phase 18** addresses this.
+**Note:** The exploration pattern is now implemented. The next layer of improvement is breadth and schema-growth sophistication, not basic discovery wiring.
 
 ---
 
 ## Advanced Patterns from Google ADK (Annie Wang)
 
-### ADK Pattern A1: Loop (Review & Critique) ✅ PARTIAL (Phase 14)
-See Pattern 4 above. KYSM has critique but not as a formal explicit loop with counter and exit conditions.
+### ADK Pattern A1: Loop (Review & Critique) ✅ Complete
+See Pattern 4 above. KYSM now has a formal live revision loop with bounded retries, explicit exit conditions, and surfaced trace metadata.
 
-### ADK Pattern A2: Coordinator (Router) 🟡 PARTIAL (Phase L5)
-Phase L5 router assigns tier but does not do **hierarchical task decomposition** — it doesn't break "find sushi in San Francisco" into "food_agent + transport_agent as a team." It only decides which steps to skip.
+### ADK Pattern A2: Coordinator (Router) ✅ Complete
+KYSM now covers both halves of the coordinator pattern: Phase L5 handles tiering and skip guards, while Phase 18 adds hierarchical task decomposition, live orchestrator merge, and surfaced decomposition plans.
 
-### ADK Pattern A3: Agent as Tool 🔴 MISSING (Phase 19)
-When Sentinel is in ENFORCING mode or CIBA returns TIGHTEN, KYSM needs to suppress agent autonomy and treat sub-agents as stateless tools. Currently sub-agents retain full autonomy even during Sentinel-enforced sessions.
+### ADK Pattern A3: Agent as Tool ✅ Complete
+Phase 19 is now live: Sentinel/CIBA can trigger pre-swarm override behavior, dispatch agents in tool mode, and use tool-mode synthesis when autonomy should be suppressed.
 
 ---
 
-## Recommended KYSM Roadmap Update (Phases 18–24)
+## Phases 18–24 Alignment Snapshot
+
+These phases are now tracked as **✅ Complete** in `LEVEL5_ROADMAP.md`; the notes below summarize the live implementation and the main hardening opportunities that remain.
 
 | Phase | Name | Source | Priority | Status |
 |-------|------|--------|----------|--------|
-| **18** | **Exploration & Discovery (Dynamic Schema Mapping)** | V1 P20 + V3 Coordinator | 🔴 HIGH | 🆕 New |
-| **19** | **Agent-as-Tool Dynamic Override Mode** | V3 Pattern A3 | 🔴 HIGH | 🆕 New |
-| **20** | **Resource-Aware Cost/Complexity Router** | V1 P15 + V3 Coordinator | 🟡 MED | 🆕 New |
-| **21** | **Formal Revision Loop with Exit Conditions** | V3 Loop Pattern | 🟡 MED | 🆕 New |
-| **22** | **Dynamic Query Prioritization Engine** | V1 P19 | 🟡 MED | 🆕 New |
-| **23** | **Safety Guardrails (Standalone Layer)** | V1 P18 | 🟢 LOW | 🆕 New |
-| **24** | **Episodic Memory Store (Session Scratchpad)** | V2 P8 Memory | 🟢 LOW | 🆕 New |
+| **18** | **Exploration & Discovery (Dynamic Schema Mapping)** | V1 P20 + V3 Coordinator | 🔴 HIGH | ✅ Complete |
+| **19** | **Agent-as-Tool Dynamic Override Mode** | V3 Pattern A3 | 🔴 HIGH | ✅ Complete |
+| **20** | **Resource-Aware Cost/Complexity Router** | V1 P15 + V3 Coordinator | 🟡 MED | ✅ Complete |
+| **21** | **Formal Revision Loop with Exit Conditions** | V3 Loop Pattern | 🟡 MED | ✅ Complete |
+| **22** | **Dynamic Query Prioritization Engine** | V1 P19 | 🟡 MED | ✅ Complete |
+| **23** | **Safety Guardrails (Standalone Layer)** | V1 P18 | 🟢 LOW | ✅ Complete |
+| **24** | **Episodic Memory Store (Session Scratchpad)** | V2 P8 Memory | 🟢 LOW | ✅ Complete |
 
 ### Phase 18: Exploration & Discovery (Priority: 🔴 HIGH)
-
-**What:** Dynamic FK probing when no meta-path hits and Schema RAG confidence < 0.60.
-
-**Key insight from V3:** The Coordinator pattern does hierarchical task decomposition — the router doesn't just *skip* steps, it *decomposes* a task into what sub-agents are needed. KYSM's router should do the same.
-
-**Files to create:**
-- `backend/app/core/exploration_engine.py` — exploration budget (max 3 probes/query), DD08L probing, table name embedding search against `sap_schema`
-- `backend/app/core/hierarchical_decomposer.py` — break complex queries into sub-agent task lists
-
-**Acceptance criteria:**
-- Novel query (outside 14 meta-paths) triggers exploration → returns semantically related tables + FK paths within 200ms
-- Exploration budget enforced: max 3 probes/query, TTL cache prevents repeated exploration cost
-
----
+- **Current state:** Live. Dynamic FK probing and hierarchical task decomposition are now merged into the orchestrator path and surfaced in the decomposition plan.
+- **Hardening opportunity:** Expand schema-growth breadth and improve coverage for newly introduced SAP modules.
+- **Key files:** `backend/app/core/exploration_engine.py`, `backend/app/core/hierarchical_decomposer.py`
 
 ### Phase 19: Agent-as-Tool Dynamic Override (Priority: 🔴 HIGH)
-
-**What:** Sentinel/CIBA triggers a mode where sub-agents are treated as stateless tools.
-
-**Key insight from V3:** "Agent as Tool pattern — full system control retained by primary agent. When you want to bypass a sub-agent's autonomy, treat it as a tool."
-
-**Files to create:**
-- `backend/app/agents/swarm/agent_tool_mode.py` — `execute_as_tool()` wrapper that runs sub-agent synchronously and discards session state after execution
-
-**Acceptance criteria:**
-- When `session.tightness >= 3` OR Sentinel verdict = ENFORCING → auto-engage agent-as-tool mode
-- Sub-agent responses are direct pass-through, no autonomous revision loops
-
----
+- **Current state:** Live. Sentinel/CIBA can trigger pre-swarm override behavior, tool-mode dispatch, and constrained synthesis.
+- **Hardening opportunity:** Refine operator ergonomics and widen test coverage for edge-case enforcement paths.
+- **Key files:** `backend/app/agents/swarm/agent_tool_mode.py`, `docs/PHASE19_OPERATOR_GUIDE.md`
 
 ### Phase 20: Resource-Aware Cost Router (Priority: 🟡 MED)
-
-**What:** Track routing latency per tier; bypass routing if computation cost exceeds savings.
-
-**Files to create:**
-- `backend/app/core/router_cost_tracker.py` — per-tier latency tracking, fall-back to default path when routing overhead > threshold
-
-**Acceptance criteria:**
-- TRIVIAL queries route in < 5ms; SIMPLE in < 15ms; COMPLEX in < 50ms
-- Router overhead logged to monitoring dashboard (Phase L4)
-
----
+- **Current state:** Live. `route_with_cost(...)` is on the API path, with tier budgets, adaptive bypass, and surfaced cost metadata.
+- **Hardening opportunity:** Continue tuning thresholds and cache policy under real workload.
+- **Key file:** `backend/app/core/router_cost_tracker.py`
 
 ### Phase 21: Formal Revision Loop (Priority: 🟡 MED)
-
-**What:** Wrap the self-heal loop in a formal `RevisionLoop` class with `exit_conditions` + `max_iterations`.
-
-**Files to create:**
-- `backend/app/core/revision_loop.py` — `RevisionLoop(exit_conditions, max_iterations=3)`, revision_number + improvement_delta tracking
-
-**Acceptance criteria:**
-- Self-heal exits at iteration 3 OR when confidence >= 0.85 OR when SQL passes all critique checks
-- Each iteration logged: revision_number, heal_code applied, improvement_delta
-
----
+- **Current state:** Live. Bounded critique/validation/execution revision attempts honor `max_iterations=3`, explicit exit conditions, and surfaced `formal_trace` / `revision_summary`.
+- **Hardening opportunity:** Broaden trace consumers and extend targeted tests around edge-case stability heuristics.
+- **Key files:** `backend/app/core/revision_loop.py`, `backend/tests/test_phase21_formal_revision_loop.py`
 
 ### Phase 22: Dynamic Query Prioritization (Priority: 🟡 MED)
-
-**What:** Priority scoring engine for Celery queue — urgency × recency × role_authority × complexity_penalty.
-
-**Files to create:**
-- `backend/app/core/query_priority_engine.py` — `compute_priority(query, auth_context, session_context) -> float`
-- Wire `task_priority` into Celery `send_task()` calls
-
-**Acceptance criteria:**
-- CIBA-pending queries always score MAX priority (10)
-- Same-session follow-up queries get 1.3× boost
-- FI_DOMAIN queries from FI_ACCOUNTANT get +0.2 over MM_CLERK
-- p95 queue latency < 200ms at conc=5
-
----
+- **Current state:** Live. Sync/async queue prioritization, fairness coverage, and queue policy docs are all wired.
+- **Hardening opportunity:** Refine policy weights as production traffic patterns become clearer.
+- **Key files:** `backend/app/core/query_priority_scorer.py`, `docs/PHASE22_QUEUE_POLICY.md`
 
 ### Phase 23: Safety Guardrails (Standalone Layer) (Priority: 🟢 LOW)
-
-**What:** Decouple Sentinel into two layers — `safety_guardrails.py` (pre-execution syntax/semantic) and `threat_sentinel.py` (behavioral anomaly during execution).
-
-**Files to create:**
-- `backend/app/core/safety_guardrails.py` — standalone `GuardrailVerdict` pre-execution gate
-
-**Acceptance criteria:**
-- GuardrailVerdict: PASS / FAIL / REVIEW
-- Violation categories: DATA_EXFILTRATION, SCHEMA_ENUMERATION, CROSS_MODULE_ESCALATION, DENIED_TABLE_PROBE, TEMPORAL_INFERENCE, ROLE_IMPERSONATION
-
----
+- **Current state:** Live. `safety_guardrails.py` owns the layered safety contract behind the sentinel adapter, with guardrail verdict/profile surfaced in API responses.
+- **Hardening opportunity:** Expand policy coverage and make operator-facing diagnostics even clearer.
+- **Key file:** `backend/app/core/safety_guardrails.py`
 
 ### Phase 24: Episodic Memory (Session Scratchpad) (Priority: 🟢 LOW)
-
-**What:** Redis-backed per-session memory store — last 5 query-result pairs as context for next query.
-
-**Files to create:**
-- `backend/app/core/episodic_memory.py` — `EpisodicMemory(session_id, ttl=24h)`, `store(query, result)`, `recall()` (returns last N pairs)
-
-**Acceptance criteria:**
-- Follow-up queries ("same for customer 123" after "vendor payment terms") retrieve prior context automatically
-- Session TTL: 24h or session end
-- Episodic memory excluded from compliance audit logs (it's inference context, not data)
+- **Current state:** Live. Duplicate-turn lookup, recent query/result pairs, scratchpad-aware prompt context, and episodic metadata are wired into the orchestrator path.
+- **Hardening opportunity:** Keep refining how episodic memory composes with broader memory policies and retention rules.
+- **Key file:** `backend/app/core/episodic_memory.py`
 
 ---
 
 ## KYSM Pattern Coverage Scorecard
 
+This scorecard is intentionally strict: if a pattern is present but still has meaningful operational gaps, it stays **🟡 Partial**.
+
 | Pattern | Name | KYSM Status | Phase |
 |---------|------|-------------|-------|
 | 1 | Prompt Chaining | 🟡 Partial | — |
-| 2 | Routing | ✅ LIVE | L5 |
-| 3 | Parallelization | ✅ LIVE | 14 / 10 |
-| 4 | Reflection / Critique | ✅ LIVE (partial) | 14 |
+| 2 | Routing | ✅ Complete | L5 |
+| 3 | Parallelization | ✅ Complete | 14 / 10 |
+| 4 | Reflection / Critique | ✅ Complete | 14 / 21 |
 | 5 | Tool Use | 🟡 Partial | Tool Registry |
 | 6 | Planning | 🟡 Partial | Meta-path |
-| 7 | Multi-Agent Collaboration | ✅ LIVE | 10 / 13 |
-| 8 | Memory Management | 🟡 Partial | 16 |
-| 9 | Learning & Adaptation | ✅ LIVE | 16 |
-| 10 | Goal Setting & Monitoring | ✅ LIVE | L4 |
-| 11 | Exception Handling & Recovery | ✅ LIVE | 6 |
-| 12 | Human-in-the-Loop | ✅ LIVE | 15 |
-| 13 | Retrieval (RAG) | ✅ LIVE | M6 |
-| 14 | Inter-Agent Communication | ✅ LIVE | 13 |
-| 15 | Resource-Aware Optimization | 🔴 MISSING | 20 |
-| 16 | Reasoning Techniques (CoT/ToT) | 🔴 MISSING | — |
+| 7 | Multi-Agent Collaboration | ✅ Complete | 10 / 13 |
+| 8 | Memory Management | 🟡 Partial | 16 / 24 |
+| 9 | Learning & Adaptation | ✅ Complete | 16 |
+| 10 | Goal Setting & Monitoring | 🟡 Partial | L4 |
+| 11 | Exception Handling & Recovery | 🟡 Partial | 6 |
+| 12 | Human-in-the-Loop | 🟡 Partial | 15 |
+| 13 | Retrieval (RAG) | 🟡 Partial | M6 |
+| 14 | Inter-Agent Communication | 🟡 Partial | 13 |
+| 15 | Resource-Aware Optimization | ✅ Complete | 20 |
+| 16 | Reasoning Techniques (CoT/ToT) | 🚧 Planned | — |
 | 17 | Evaluation & Monitoring | 🟡 Partial | L4 / 12 |
-| 18 | Guardrails & Safety | 🟡 Partial | 6c |
-| 19 | Prioritization | 🔴 MISSING | 22 |
-| 20 | Exploration & Discovery | 🔴 MISSING | 18 |
-| A1 | Loop (Review & Critique) | ✅ LIVE (partial) | 14 |
-| A2 | Coordinator (Router) | 🟡 Partial | L5 |
-| A3 | Agent as Tool | 🔴 MISSING | 19 |
+| 18 | Guardrails & Safety | ✅ Complete | 6c / 23 |
+| 19 | Prioritization | ✅ Complete | 22 |
+| 20 | Exploration & Discovery | ✅ Complete | 18 |
+| A1 | Loop (Review & Critique) | ✅ Complete | 14 / 21 |
+| A2 | Coordinator (Router) | ✅ Complete | L5 / 18 |
+| A3 | Agent as Tool | ✅ Complete | 19 |
 
-**Coverage:** 9/23 ✅ LIVE · 8/23 🟡 Partial · 6/23 🔴 MISSING
+**Coverage:** 12/23 ✅ Complete · 10/23 🟡 Partial · 1/23 🚧 Planned
 
 ---
 

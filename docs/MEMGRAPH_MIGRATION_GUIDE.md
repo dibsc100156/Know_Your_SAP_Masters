@@ -1,572 +1,425 @@
 # Memgraph Migration Guide — Know Your SAP Masters
-**From:** In-memory NetworkX Graph  
-**To:** Distributed Memgraph Graph Database  
-**Date:** April 6, 2026 | Author: Vishnu ॐ  
-**Last Updated:** April 16, 2026
+**From:** in-memory NetworkX graph  
+**To:** Memgraph-backed graph runtime with a local NetworkX mirror  
+**Last Updated:** April 22, 2026
 
 ---
 
-## Implementation Status — Updated April 9, 2026
+## Executive Summary
 
-| Phase | Task | Status | Notes |
-|-------|------|--------|-------|
-| M1 | `docker-compose.memgraph.yml` + Memgraph Lab | ✅ DONE | Lab at `http://localhost:3000` |
-| M1 | `memgraph_adapter.py` scaffold | ✅ DONE | Dual-mode (Memgraph + NetworkX mirror) |
-| M1 | `init_schema.cql` — 114 tables + 137 edges | ✅ DONE | Full SAP enterprise schema loaded |
-| M1 | `use_memgraph()` factory in `__init__.py` | ✅ DONE | Accepts `uri`, `user`, `password` |
-| M2 | `build_enterprise_schema_graph()` direct Cypher port | ✅ DONE | Parses `init_schema.cql` via regex, builds both Memgraph + NX mirror |
-| M2 | Regex fix — `m.group(6)` bridge flag (was `m.group(7)`) | ✅ DONE | `IndexError: no such group` bug fixed |
-| M2 | Edge regex fixed — `)-[` pattern for `FOREIGN_KEY` edges | ✅ DONE | All 47 edges now parse correctly |
-| M2 | Duplicate kwargs fix in `MemgraphShim.__init__` | ✅ DONE | Fixed `TypeError` on hot-reload |
-| M2 | Orchestrator Native Cypher Querying (`AllPathsExplorer`) | ✅ DONE | `find_all_ranked_paths_native` implemented natively in `memgraph_adapter.py`. Variable-length queries (`-[*..5]-`) offloaded from Python to DB engine. |
-| M3 | Wire `use_memgraph()` into `main.py` startup | ✅ DONE | Sets `MEMGRAPH_URI` env var; falls back to NX on failure |
-| M3 | `smoke_test_memgraph.py` + `load_init_schema.py` scripts | ✅ DONE | |
-| M4 | Celery async workers + circular import fix | ✅ DONE | `celery_app_instance` name change + `@shared_task` migration |
-| M5 | Redis dialog state | ✅ COMPLETE | Hardened: retries, backoff, `REDIS_ENFORCE` fail-loud |
-| M6 | Qdrant cluster migration | ✅ COMPLETE | `vector_store.py`, `graph_embedding_store.py` (Phase 5½), and `qm_semantic_search.py` (Phase 8) all fully operational on Qdrant via `VECTOR_STORE_BACKEND=qdrant`. ChromaDB fallback intact. |
-| M7 | Connection pooling for SAP HANA | ⬜ PENDING | |
-| M8 | Kubernetes HPA — autoscale Celery workers | ✅ COMPLETE | KEDA ScaledObjects configured for RabbitMQ depth |
-| M9 | LeanIX agent governance integration | ✅ WIRED | Middleware registered in main.py; DPO reporting enabled |
-| M10 | Multi-tenant isolation — separate Memgraph subgraphs | ✅ COMPLETE | Cypher nodes labeled per-tenant, `TENANT_ID` env wired |
+**Status labels used in this guide:** ✅ Complete | 🟡 Partial | 🚧 Planned
 
-**Overall:** M1–M5 ✅ COMPLETE | M6 ✅ COMPLETE (Qdrant) | M7 ⬜ PENDING | M8 ✅ COMPLETE | M10 ✅ COMPLETE
+The Memgraph migration is largely complete.
+
+- **Graph storage/runtime:** Memgraph is wired and can replace the global `graph_store` at startup.
+- **Traversal model:** the system still keeps a **local NetworkX mirror** for compatibility and low-latency graph algorithms.
+- **Native Memgraph path-finding:** available for ranked multi-path exploration via `find_all_ranked_paths_native()`.
+- **Vector search:** **Qdrant**, not Memgraph, is the active vector backend for schema/pattern search, graph embeddings, and QM semantic search.
+- **Remaining gap:** real SAP HANA production cutover is still not the default runtime; pool-backed HANA execution exists in code but is not the default deployment mode.
 
 ---
 
-## Overview
+## Implementation Status
 
-This guide migrates **Pillar 5 (Graph RAG)** from a single-node in-memory NetworkX graph (`graph_store.py`) to a distributed Memgraph cluster — enabling horizontal scale, concurrent multi-worker traversal, and native vector search.
-
-### Architecture: Dual-Mode (Memgraph + NetworkX Mirror)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│  Memgraph (bolt://localhost:7687)                       │
-│  · Persistent graph — 114 tables, 137 FK edges          │
-│  · Loaded once at startup from init_schema.cql          │
-│  · Queried via Cypher for graph mutations               │
-└────────────────────┬────────────────────────────────────┘
-                    │ _build_nx_from_local_metadata()
-                    │ (called once after schema load)
-                    ↓
-┌─────────────────────────────────────────────────────────┐
-│  NetworkX Mirror (in-process, in-memory)                │
-│  · Built from local _node_meta + _edge_meta            │
-│  · Always stays in sync with Memgraph                  │
-│  · Used for ALL traversal algorithms (BFS, betweenness) │
-│  · Falls back to NX if Memgraph is unavailable         │
-└─────────────────────────────────────────────────────────┘
-```
-
-> **Key insight:** The NetworkX mirror is built **locally** from parsed metadata — NOT lazily synced from Memgraph queries. This avoids round-trip latency on every traversal and makes the system work even if Memgraph goes down mid-session.
-
-### What Stays the Same
-- All **14 meta-paths** (vendor_master, procure_to_pay, order_to_cash, etc.)
-- All **114 nodes** and **137 edges** (updated schema in `init_schema.cql`)
-- All **orchestrator calls** — `traverse_graph()`, `find_path()`, `get_subgraph_context()`, `get_neighbors()`, `.G.nodes` all work unchanged
-- `AllPathsExplorer` and `TemporalGraphRAG` — work unchanged via NetworkX mirror
-- Drop-in replacement — no orchestrator changes needed
-
-### What Has Changed
-- Graph storage: RAM (NetworkX only) → Memgraph (persistent) + NetworkX (mirror)
-- `graph_store.py` is now the **fallback** (NetworkX-only mode when Memgraph unavailable)
-- `memgraph_adapter.py` is the **primary** — handles connection, parsing, dual sync
-- `use_memgraph()` must be called at startup to activate Memgraph mode
-- ChromaDB → Qdrant migration still pending (M6)
-
----
-
-## Phase M1: Scaffold & Start Services
-
-**Goal:** Get all Docker services running locally.
-
-```bash
-# Start the full stack
-docker compose -f docker/docker-compose.memgraph.yml up memgraph lab -d
-
-# Verify all containers are running
-docker ps --format "{{.Names}} {{.Status}}"
-
-# Expected output:
-# sapmasters_memgraph       Up 2 minutes
-# sapmasters_memgraph_lab   Up 2 minutes (port 3000)
-# sapmasters_qdrant         Up <time>
-# sapmasters_rabbitmq       Up <time> (ports 5672, 15672)
-# sapmasters_redis           Up <time> (port 6379)
-```
-
-**Services and their endpoints:**
-
-| Service | Host Port | Purpose |
-|---------|-----------|---------|
-| Memgraph | `localhost:7687` | Graph database (Bolt) |
-| Memgraph Lab | `localhost:3000` | Web UI for graph visualization |
-| Qdrant | `localhost:6333` | Vector store — ✅ ACTIVE — 4 collections |
-| Redis | `localhost:6379` | Dialog session store |
-| RabbitMQ | `localhost:5672`, `15672` | Celery message broker |
-
-**Install Python client:**
-```bash
-cd backend
-.\.venv\Scripts\pip install gqlalchemy>=3.0.0
-```
-
-**Verify Memgraph connection:**
-```python
-from gqlalchemy import Memgraph
-mg = Memgraph(host='localhost', port=7687)
-print(list(mg.execute_and_fetch('RETURN 1 AS x')))
-# → [{'x': 1}]
-```
-
----
-
-## Phase M2: Load the SAP Enterprise Schema
-
-**Goal:** Populate Memgraph with 114 tables and 137 FK relationships from `init_schema.cql`.
-
-### How it works
-
-`MemgraphGraphRAGManager.build_enterprise_schema_graph()` does NOT use GraphRAGManager as a delegate anymore. Instead, it:
-
-1. **Reads** `docker/memgraph/init_schema.cql` as a plain text file
-2. **Parses** each statement with `_parse_node_statement()` and `_parse_edge_statement()` (regex-based)
-3. **Executes** Cypher via `self._mg.execute()` to load nodes and edges into Memgraph
-4. **Builds** the NetworkX mirror locally from parsed `_node_meta` / `_edge_meta` (no Memgraph round-trip)
-5. **Computes** degree + betweenness centrality and stores back as Memgraph node properties
-
-### Regex parsing (critical bugs to avoid)
-
-**`_parse_node_statement()`** — parses CQL like:
-```cypher
-MERGE (m:SAPTable {table_name:"MARA"}) SET m.module="MM" ...
-```
-- Regex has **6 capture groups** — bridge flag is `m.group(6)` (NOT 7)
-- The old code called `m.group(7)` → `IndexError: no such group` (bug fixed ✅)
-
-**`_parse_edge_statement()`** — parses CQL like:
-```cypher
-MATCH (a:SAPTable {table_name:"MARA"}), (b:SAPTable {table_name:"MARC"})
-MERGE (a)-[:FOREIGN_KEY {condition:"...", cardinality:"...", bridge_type:"..."}]->(b)
-```
-- Property block is captured as `edge_match.group(3)` — the full MATCH line
-- Then `props_match = re.search(..., props_str)` extracts individual properties
-- Previous bug: tried to parse from `edge_match.group(0)` using `[^}]*` which swallowed internal quotes → 0/47 edges matched (fixed ✅)
-
-### Verify schema loaded
-
-```python
-from app.core import use_memgraph
-mg = use_memgraph(uri='bolt://localhost:7687')
-print(mg.stats())
-# Expected:
-# {'total_tables': 114, 'total_relationships': 137, 'cross_module_bridges': 97,
-#  'modules': ['BP', 'CO', 'CS', 'FI', ...], 'memgraph_connected': True}
-```
-
-### Inspect in Memgraph Lab
-
-Open `http://localhost:3000` and run:
-```cypher
-MATCH (t:SAPTable) RETURN t LIMIT 25
-MATCH (a)-[r:FOREIGN_KEY]->(b) RETURN a, r, b LIMIT 50
-```
-
----
-
-## Phase M3: Wire into FastAPI Startup
-
-**Goal:** Activate Memgraph automatically when the FastAPI server starts.
-
-### How it's wired (in `main.py`)
-
-```python
-# backend/app/main.py — on_startup()
-from app.core import use_memgraph, MEMGRAPH_GRAPH_STORE
-import os
-
-# Memgraph — load on startup (falls back to NetworkX on failure)
-memgraph_uri = os.environ.get("MEMGRAPH_URI", "bolt://localhost:7687")
-try:
-    graph_store = use_memgraph(uri=memgraph_uri)
-    stats = graph_store.stats()
-    print(f"[STARTUP] Memgraph Graph RAG: {stats}")
-except Exception as e:
-    print(f"[STARTUP] Memgraph unavailable: {e}")
-    print("[STARTUP] Using NetworkX fallback.")
-    # graph_store remains as the NetworkX GraphRAGManager
-```
-
-### Startup environment variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `MEMGRAPH_URI` | `bolt://localhost:7687` | Memgraph Bolt endpoint |
-| `REDIS_HOST` | `localhost` | Redis host (use `localhost` on Windows, `redis` inside Docker) |
-| `REDIS_PORT` | `6379` | Redis port |
-
-### Startup log verification
-
-```
-[STARTUP] ChromaDB: 11 schema records at ~/.openclaw/workspace/chroma_db
-[STARTUP] Vector store ready.
-[STARTUP] Redis Dialog Manager: {'backend': 'redis', 'connected': True, ...}
-[STARTUP] Memgraph: swapping graph_store → Memgraph (bolt://localhost:7687)
-[STARTUP] Memgraph Graph RAG: {'total_tables': 114, 'total_relationships': 137, ...}
-```
-
-### Manual activation (anywhere in code)
-
-```python
-from app.core import use_memgraph
-mg = use_memgraph(uri='bolt://localhost:7687')
-# graph_store global is now replaced with MemgraphGraphRAGManager
-```
-
----
-
-## Phase M4: Celery Worker Fleet (Horizontal Scale)
-
-**Goal:** Decouple the orchestrator loop from the FastAPI request thread.
-
-### Current status
-
-✅ Tasks are defined with `@shared_task` decorator  
-✅ `celery_app.py` uses `celery_app_instance` variable name to avoid circular import  
-✅ Broker is RabbitMQ (`sapmasters-rabbitmq:5672`)  
-✅ Lazy import pattern — `celery_app_instance` imported only inside `get_task_result()`
-
-### The circular import deadlock (fixed)
-
-If you see `NameError: name 'app' is not defined`:
-- **Cause:** `celery_app.py` had `app = Celery(...)` then immediately `import app.workers.orchestrator_tasks`. Python's import system resolved bare `app` through `sys.modules` before the assignment.
-- **Fix (Applied April 7):** Renamed Celery instance to `celery_app_instance`. Set ALL `.conf.*` settings BEFORE importing workers. Added `app = celery_app_instance` at module bottom. Changed all `@app.task` decorators to `@shared_task` in the workers.
-
----
-
-## Phase M5: Redis Dialog State
-
-**Goal:** Move session persistence out of in-process memory and harden for distributed environments.
-
-### Current status
-
-✅ **COMPLETE (April 8, 2026)**
-✅ `RedisDialogManager` class fully hardened
-✅ Exponential backoff and auto-reconnect logic added
-✅ Strict enforcement to prevent split-brain (`REDIS_ENFORCE=true`)
-
-### Dialog manager behavior
-
-```
-Request arrives
-  → try Redis connection (with up to 3 retries & backoff)
-  → Redis up? → use Redis backend
-  → Redis down? 
-      → If REDIS_ENFORCE=true (default) → Fail-loud (RuntimeError)
-      → If REDIS_ENFORCE=false → Fall back to file-based (.dialog_sessions/ dir)
-```
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `REDIS_HOST` | `localhost` | Redis host (use `redis` inside Docker) |
-| `REDIS_PORT` | `6379` | Redis port |
-| `REDIS_ENFORCE` | `true` | When true, prevents silent fallback to files to avoid split-brain state loss. |
-
-### Verify Redis connection
-
-```python
-from app.core.redis_dialog_manager import get_dialog_stats
-print(get_dialog_stats())
-# → {'backend': 'redis', 'connected': True, 'dialog_sessions': 0, ...}
-```
-
-### Scaling to production (inside Docker)
-
-When deployed inside Docker, change:
-```bash
-REDIS_HOST=redis   # Docker service name
-REDIS_PORT=6379
-```
-
----
-
-## Phase M6: Qdrant Cluster Migration
-
-**Goal:** Replace file-based ChromaDB with clustered Qdrant vector store for horizontal scalability.
-
-### Current Status
-
-✅ **COMPLETE (April 7, 2026)**
-✅ `VectorStoreManager` dual-backend in `vector_store.py`
-✅ `qdrant_vector_store.py` operational with gRPC
-✅ 4 collections active: `sap_schema`, `sql_patterns`, `graph_node_embeddings`, `graph_table_context`
-✅ `VECTOR_STORE_BACKEND=qdrant` env var wired into FastAPI startup
-
-### How it works
-
-The `VectorStoreManager` checks `VECTOR_STORE_BACKEND` at startup:
-
-```python
-# backend/app/core/vector_store.py
-backend = os.environ.get("VECTOR_STORE_BACKEND", "chroma")
-if backend == "qdrant":
-    from app.core.qdrant_vector_store import QdrantVectorStore
-    self._qdrant = QdrantVectorStore(...)
-else:
-    self._chroma = ChromaDBVectorStore(...)
-```
-
-### Collections
-
-| Collection | Dimension | Description |
-|---|---|---|
-| `sap_schema` | 384 | DDIC table metadata (DD03L) |
-| `sql_patterns` | 384 | Proven SQL query patterns |
-| `graph_node_embeddings` | 64 | Node2Vec structural embeddings |
-| `graph_table_context` | 384 | Context-rich table descriptions |
-
-### Verify Qdrant is active
-
-```python
-from app.core.vector_store import get_vector_store
-vs = get_vector_store()
-print(vs.stats())
-# → {'backend': 'qdrant', 'collections': 4, 'total_vectors': ...}
-```
-
----
-
-## Phase M8: Kubernetes HPA (Auto-Scaling Celery Workers)
-
-**Goal:** Automatically scale the backend Celery agents in a Kubernetes cluster based on workload (RabbitMQ queue depth).
-
-### Current Status
-
-✅ **COMPLETE (April 9, 2026)**  
-✅ KEDA `ScaledObject` configured for both `celery-primary` and `celery-replica` deployments  
-✅ RabbitMQ credentials injected securely via `TriggerAuthentication`  
-✅ Scale behavior set to max 20 replicas, triggering at 10 messages per worker  
-
-### How it works
-
-The system uses [KEDA (Kubernetes Event-driven Autoscaling)](https://keda.sh) to monitor the length of the `agent` queue in RabbitMQ.
-When the depth exceeds the `queueLengthTarget` (set to 10), KEDA automatically scales up the `celery-primary` Deployment. 
-To prevent thrashing, the scaler employs a 300-second cooldown period before scaling down after a spike.
-
-### Deployment instructions
-
-```bash
-# Ensure KEDA is installed in the cluster
-kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/v2.14.2/keda-2.14.2.yaml
-
-# Apply the worker deployments and KEDA ScaledObjects
-kubectl apply -k k8s/overlays/prod
-```
-
----
-
-## Phase M10: Multi-Tenant Isolation
-
-**Goal:** Segment the enterprise schema into isolated subgraphs so multiple Business Units (BUs), company codes, or external customers can share one Memgraph instance securely.
-
-### Current Status
-
-✅ **COMPLETE (April 9, 2026)**  
-✅ Cypher queries updated to inject dynamic tenant labels  
-✅ FastAPI startup uses `TENANT_ID` environment variable  
-✅ NetworkX in-memory mirror scoped to tenant boundaries  
-
-### How it works
-
-In `memgraph_adapter.py`, the `MemgraphGraphRAGManager` accepts a `tenant_id` at initialization. It appends a label (e.g., `:Tenant_T100`) to every node inserted into Memgraph.
-
-When the application fetches the graph to build the local NetworkX mirror, it filters strictly by that tenant label:
-```cypher
-MATCH (t:SAPTable:Tenant_T100) RETURN t...
-MATCH (a:SAPTable:Tenant_T100)-[r:FOREIGN_KEY]->(b:SAPTable:Tenant_T100) RETURN ...
-```
-
-### Usage
-
-Set the environment variable before starting the backend:
-```bash
-# Windows
-set TENANT_ID=SP_GLOBAL_ENERGY
-
-# Linux/Docker
-export TENANT_ID=SP_GLOBAL_ENERGY
-```
-
-If not set, it defaults to `default`, keeping full backward compatibility with single-tenant deployments.
-
-**Goal:** Replace file-based ChromaDB with clustered Qdrant vector store.
-
-### Current status
-
-✅ **COMPLETE (April 7, 2026)**
-✅ Dual-backend `VectorStoreManager` built in `vector_store.py`
-✅ `qdrant_vector_store.py` operational with gRPC connection
-✅ Env var switch wired into FastAPI startup (`VECTOR_STORE_BACKEND=qdrant`)
-
-### How to use Qdrant
-
-In `main.py`, the backend checks the environment variable at startup:
-
-```bash
-# Windows
-set VECTOR_STORE_BACKEND=qdrant
-set QDRANT_HOST=localhost
-set QDRANT_PORT=6333
-
-# Docker/Linux
-export VECTOR_STORE_BACKEND=qdrant
-```
-
-If the connection fails or `VECTOR_STORE_BACKEND` is missing/set to `chroma`, it falls back to ChromaDB instantly.
-
----
-
-## NetworkX Mirror — How It Works
-
-```
-Memgraph (persistent graph, loaded at startup)
-       │
-       │  _build_nx_from_local_metadata()
-       │  (called once, after schema loaded)
-       ↓
-NetworkX mirror (in-memory, in-process)
-       │
-       ├── traverse_graph()    ──► BFS shortest path
-       ├── find_path()         ──► raw table list
-       ├── get_neighbors()     ──► k-hop neighborhood
-       ├── all_paths_explore() ──► all-simple-paths enumeration
-       ├── get_subgraph_context() ──► rich path metadata
-       └── temporal_graph_search() ──► date-filtered traversal
-```
-
-**The mirror is NOT lazily synced from Memgraph.** It's built in one pass from the local `_node_meta` and `_edge_meta` dictionaries, which are populated during the CQL parse. This design:
-
-- Avoids round-trip latency on every traversal
-- Works even if Memgraph is temporarily unavailable
-- Makes the system trivially roll back to pure NetworkX by skipping `use_memgraph()`
-
----
-
-## Rollback Plan
-
-**Instant rollback — no code changes needed:**
-
-```python
-# Just don't call use_memgraph() — graph_store stays as NetworkX GraphRAGManager
-from app.core.graph_store import graph_store  # pure NetworkX, no external deps
-```
-
-**Or, to explicitly use NetworkX:**
-```python
-from app.core.graph_store import graph_store as nx_graph_store
-```
-
----
-
-## Performance Targets
-
-| Metric | Current (NetworkX only) | Current (Memgraph + NX) | Target (Full Fleet) |
+| Phase | Area | Status | Notes |
 |---|---|---|---|
-| Graph load time | ~50ms (in-memory) | ~3-5s (Memgraph cold) | ~3-5s |
-| Shortest path query | ~1ms | ~1ms (NX mirror) | ~1ms |
-| Concurrent traversals | 1 (single process) | 1 (single process) | 50+ (fleet) |
-| Graph persistence | RAM only | Memgraph disk + NX RAM | Memgraph + replicas |
-| Vector search | ChromaDB (file) | ChromaDB (file) | Qdrant cluster |
+| M1 | Memgraph Docker stack + adapter scaffold | ✅ Complete | `docker-compose.memgraph.yml`, Memgraph Lab, `memgraph_adapter.py` |
+| M2 | Native Memgraph graph querying | ✅ Complete | `AllPathsExplorer` uses `find_all_ranked_paths_native()` when available |
+| M3 | FastAPI startup wiring | ✅ Complete | `main.py` activates Memgraph when `MEMGRAPH_URI` is set |
+| M4 | Celery worker fleet | ✅ Complete | `celery_app_instance`, `@shared_task`, RabbitMQ-backed async execution |
+| M5 | Redis dialog state | ✅ Complete | Redis-backed dialog/session state with enforcement controls |
+| M6 | Qdrant migration | ✅ Complete | Schema RAG, SQL patterns, graph embeddings, and QM semantic search support Qdrant |
+| M7 | SAP HANA connection pooling | 🟡 Partial | `hana_pool.py` and `HANA_MODE=pool` exist, but real HANA is still not the default live path |
+| M8 | Kubernetes autoscaling | ✅ Complete | KEDA `ScaledObject` manifests for Celery workers are present |
+| M9 | Multi-tenant isolation | ✅ Complete | Tenant-aware labels via `TENANT_ID` in Memgraph adapter |
+
+**Overall status:** ✅ Complete for M1-M6 and M8-M9; 🟡 Partial for M7.
 
 ---
 
-## Files Created by This Migration
+## Current Architecture
 
+```text
+FastAPI / Orchestrator
+        |
+        | use_memgraph() when MEMGRAPH_URI is set
+        v
+MemgraphGraphRAGManager
+        |
+        | builds / syncs
+        v
+Memgraph (persistent graph store)
+        |
+        | local mirror for compatibility + algorithms
+        v
+NetworkX mirror (in-process)
 ```
+
+### Key design choice
+The system is **not** “Memgraph only.” It is a **hybrid runtime**:
+
+- **Memgraph** provides persistence and native graph querying.
+- **NetworkX mirror** preserves existing graph APIs and supports algorithms still running in-process.
+
+This is intentional and matches the current codebase.
+
+---
+
+## What Changed
+
+### Before
+- Graph existed only in-process via `graph_store.py`
+- No persistent graph database
+- Vector search relied on ChromaDB
+
+### Now
+- Memgraph can back the global graph runtime
+- Startup can swap `graph_store` to the Memgraph-backed shim
+- Ranked path exploration can execute natively in Memgraph
+- Qdrant is the active scalable vector backend
+- Tenant labels are supported in Memgraph
+- Celery + Redis + RabbitMQ infrastructure is in place for horizontal scale
+
+---
+
+## What Did **Not** Change
+
+These APIs remain stable for the orchestrator layer:
+
+- `traverse_graph()`
+- `find_path()`
+- `get_neighbors()`
+- `get_subgraph_context()`
+- `stats()`
+
+The migration preserved compatibility by keeping the NetworkX mirror and shim layer.
+
+---
+
+## Phase Details
+
+## M1 — Memgraph Stack and Adapter
+
+### Delivered
+- `docker/docker-compose.memgraph.yml`
+- `backend/app/core/memgraph_adapter.py`
+- Memgraph Lab on port `3000`
+- Memgraph Bolt on port `7687`
+
+### Notes
+The adapter is no longer just a scaffold in practice. It connects, loads schema, builds the NetworkX mirror, and exposes the graph API expected by the rest of the system.
+
+---
+
+## M2 — Native Memgraph Querying
+
+### Delivered
+- `find_all_ranked_paths_native()` in `memgraph_adapter.py`
+- `AllPathsExplorer.find_all_ranked_paths()` prefers the native Memgraph path when available
+- `init_schema.cql` loading + regex parsing fixes
+- sync path to push missing NetworkX edges into Memgraph
+
+### Important accuracy note
+Only part of traversal is native today:
+
+- **Native in Memgraph:** ranked multi-path exploration via variable-length Cypher matching
+- **Still on NetworkX mirror:** shortest-path traversal, neighborhood traversal, centrality-heavy logic, and compatibility paths
+
+So the correct description is **hybrid graph execution**, not “everything moved to Memgraph.”
+
+---
+
+## M3 — FastAPI Startup Wiring
+
+### Delivered
+`backend/app/main.py` now activates Memgraph on startup when `MEMGRAPH_URI` is present.
+
+### Actual startup behavior
+```python
+memgraph_uri = os.environ.get("MEMGRAPH_URI", "")
+if memgraph_uri:
+    from app.core import use_memgraph
+    tenant = os.environ.get("TENANT_ID", "default")
+    use_memgraph(uri=memgraph_uri, tenant_id=tenant)
+else:
+    # stay on pure NetworkX
+```
+
+### Relevant environment variables
+| Variable | Default | Purpose |
+|---|---|---|
+| `MEMGRAPH_URI` | empty | Enables Memgraph mode when set |
+| `TENANT_ID` | `default` | Tenant-scoped Memgraph labels |
+| `REDIS_HOST` | `localhost` | Redis host |
+| `VECTOR_STORE_BACKEND` | `chroma` | Set to `qdrant` to enable Qdrant |
+
+### Example
+```bash
+# Windows
+set MEMGRAPH_URI=bolt://localhost:7687
+set TENANT_ID=SP_GLOBAL_ENERGY
+set VECTOR_STORE_BACKEND=qdrant
+```
+
+---
+
+## M4 — Celery Worker Fleet
+
+### Delivered
+- `backend/app/workers/celery_app.py`
+- `celery_app_instance` naming fix to avoid circular import ambiguity
+- `@shared_task` task registration pattern
+- RabbitMQ-backed task routing
+- queue definitions for agent and domain-specific work
+
+### Accuracy note
+This phase is complete from a code and deployment-manifest standpoint. It is not just a plan anymore.
+
+---
+
+## M5 — Redis Dialog State
+
+### Delivered
+- Redis-backed session/dialog state
+- fail-loud enforcement support
+- retry/backoff behavior
+
+### Behavior
+- Redis is used when configured and reachable
+- on Windows, `REDIS_HOST=localhost` is typically required outside Docker
+
+---
+
+## M6 — Qdrant Migration
+
+### Delivered
+Qdrant support is fully present across the migration stack:
+
+- `backend/app/core/vector_store.py` — dual backend manager
+- `backend/app/core/qdrant_vector_store.py` — Qdrant-backed schema/pattern store
+- `backend/app/core/graph_embedding_store.py` — graph embeddings on Qdrant
+- `backend/app/core/qdrant_qm_wrapper.py` — Qdrant wrapper for QM semantic search
+- `backend/app/core/qm_semantic_search.py` — supports `VECTOR_STORE_BACKEND=qdrant`
+
+### Important correction
+The active scalable vector path is **Qdrant**, not Memgraph native vector search.
+
+`memgraph_adapter.py` still marks Memgraph-native vector search as **pending / not implemented**.
+
+### Current collections in play
+| Collection | Purpose |
+|---|---|
+| `sap_schema` | DDIC/schema metadata |
+| `sql_patterns` | SQL pattern retrieval |
+| `graph_node_embeddings` | Node2Vec structural embeddings |
+| `graph_table_context` | graph-aware semantic table context |
+| `qm_semantic_notifications` | QM long-text semantic search |
+
+---
+
+## M7 — SAP HANA Connection Pooling
+
+### Current state
+This phase is implemented in code, but it is not yet the default production runtime.
+
+### What exists
+- `backend/app/tools/hana_pool.py`
+- `backend/app/tools/sql_executor.py`
+- `HANA_MODE=pool` execution path
+- pool sizing, timeouts, circuit breaker, MANDT enforcement hooks
+
+### What is still pending
+- real SAP HANA cutover as the normal runtime path
+- production validation against a live system
+- full replacement of the current default mock execution mode
+
+### Recommended status wording
+**🟡 Partial** — implemented in code, not yet the default production runtime
+
+---
+
+## M8 — Kubernetes Autoscaling
+
+### Delivered
+KEDA-backed scaling manifests exist in `k8s/base/`, including `ScaledObject` definitions for Celery workers.
+
+### Evidence in repo
+- `k8s/base/celery-primary.yaml`
+- `k8s/base/celery-replica.yaml`
+
+---
+
+## M9 — Multi-Tenant Isolation
+
+### Delivered
+The Memgraph adapter supports tenant-specific labels:
+
+```python
+self.tenant_label = f"Tenant_{tenant_id}"
+```
+
+Nodes and relationships are written and queried with tenant-aware labels when Memgraph mode is enabled.
+
+### Correction
+Older drafts of this guide labeled this section as **M10**. That was inconsistent with the status table. The correct phase label here is **M9**.
+
+---
+
+## Activation Guide
+
+### Local stack
+```bash
+docker compose -f docker/docker-compose.memgraph.yml up -d
+```
+
+### Backend env
+```bash
+set MEMGRAPH_URI=bolt://localhost:7687
+set VECTOR_STORE_BACKEND=qdrant
+set REDIS_HOST=localhost
+set TENANT_ID=default
+```
+
+### Expected behavior
+- backend starts with Memgraph enabled
+- vector store initializes with Qdrant when configured
+- Redis dialog manager connects
+- graph APIs continue to work through the shim
+
+---
+
+## Verification Checklist
+
+### Memgraph
+- `http://localhost:3000` opens Memgraph Lab
+- Bolt endpoint reachable on `localhost:7687`
+- backend startup logs show Memgraph activation
+
+### Graph backend
+Use:
+- `GET /debug/graph-backend`
+- `GET /health`
+
+Expected:
+- Memgraph reachable when configured
+- NetworkX metadata counts present
+- backend remains functional even if Memgraph is unavailable
+
+### Qdrant
+- `VECTOR_STORE_BACKEND=qdrant`
+- Qdrant reachable on `localhost:6333`
+- schema/pattern/graph/QM vector paths initialize successfully
+
+---
+
+## Troubleshooting
+
+### Memgraph not activating
+**Symptom:** backend stays on NetworkX only  
+**Check:** `MEMGRAPH_URI` must be set; the current startup path does not force a default URI.
+
+### Partial edge set in Memgraph
+**Symptom:** Memgraph has fewer edges than NetworkX metadata  
+**Cause:** `init_schema.cql` does not carry the full edge set used by the in-memory graph model  
+**Current mitigation:** `_sync_nx_edges_to_memgraph()` adds missing edges from the NetworkX metadata
+
+### Regex parse failures during schema load
+Known fixes already applied:
+- node regex bridge flag uses the correct capture group
+- edge regex correctly matches `)-[` style edge patterns
+
+### Redis hostname failure on Windows
+Use:
+```bash
+set REDIS_HOST=localhost
+```
+not Docker service names like `redis` when running from the host OS.
+
+### Celery circular import / `app` naming issue
+Use `celery_app_instance` and import worker modules only after configuration is applied.
+
+### Memgraph vector search confusion
+Do **not** describe Memgraph vector search as active. In the current code, Memgraph-native vector search remains unimplemented; Qdrant is the real vector backend.
+
+---
+
+## Performance Positioning
+
+| Capability | Current state |
+|---|---|
+| Graph persistence | Memgraph-backed |
+| Compatibility graph APIs | NetworkX mirror |
+| Ranked path exploration | Native Memgraph available |
+| General shortest path / neighbor traversal | NetworkX mirror |
+| Vector search | Qdrant |
+| Async orchestration | Celery + RabbitMQ |
+| Session/dialog state | Redis |
+| Real SAP HANA runtime | 🟡 Partial |
+
+---
+
+## Files Most Relevant to This Migration
+
+```text
 backend/app/core/
-  ├── memgraph_adapter.py       # MemgraphGraphRAGManager — dual-mode graph
-  │   ├── use_memgraph()        # factory: uri/user/password → instance
-  │   ├── MemgraphShim          # shim for NetworkX compatibility
-  │   ├── _parse_node_statement()  # CQL → dict (6 capture groups!)
-  │   ├── _parse_edge_statement()  # CQL → dict (parse from group(3))
-  │   ├── build_enterprise_schema_graph()  # load + build NX mirror
-  │   ├── _build_nx_from_local_metadata()  # no Memgraph round-trip
-  │   └── _compute_and_store_centrality()  # degree + betweenness → Memgraph
-  │
-  ├── graph_store.py            # UNCHANGED — pure NetworkX fallback
-  ├── vector_store.py           # M6 — dual-backend Qdrant + ChromaDB manager
-  └── qdrant_vector_store.py    # M6 — Qdrant gRPC client (16KB)
+  __init__.py
+  memgraph_adapter.py
+  graph_store.py
+  vector_store.py
+  qdrant_vector_store.py
+  graph_embedding_store.py
+  qm_semantic_search.py
+  qdrant_qm_wrapper.py
 
 backend/app/workers/
-  ├── celery_app.py             # celery_app_instance + .conf before imports
-  └── orchestrator_tasks.py     # @shared_task + lazy celery_app import
+  celery_app.py
+  orchestrator_tasks.py
 
-backend/app/main.py              # wires use_memgraph() on startup
+backend/app/tools/
+  hana_pool.py
+  sql_executor.py
 
 docker/
-  ├── docker-compose.memgraph.yml  # Memgraph + Lab
-  └── memgraph/
-      └── init_schema.cql          # 114 tables + 137 edges (full SAP schema)
+  docker-compose.memgraph.yml
+  memgraph/init_schema.cql
 
-scripts/
-  ├── smoke_test_memgraph.py    # M1 smoke test
-  └── load_init_schema.py       # M2 schema loader (optional — init_schema.cql loads directly via memgraph_adapter.py)
+k8s/base/
+  celery-primary.yaml
+  celery-replica.yaml
 
-docs/
-  └── MEMGRAPH_MIGRATION_GUIDE.md  # THIS FILE
+backend/app/main.py
 ```
 
 ---
 
-## Critical Debugging Notes
+## Recommended Next Steps
 
-### `TypeError` in `super().__init__()` (Duplicate kwargs)
-**Symptom:** Startup fails on `MemgraphShim` initialization due to unexpected keyword arguments.
-**Cause:** The original parameters `uri`, `user`, and `password` were passed down via `**kwargs` causing duplicates.
-**Fix:** Explicitly pop `uri`, `user`, and `password` out of `kwargs` before passing them up.
+1. **Close M7 properly**
+   - validate `HANA_MODE=pool` against a live SAP HANA system
+   - make the real HANA path operational, not just available in code
 
-### "no such group" IndexError
-**Symptom:** Startup fails during schema load, falls back to NetworkX silently.  
-**Cause:** `_parse_node_statement()` called `m.group(7)` but regex only had 6 groups.  
-**Fix:** Use `m.group(6)` for the bridge flag. Add `lastindex` guard: `m.group(6) if m.lastindex >= 6 else False`.
+2. **Benchmark the hybrid graph runtime**
+   - compare native Memgraph path exploration vs NetworkX mirror paths under concurrency
 
-### "Failed to connect to Memgraph" at startup
-**Symptom:** `[STARTUP] Memgraph Graph RAG: {...}` not in logs. NetworkX used instead.  
-**Cause:** `use_memgraph()` failed silently (exception caught and swallowed).  
-**Fix:** Set `MEMGRAPH_URI=bolt://localhost:7687` env var. Check Memgraph container is running: `docker ps sapmasters_memgraph`.
+3. **Document operational defaults clearly**
+   - recommended local/dev env
+   - recommended Docker env
+   - recommended production env
 
-### Redis "getaddrinfo failed" on Windows
-**Symptom:** `[RedisDialogManager] Redis unavailable (Error 11001 connecting to redis:6379)`  
-**Cause:** `redis` hostname doesn't resolve on Windows — it's a Docker service name.  
-**Fix:** Set `REDIS_HOST=localhost` env var (Windows host port 6379 is mapped).
-
-### 0/47 edges parsed (edge regex failure)
-**Symptom:** `mg.stats()` shows 114 nodes but 0 edges.  
-**Cause:** Edge regex pattern `)\s*,\s*\(` matched `)` then `[` as separate characters instead of `)-[`.  
-**Fix:** Pattern uses `)-[` (literal) to match the `)-[:FOREIGN_KEY` syntax correctly.
-
-### Circular import with Celery
-**Symptom:** `NameError: name 'app' is not defined`  
-**Cause:** `app = Celery(...)` then `import app.workers.orchestrator_tasks` — deadlock.  
-**Fix:** `celery_app_instance` variable name + `.conf.*` settings before any worker imports.
+4. **Keep the guide aligned with code**
+   - avoid mixing old ChromaDB-era language with current Qdrant reality
+   - avoid calling M9 “M10”
+   - avoid implying Memgraph-native vector search is already live
 
 ---
 
-## Next Steps
+## Bottom Line
 
-> **Updated April 16, 2026** — M6, M8, M9, M10 are all ✅ COMPLETE.
-> Only M7 remains ⬜ PENDING.
+The migration succeeded as a **hybrid architecture**:
 
-| # | Phase | Status | Owner |
-|---|-------|--------|-------|
-| 1 | **M7:** SAP HANA connection pooling (`hdbcli`, `hana_pool.py`, `HANA_MODE=pool`) | ⬜ PENDING | SAP Infra |
-| 2 | **P2:** 50-query benchmark suite → wire into QualityEvaluator alerting | 🚧 Pending | QA |
-| 3 | **P3:** M6 load test — p95 <= 300ms @ concurrency=10, `pool_size=20` sign-off | 🚧 Pending | Performance |
+- **Memgraph** is the persistent graph layer
+- **NetworkX** remains the compatibility and algorithm mirror
+- **Qdrant** is the production vector backend
+- **Redis + RabbitMQ + Celery** provide distributed execution support
 
-**Completed Next Steps (can be removed from future revisions):**
-- ~~M6: Wire Qdrant as vector store backend~~ ✅ (April 7)
-- ~~M8: Kubernetes HPA autoscale Celery workers~~ ✅ (April 9)
-- ~~M9: LeanIX agent governance integration~~ ✅ (April 9)
-- ~~M10: Multi-tenant isolation~~ ✅ (April 9)
+The biggest remaining gap is **real SAP HANA production activation**, not the Memgraph migration itself.
