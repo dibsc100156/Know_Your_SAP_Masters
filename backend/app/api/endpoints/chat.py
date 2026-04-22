@@ -97,6 +97,9 @@ class ChatResponse(BaseModel):
     conflicts: Optional[List[Dict[str, Any]]] = None  # value conflicts across agents
     model_driven_plan: Optional[Dict[str, Any]] = None
     model_driven_plan_history: Optional[List[Dict[str, Any]]] = None
+    adaptive_plan: Optional[Dict[str, Any]] = None
+    plan_trace: Optional[List[Dict[str, Any]]] = None
+    replan_events: Optional[List[Dict[str, Any]]] = None
     complexity_score: Optional[float] = None
 
     # Phase L5: Complexity Routing intelligence returned to frontend
@@ -134,8 +137,16 @@ class ChatResponse(BaseModel):
     memory_trace: Optional[List[Dict[str, Any]]] = None
     retrieval_quality: Optional[Dict[str, Any]] = None
     retrieval_trace: Optional[List[Dict[str, Any]]] = None
+    eval_gate: Optional[Dict[str, Any]] = None
+    golden_set_results: Optional[List[Dict[str, Any]]] = None
     chain_trace: Optional[List[Dict[str, Any]]] = None
     step_verdicts: Optional[Dict[str, Any]] = None
+    goal_state: Optional[Dict[str, Any]] = None
+    goal_trace: Optional[List[Dict[str, Any]]] = None
+    goal_correction: Optional[Dict[str, Any]] = None
+    recovery_trace: Optional[List[Dict[str, Any]]] = None
+    reasoning_trace: Optional[List[Dict[str, Any]]] = None
+    reasoning_summary: Optional[Dict[str, Any]] = None
     prior_turns: Optional[int] = None
     prior_tables: Optional[List[str]] = None
     urgency: Optional[str] = None            # Urgency level applied
@@ -296,6 +307,9 @@ async def chat_master_data_endpoint(request: ChatRequest, http_request: Request)
             conflicts=result.get("conflicts"),
             model_driven_plan=result.get("model_driven_plan"),
             model_driven_plan_history=result.get("model_driven_plan_history"),
+            adaptive_plan=result.get("adaptive_plan"),
+            plan_trace=result.get("plan_trace"),
+            replan_events=result.get("replan_events"),
             complexity_score=result.get("complexity_score"),
             routing_tier=routing.tier.value if routing else None,
             routing_score=routing.score if routing else None,
@@ -322,8 +336,16 @@ async def chat_master_data_endpoint(request: ChatRequest, http_request: Request)
             memory_trace=result.get("memory_trace"),
             retrieval_quality=result.get("retrieval_quality"),
             retrieval_trace=result.get("retrieval_trace"),
+            eval_gate=result.get("eval_gate"),
+            golden_set_results=result.get("golden_set_results"),
             chain_trace=result.get("chain_trace"),
             step_verdicts=result.get("step_verdicts"),
+            goal_state=result.get("goal_state"),
+            goal_trace=result.get("goal_trace"),
+            goal_correction=result.get("goal_correction"),
+            recovery_trace=result.get("recovery_trace"),
+            reasoning_trace=result.get("reasoning_trace"),
+            reasoning_summary=result.get("reasoning_summary"),
             prior_turns=result.get("prior_turns"),
             prior_tables=result.get("prior_tables"),
             urgency=result.get("urgency"),

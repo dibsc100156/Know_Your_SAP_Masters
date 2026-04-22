@@ -909,6 +909,30 @@ def run_agent_loop(
     prior_tables: List[str] = list(memory_context.metadata.get("prior_tables") or [])
     prior_history = mem.get_history(session_id, limit=5)
     episodic_context = memory_context.prompt_text()
+
+    from app.core.query_goal import build_query_goal
+    from app.core.goal_tracker import GoalTracker
+    from app.core.goal_drift_detector import GoalDriftDetector
+    from app.core.goal_policy import GoalPolicy
+
+    query_goal = build_query_goal(query, auth_context, session_context={"prior_tables": prior_tables, "prior_turns": len(prior_history)})
+    goal_tracker = GoalTracker(query_goal)
+    goal_drift_detector = GoalDriftDetector()
+    goal_policy = GoalPolicy()
+    goal_tracker.update_goal_state("planning", "started", domain=domain, session_id=session_id)
+
+    from app.core.reasoning_runtime import ReasoningRuntime
+    from app.core.reasoning_policy import ReasoningPolicy
+    from app.core.reasoning_types import ReasoningDepth
+
+    reasoning_runtime = ReasoningRuntime(depth=ReasoningDepth.LIGHT)
+    reasoning_policy = ReasoningPolicy(depth=ReasoningDepth.LIGHT)
+    reasoning_runtime.record_reasoning_step(
+        "planning",
+        "initialized orchestrator run",
+        evidence=[f"domain={domain}", f"routing={routing.tier.value}"],
+        detail={"session_id": session_id},
+    )
     # Run threat evaluation BEFORE query executes
 
     sentinel_verdict = sentinel.evaluate(
@@ -1022,16 +1046,25 @@ def run_agent_loop(
         routing=routing,
         available_tools=list_tools(),
     ) if should_enable_model_driven_mode(routing) else None
-    planned_tools = set(model_driven_plan.selected_tools) if model_driven_plan else set()
+    from app.core.replanner import get_replanner
+    replanner = get_replanner()
+    adaptive_plan = replanner.build_initial_plan(
+        model_driven_plan.selected_tools,
+        metadata={"source": "model_driven_plan", "tier": routing.tier.value},
+    ) if model_driven_plan and model_driven_plan.enabled else None
+    planned_tools = set(adaptive_plan.step_names()) if adaptive_plan else (set(model_driven_plan.selected_tools) if model_driven_plan else set())
     model_driven_plan_history: List[Dict[str, Any]] = []
+    adaptive_plan_history: List[Dict[str, Any]] = []
     sequencer_completed_tools: List[str] = []
 
     def _record_model_plan(stage: str) -> None:
         if model_driven_plan and model_driven_plan.enabled:
             model_driven_plan_history.append({"stage": stage, **model_driven_plan.to_dict()})
+        if adaptive_plan is not None:
+            adaptive_plan_history.append({"stage": stage, **adaptive_plan.to_dict()})
 
     def _refine_model_plan(stage: str) -> None:
-        nonlocal model_driven_plan, planned_tools
+        nonlocal model_driven_plan, planned_tools, adaptive_plan
         if not model_driven_plan or not model_driven_plan.enabled:
             return
         refined = refine_model_driven_plan(
@@ -1057,6 +1090,29 @@ def run_agent_loop(
                     "iteration": model_driven_plan.iteration,
                 },
             )
+
+        if adaptive_plan is not None:
+            findings = {
+                "stage": stage,
+                "schema_confidence": min(1.0, len(tables_involved) / 4.0) if tables_involved else 0.0,
+                "new_tables": len(tables_involved),
+                "temporal_mode": temporal_mode,
+            }
+            revised_plan = replanner.revise_plan(adaptive_plan, findings, context={"completed_tools": list(sequencer_completed_tools)})
+            if revised_plan.to_dict() != adaptive_plan.to_dict():
+                adaptive_plan = revised_plan
+                planned_tools = set(adaptive_plan.step_names())
+                _record_model_plan(f"adaptive_{stage}")
+                _traj(
+                    "adaptive_replan",
+                    "replanned",
+                    "Adaptive replanning revised remaining tool order using intermediate findings",
+                    {
+                        "stage": stage,
+                        "steps": adaptive_plan.step_names(),
+                        "revision_count": len(adaptive_plan.revisions),
+                    },
+                )
 
     if model_driven_plan and model_driven_plan.enabled:
         logger.info(
@@ -1207,6 +1263,12 @@ def run_agent_loop(
 
         }, auth_context=auth_context)
         trace("meta_path_match", meta_result)
+        reasoning_runtime.record_reasoning_step(
+            "meta_path",
+            "evaluated meta-path fast path",
+            evidence=[meta_result.message or "meta-path evaluated"],
+            detail={"status": meta_result.status.value},
+        )
     else:
         meta_result = ToolResult(
             status=ToolStatus.SKIPPED,
@@ -1664,6 +1726,18 @@ def run_agent_loop(
                 metadata={"message": schema_result.message},
             ),
         )
+        goal_tracker.update_goal_state(
+            "schema_retrieval",
+            "completed" if tables_involved else "partial",
+            tables_found=len(tables_involved),
+            tables=tables_involved[:5],
+        )
+        reasoning_runtime.record_reasoning_step(
+            "schema_retrieval",
+            "selected schema candidates",
+            evidence=tables_involved[:3],
+            detail={"table_count": len(tables_involved), "status": schema_result.status.value},
+        )
 
         if current_run_id:
 
@@ -1918,6 +1992,12 @@ def run_agent_loop(
                 logger.info(f"    [MERGE] Added {merged_count} graph-discovered table(s): "
 
                       f"{[t for t in graph_tables if t not in schema_result.data['tables_used']]}")
+            reasoning_runtime.record_reasoning_step(
+                "graph_discovery",
+                "expanded schema set with structural candidates",
+                evidence=graph_tables[:3],
+                detail={"merged_count": merged_count, "graph_status": graph_result.status.value},
+            )
 
 
 
@@ -2043,6 +2123,53 @@ def run_agent_loop(
                 metadata={"recommended_pattern": retrieval_quality_context.summary().get("recommended_pattern")},
             ),
         )
+        goal_tracker.update_goal_state(
+            "retrieval_quality",
+            "completed",
+            retrieval_quality=retrieval_quality_context.composite_score,
+            recommended_tables=retrieval_quality_context.recommended_tables[:5],
+        )
+        drift_signals = goal_drift_detector.detect_drift(
+            goal_tracker.state,
+            {
+                "tables_found": len(tables_involved),
+                "retrieval_quality": retrieval_quality_context.composite_score,
+            },
+        )
+        correction_action = goal_policy.evaluate_goal_policy(goal_tracker.state, drift_signals)
+        goal_tracker.update_goal_state(
+            "goal_policy",
+            "completed" if not drift_signals else "corrective_action",
+            drift_signals=[signal.to_dict() for signal in drift_signals],
+            correction_action=correction_action.to_dict(),
+        )
+
+        if adaptive_plan is not None and correction_action.action in {"expand_retrieval", "replan"}:
+            revised_plan = replanner.revise_plan(
+                adaptive_plan,
+                {
+                    "stage": "post_retrieval_quality",
+                    "schema_confidence": min(1.0, len(tables_involved) / 4.0) if tables_involved else 0.0,
+                    "retrieval_quality": retrieval_quality_context.composite_score,
+                    "new_tables": len(retrieval_quality_context.recommended_tables),
+                    "temporal_mode": temporal_mode,
+                },
+                context={"recommended_tables": retrieval_quality_context.recommended_tables[:5], "goal_correction": correction_action.to_dict()},
+            )
+            if revised_plan.to_dict() != adaptive_plan.to_dict():
+                adaptive_plan = revised_plan
+                planned_tools = set(adaptive_plan.step_names())
+                _record_model_plan("adaptive_post_retrieval_quality")
+                _traj(
+                    "adaptive_replan",
+                    "replanned",
+                    "Adaptive replanning revised the remaining plan after retrieval-quality scoring",
+                    {
+                        "stage": "post_retrieval_quality",
+                        "steps": adaptive_plan.step_names(),
+                        "revision_count": len(adaptive_plan.revisions),
+                    },
+                )
 
         base_sql = ""
 
@@ -2983,6 +3110,12 @@ def run_agent_loop(
             metadata={"issues": critique_result.get("issues", [])[:3]},
         ),
     )
+    reasoning_runtime.record_reasoning_step(
+        "critique_gate",
+        "evaluated generated SQL quality",
+        evidence=critique_result.get("issues", [])[:2] or [f"score={critique_result.get('score', 0)}"],
+        detail={"passed": critique_result.get("passed"), "score": critique_result.get("score")},
+    )
 
     if not critique_result["passed"]:
 
@@ -3389,6 +3522,12 @@ def run_agent_loop(
     }, auth_context=auth_context)
 
     trace("sql_execute", exec_result)
+    reasoning_runtime.record_reasoning_step(
+        "execution",
+        "executed candidate SQL",
+        evidence=[exec_result.message or exec_result.status.value],
+        detail={"status": exec_result.status.value},
+    )
     _traj(
         "phase_6_execution",
         "success" if exec_result.status == ToolStatus.SUCCESS else "fail",
@@ -3398,11 +3537,20 @@ def run_agent_loop(
 
     # [Phase 6] Autonomous Recovery — attempt self-heal on execution errors
 
+    from app.core.recovery_types import RecoveryCase, RecoveryAttempt, RecoverySeverity
+    recovery_case = None
+
     if exec_result.status == ToolStatus.ERROR:
 
         exec_error = exec_result.message or "SQL execution failed"
 
         logger.info(f"    [!!] Execution failed: {exec_error[:60]}")
+        recovery_case = RecoveryCase(
+            error_class="sql_execution_error",
+            error_message=exec_error,
+            context={"sql": generated_sql, "tables": tables_involved},
+            severity=RecoverySeverity.HIGH,
+        )
 
         can_attempt_heal = revision_loop.should_continue()
         if can_attempt_heal:
@@ -3477,6 +3625,19 @@ def run_agent_loop(
         else:
 
             logger.info(f"    [WARN] No autonomous heal possible: {heal_reason}")
+            recovery_case.attempts.append(RecoveryAttempt(action="self_heal", success=False, details={"reason": heal_reason}))
+
+    # [E11.2] Escalate if execution error remains
+    if exec_result.status == ToolStatus.ERROR and recovery_case:
+        from app.core.recovery_orchestrator import RecoveryOrchestrator
+        recovery_orchestrator = RecoveryOrchestrator()
+        recovery_result = recovery_orchestrator.resolve_recovery(
+            case=recovery_case,
+            context={"has_partial_data": bool(exec_result.data and exec_result.data.get("rows"))}
+        )
+        logger.info(f"    [ESCALATE] Chosen lane: {recovery_result.decision.lane.value} - {recovery_result.decision.reason}")
+        # Note: In a fuller implementation, this lane decision would branch control flow.
+        # For now, we capture the trace and fall through to partial results or final payload building.
 
 
 
@@ -3767,6 +3928,9 @@ def run_agent_loop(
         "confidence_score": final_confidence,
         "model_driven_plan": model_driven_plan.to_dict() if model_driven_plan and model_driven_plan.enabled else None,
         "model_driven_plan_history": model_driven_plan_history or None,
+        "adaptive_plan": adaptive_plan.to_dict() if adaptive_plan is not None else None,
+        "plan_trace": adaptive_plan_history or None,
+        "replan_events": adaptive_plan.revisions if adaptive_plan is not None and adaptive_plan.revisions else None,
 
         "routing_path": (
 
@@ -4062,6 +4226,59 @@ def run_agent_loop(
     if 'retrieval_quality_context' in locals() and retrieval_quality_context is not None:
         result_dict["retrieval_quality"] = retrieval_quality_context.summary()
         result_dict["retrieval_trace"] = retrieval_quality_context.trace
+
+    goal_tracker.update_goal_state(
+        "final_answer",
+        "completed",
+        confidence=(result_dict.get("confidence_score", {}).get("composite", 0.0) if isinstance(result_dict.get("confidence_score"), dict) else 0.0),
+        tables_found=len(result_dict.get("tables_used", []) or []),
+        masked_fields=result_dict.get("masked_fields", []),
+    )
+    result_dict["goal_state"] = goal_tracker.state.to_dict()
+    result_dict["goal_trace"] = goal_tracker.goal_trace()
+    result_dict["goal_correction"] = correction_action.to_dict() if 'correction_action' in locals() else {"action": "continue", "reason": "no correction evaluated"}
+    result_dict["recovery_trace"] = recovery_result.trace if 'recovery_result' in locals() else None
+
+    reasoning_runtime.record_reasoning_step(
+        "final_answer",
+        "assembled final response payload",
+        evidence=result_dict.get("tables_used", [])[:3],
+        detail={"confidence": result_dict.get("confidence_score", {}).get("composite") if isinstance(result_dict.get("confidence_score"), dict) else None},
+    )
+    reasoning_trace = reasoning_policy.filter_reasoning_trace(reasoning_runtime.build_reasoning_trace())
+    result_dict["reasoning_trace"] = reasoning_trace.to_dict().get("steps", [])
+    result_dict["reasoning_summary"] = reasoning_trace.to_dict().get("summary")
+
+    from app.evals.change_impact import ChangeImpactDetector
+    from app.evals.eval_runner import EvalRunner
+    from app.evals.eval_trace import to_eval_gate_summary
+    from app.evals.golden_set import load_golden_set
+    from app.evals.regression_gate import RegressionGate
+
+    changed_components = [
+        "routing" if result_dict.get("routing_path") else "",
+        "schema_lookup",
+        "graph" if graph_scores_data else "",
+        "safety" if result_dict.get("sentinel") else "",
+        "sql_execution",
+        "answer_synthesis",
+    ]
+    eval_scope = ChangeImpactDetector().detect_eval_scope(changed_components=[c for c in changed_components if c])
+    golden_set = load_golden_set("runtime_guardrails")
+    eval_run = EvalRunner().run_golden_set(
+        golden_set=golden_set,
+        scope=eval_scope.tags,
+        observed={
+            "domain": domain,
+            "confidence": (result_dict.get("confidence_score", {}) or {}).get("composite", 0.0),
+            "tables_used": result_dict.get("tables_used", []),
+            "masked_fields": result_dict.get("masked_fields", []),
+            "routing_path": result_dict.get("routing_path"),
+        },
+    )
+    regression_verdict = RegressionGate().evaluate_regression_gate(eval_run)
+    result_dict["eval_gate"] = to_eval_gate_summary(eval_run, regression_verdict)
+    result_dict["golden_set_results"] = [result.to_dict() for result in eval_run.results]
 
     chain_result = chain_controller.result()
     result_dict["chain_trace"] = chain_result.trace
