@@ -1,22 +1,24 @@
 # KYSM Level-5 Roadmap — Consolidated Implementation Status
-**Last Updated:** April 21, 2026 | Project: Know Your SAP Masters (SAP Masters)
+**Last Updated:** April 22, 2026 | Project: Know Your SAP Masters (SAP Masters)
 
 ---
 
 ## Executive Summary
 
-17-phase autonomous enterprise SAP assistant. Each phase is independently deployable
+**Status labels used in this roadmap:** ✅ Complete | 🟡 Partial | 🚧 Planned
+
+A 17-phase roadmap for an autonomous enterprise SAP assistant. Each phase is independently deployable
 and wires into the orchestrator via clearly defined entry/exit contracts.
 
-**Tonight's commits (April 19):**
+**April 19 commits:**
 - `c4d087e` — Phase 14 Voting Executor (3-path parallel, consensus boosting)
 - `acb50ea` — Phase 15 CIBA Approval Flow (block/tighten → async approve/deny)
 - `9ef51de` — Phase 16 Self-Healing Patterns DB (Qdrant-stored healed SQL → PATH_D fast-path)
 
-**Evening commits (April 20):**
+**April 20 evening commits:**
 - `(wip)` — Phases L5+20+21: Restored clean orchestrator, re-applied L5 routing + Phase 20 cost tracker + Phase 21 Formal Revision Loop (correct 12-space else-block indentation)
 
-**Today's commits (April 20):**
+**April 20 commits:**
 - `78366d7` — Phase L5: Tuned Complexity Router (TRIVIAL threshold 0.00)
 - `b91aec6` — Priority 3: Per-Tier Quality Metrics Dashboard (Harness Runs metrics)
 - `cd483bf` — Priority 5: CIBA Tier Configuration (Risk-adjusted approvals)
@@ -26,18 +28,23 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - `e2a0d05` — Priority 6: MCP Server for KYSM
 - `8782e9f` — Priority 10: Fluent Orchestrator Builder Syntax
 
-**Today's commits (April 21):**
+**April 22 work:**
+- Hybrid graph runtime perf/load sign-off is now **GREEN** (`backend/reports/hybrid_graph_signoff_20260422T094235Z.json`)
+- Native ranked-path probing tuned to BFS-limited Bolt execution; sign-off harness switched to direct Bolt measurement instead of subprocess overhead
+- Passing metrics: native ranked-path p95 `6.716 ms`, mixed workload p95 `28.337 ms`, burst p95 `14.702 ms`, steady-state p95 `4.396 ms`
+
+**April 21 commits:**
 - `eba82a6` — Feature 4: Plain-English Safeguards + Feature 5: Scatter-Gather Swarm
 - `114aff4` — Feature 3: Bootstrap Model-Driven Tool Sequencing (Strands pattern)
 
-**Morning commits (April 20):**
+**April 20 morning commits:**
 - `fd038f1` — Phase L5: Complexity-Based Query Routing — 8 patches applied to orchestrator.py (TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing)
 - `f049558` — Phase L5: wire get_routing_decision into chat API, return routing_tier/score in ChatResponse
 - `VIDEO20` — docs: AGENTIC_DESIGN_PATTERNS_KYSM.md — 23-pattern analysis + 7-phase roadmap (Phases 18–24)
 
-**Infrastructure (April 19):**
+**Infrastructure snapshot (April 19):**
 - Qdrant ✅ — 5 collections (sap_schema, sql_patterns, graph_node_embeddings, graph_table_context, qm_semantic_notifications)
-- Memgraph ✅ — bolt://localhost:7687, 114 nodes / 47 edges
+- Memgraph ✅ — bolt://localhost:7687, hybrid Memgraph + NetworkX mirror runtime with native ranked-path querying and edge sync from NX metadata
 - Redis ✅ — localhost:6379/0 (CIBA store + Celery broker + harness runs)
 - RabbitMQ ✅ — amqp://sapmasters:sapmasters123@localhost:5672//
 - Celery Worker ✅ — 4 threads, queues: agent + priority
@@ -48,18 +55,18 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 
 | Pillar | Name | Component | Status |
 |--------|------|-----------|--------|
-| 1 | Role-Aware Security | `security.py` — SAPAuthContext, AuthContext masking, denied_tables | ✅ Working |
-| 2 | Agentic Orchestrator | `orchestrator.py` — `run_agent_loop()`, 8-step execution flow | ✅ Working |
-| 3 | Schema RAG | Qdrant semantic search over DDIC metadata | ✅ Working |
-| 4 | SQL Pattern RAG | `sql_pattern_lookup()`, 68+ patterns across 18 domains | ✅ Working |
-| 5 | Graph RAG | NetworkX FK graph, `AllPathsExplorer`, `TemporalGraphRAG`, Meta-Path Library | ✅ Working |
-| 5½ | Graph Embedding Search | Node2Vec + text hybrid in Qdrant | ✅ Working |
-| **L5** | **Complexity Routing** | `ComplexityRouter` — 4-tier skip guards + adaptive voting threshold | ✅ **LIVE — Apr 20** |
-| **L5+20** | **Resource-Aware Cost Router** | `RouterCostTracker` — per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms), adaptive bypass | ✅ **WIRED — Apr 20** |
-| **L5+21** | **Formal Revision Loop** | `FormalRevisionLoop` — CoT trace accumulation, 8-phase convergence, `max_iterations=3` | ✅ **WIRED — Apr 20** |
-| **F3** | **Model-Driven Tool Sequencing** | `model_driven_sequencer.py` — description-aware tool planning for COMPLEX/EXPERT tiers | ✅ **BOOTSTRAP LIVE — Apr 21** |
-| **F4** | **Plain-English Safeguards** | Tool descriptions encode mandatory safety guidance close to tool contracts | ✅ **LIVE — Apr 21** |
-| **F5** | **Scatter-Gather Swarm** | Multi-entity swarm routing with parallel fan-out and synthesis gather | ✅ **LIVE — Apr 21** |
+| 1 | Role-Aware Security | `security.py` — SAPAuthContext, AuthContext masking, denied_tables | ✅ Complete |
+| 2 | Agentic Orchestrator | `orchestrator.py` — `run_agent_loop()`, 8-step execution flow | ✅ Complete |
+| 3 | Schema RAG | Qdrant semantic search over DDIC metadata | ✅ Complete |
+| 4 | SQL Pattern RAG | `sql_pattern_lookup()`, 68+ patterns across 18 domains | ✅ Complete |
+| 5 | Graph RAG | NetworkX FK graph, `AllPathsExplorer`, `TemporalGraphRAG`, Meta-Path Library | ✅ Complete |
+| 5½ | Graph Embedding Search | Node2Vec + text hybrid in Qdrant | ✅ Complete |
+| **L5** | **Complexity Routing** | `ComplexityRouter` — 4-tier skip guards + adaptive voting threshold | ✅ Complete |
+| **L5+20** | **Resource-Aware Cost Router** | `RouterCostTracker` — per-tier budgets (TRIVIAL=5ms, SIMPLE=15ms, COMPLEX=50ms), adaptive bypass | 🟡 Partial |
+| **L5+21** | **Formal Revision Loop** | `FormalRevisionLoop` — CoT trace accumulation, 8-phase convergence, `max_iterations=3` | 🟡 Partial |
+| **F3** | **Model-Driven Tool Sequencing** | `model_driven_sequencer.py` — description-aware tool planning for COMPLEX/EXPERT tiers | 🟡 Partial |
+| **F4** | **Plain-English Safeguards** | Tool descriptions encode mandatory safety guidance close to tool contracts | ✅ Complete |
+| **F5** | **Scatter-Gather Swarm** | Multi-entity swarm routing with parallel fan-out and synthesis gather | ✅ Complete |
 
 ---
 
@@ -67,45 +74,44 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 
 | Phase | Name | Description | Status |
 |-------|------|-------------|--------|
-| 0 | Meta-Path Match | Fast-path template matching (14 pre-computed JOIN paths) | ✅ Working |
-| 1 | Schema RAG | Qdrant semantic search over DDIC metadata | ✅ Working |
-| 1.5 | Graph Embedding | Node2Vec structural + text hybrid table discovery | ✅ Working |
-| 1.75 | QM Semantic Search | 20yr QM notification long-text semantic search | ✅ Working |
-| 2 | SQL Pattern RAG | Qdrant proven SQL patterns (18 domains) | ✅ Working |
-| 2b | Temporal Detection | Date/fiscal anchor detection → temporal filters | ✅ Working |
-| 2c | Phase 7 Temporal Engine | FY analysis, CLV, Supplier SPI, Economic Cycle | ✅ Working |
-| 2d | Phase 8 Negotiation Briefing | CLV, PSI, churn risk, BATNA synthesis | ✅ Working |
-| 3 | Graph RAG | All-ranked-paths → best JOIN via NetworkX + AllPathsExplorer | ✅ Working |
-| **L5** | **Complexity Routing** | TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing — 9-step skip guards + adaptive voting threshold | ✅ **LIVE — Apr 20** |
-| 4 | SQL Assembly | MANDT injection + AuthContext + Temporal filters | ✅ Working |
-| 5 | Critique Gate | 7-point SQL validation (SELECT-only, MANDT, JOIN sanity, LIMIT) | ✅ Working |
-| 5.5 | Validation Harness | `SELECT COUNT(*)` dry-run → syntax validation → autonomous fix | ✅ Apr 12 |
-| 6 | Self-Healing | Rule-based SQL correction (10 error codes → 6 heal strategies) | ✅ Working |
-| **6b** | **Memory Compounding** | Auto-vectorize healed SQL back into Qdrant pattern store | ✅ Apr 12 |
-| **6c** | **Proactive Threat Sentinel** | 6 threat engines + dynamic AuthContext tightening | ✅ Apr 12 |
-| **14** | **Voting Executor** | 4-path parallel SQL generation + consensus (Phase 16 — Apr 19) | ✅ **LIVE** |
-| **15** | **CIBA Approval Flow** | Block verdict → async approve/deny via Redis-backed store (Apr 19) | ✅ **LIVE** |
-| **17** | **Semantic Answer Validation** | Qdrant cross-check + 4-component scoring (semantic_sim, row_plausibility, intent_match, table_match) | ✅ **LIVE — Apr 19** |
-| 7 | Execution | SAP HANA mock executor — swap `hdbcli` for real connection to close P0 | ✅ Working (mock) |
-| 8 | Result Masking | Role-based column redaction (Pillar 1) | ✅ Working |
-| 9 | Frontend Modernization | 8-phase + confidence gauge + signal table + dark card | ✅ Apr 5 |
-| **10** | **Multi-Agent Domain Swarm** | Planner + 7 Domain Agents + Synthesis Agent — ThreadPoolExecutor | ✅ **LIVE — Apr 12** |
-| 11 | Meta-Harness Loop | `meta_harness_loop.py` — collect→analyze→YAML→approve→patch | ✅ WIRED |
-| 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from Redis traces | ✅ WIRED |
-| 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ IMPLEMENTED |
-| 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ IMPLEMENTED |
-| **L5** | **Complexity Routing** | 4-tier complexity router (TRIVIAL/SIMPLE/COMPLEX/EXPERT) — skip guards + adaptive voting | ✅ **LIVE — Apr 20** |
-| **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition | 🆕 Apr 20 |
-| **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy | 🆕 Apr 20 |
-| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | ✅ **WIRED — Apr 20** |
-| **21** | **Formal Revision Loop** | `RevisionLoop` class with CoT trace + convergence detection | ✅ **WIRED — Apr 20** |
-| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | ✅ **WIRED — Apr 20** |
-| **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | ✅ **WIRED — Apr 20** |
-| **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | ✅ **WIRED — Apr 20** |
+| 0 | Meta-Path Match | Fast-path template matching (14 pre-computed JOIN paths) | ✅ Complete |
+| 1 | Schema RAG | Qdrant semantic search over DDIC metadata | ✅ Complete |
+| 1.5 | Graph Embedding | Node2Vec structural + text hybrid table discovery | ✅ Complete |
+| 1.75 | QM Semantic Search | 20yr QM notification long-text semantic search | ✅ Complete |
+| 2 | SQL Pattern RAG | Qdrant proven SQL patterns (18 domains) | ✅ Complete |
+| 2b | Temporal Detection | Date/fiscal anchor detection → temporal filters | ✅ Complete |
+| 2c | Phase 7 Temporal Engine | FY analysis, CLV, Supplier SPI, Economic Cycle | ✅ Complete |
+| 2d | Phase 8 Negotiation Briefing | CLV, PSI, churn risk, BATNA synthesis | ✅ Complete |
+| 3 | Graph RAG | All-ranked-paths → best JOIN via NetworkX + AllPathsExplorer | ✅ Complete |
+| **L5** | **Complexity Routing** | TRIVIAL/SIMPLE/COMPLEX/EXPERT tier routing — 9-step skip guards + adaptive voting threshold | ✅ Complete |
+| 4 | SQL Assembly | MANDT injection + AuthContext + Temporal filters | ✅ Complete |
+| 5 | Critique Gate | 7-point SQL validation (SELECT-only, MANDT, JOIN sanity, LIMIT) | ✅ Complete |
+| 5.5 | Validation Harness | `SELECT COUNT(*)` dry-run → syntax validation → autonomous fix | ✅ Complete |
+| 6 | Self-Healing | Rule-based SQL correction (10 error codes → 6 heal strategies) | ✅ Complete |
+| **6b** | **Memory Compounding** | Auto-vectorize healed SQL back into Qdrant pattern store | ✅ Complete |
+| **6c** | **Proactive Threat Sentinel** | 6 threat engines + dynamic AuthContext tightening | ✅ Complete |
+| **14** | **Voting Executor** | 4-path parallel SQL generation + consensus (Phase 16 — Apr 19) | ✅ Complete |
+| **15** | **CIBA Approval Flow** | Block verdict → async approve/deny via Redis-backed store (Apr 19) | ✅ Complete |
+| **17** | **Semantic Answer Validation** | Qdrant cross-check + 4-component scoring (semantic_sim, row_plausibility, intent_match, table_match) | ✅ Complete |
+| 7 | Execution | SAP HANA mock executor — swap `hdbcli` for real connection to close P0 | 🟡 Partial |
+| 8 | Result Masking | Role-based column redaction (Pillar 1) | ✅ Complete |
+| 9 | Frontend Modernization | 8-phase + confidence gauge + signal table + dark card | ✅ Complete |
+| **10** | **Multi-Agent Domain Swarm** | Planner + 7 Domain Agents + Synthesis Agent — ThreadPoolExecutor | ✅ Complete |
+| 11 | Meta-Harness Loop | `meta_harness_loop.py` — collect→analyze→YAML→approve→patch | 🟡 Partial |
+| 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from Redis traces | 🟡 Partial |
+| 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ Complete |
+| 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ Complete |
+| **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition | 🟡 Partial |
+| **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy | 🟡 Partial |
+| **20** | **Resource-Aware Cost Router** | Per-tier routing cost tracking + bypass when overhead > threshold | 🟡 Partial |
+| **21** | **Formal Revision Loop** | `RevisionLoop` class with CoT trace + convergence detection | 🟡 Partial |
+| **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue | 🟡 Partial |
+| **23** | **Safety Guardrails (Standalone)** | Decouple Sentinel → safety_guardrails + threat_sentinel layers | 🟡 Partial |
+| **24** | **Episodic Memory Store** | Redis-backed session scratchpad (last 5 query-result pairs) | 🟡 Partial |
 
 ---
 
-## Phase 14 — Voting Executor ✅ LIVE (April 19)
+## Phase 14 — Voting Executor
 
 **Commit:** `c4d087e` | **Trigger:** confidence < 0.70 OR domain in {finance, tax, treasury, compliance}
 
@@ -129,7 +135,7 @@ Registered as `voting_sql_generate` in TOOL_REGISTRY. Fires at Step 6 of orchest
 
 ---
 
-## Phase 15 — CIBA Approval Flow ✅ LIVE (April 19)
+## Phase 15 — CIBA Approval Flow
 
 **Commit:** `acb50ea`
 
@@ -173,7 +179,7 @@ Sentinel verdict: "tighten"
 
 ---
 
-## Phase 16 — Self-Healing Patterns DB ✅ LIVE (April 19)
+## Phase 16 — Self-Healing Patterns DB
 
 **Commit:** `9ef51de`
 
@@ -224,18 +230,18 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 ---
 
-## Multi-Agent Domain Swarm Architecture — ✅ LIVE (April 12, 2026)
+## Multi-Agent Domain Swarm Architecture
 
 | Component | File | Status |
 |---|---|---|
-| Domain Agents (7 specialists) | `domain_agents.py` | ✅ Working |
-| Planner Agent + Complexity Analyzer | `swarm/planner_agent.py` (19KB) | ✅ **LIVE** |
-| Synthesis Agent (merge + rank + conflicts) | `swarm/synthesis_agent.py` (16KB) | ✅ **LIVE** |
-| Swarm entry point | `swarm/__init__.py` (2KB) | ✅ **LIVE** |
-| Inter-Agent Message Bus | `app/core/message_bus.py` | ✅ Phase 13 |
-| Negotiation Protocol | `app/core/negotiation_protocol.py` | ✅ Phase 13b |
-| Message Dispatcher + Agent Registry | `app/agents/swarm/message_dispatcher.py` | ✅ Phase 13 |
-| Agent Inbox | `app/core/agent_inbox.py` (19.7KB) | ✅ Apr 17 |
+| Domain Agents (7 specialists) | `domain_agents.py` | ✅ Complete |
+| Planner Agent + Complexity Analyzer | `swarm/planner_agent.py` (19KB) | ✅ Complete |
+| Synthesis Agent (merge + rank + conflicts) | `swarm/synthesis_agent.py` (16KB) | ✅ Complete |
+| Swarm entry point | `swarm/__init__.py` (2KB) | ✅ Complete |
+| Inter-Agent Message Bus | `app/core/message_bus.py` | ✅ Complete |
+| Negotiation Protocol | `app/core/negotiation_protocol.py` | ✅ Complete |
+| Message Dispatcher + Agent Registry | `app/agents/swarm/message_dispatcher.py` | ✅ Complete |
+| Agent Inbox | `app/core/agent_inbox.py` (19.7KB) | ✅ Complete |
 
 ### Live Test Results (April 12)
 | Query | Swarm Routing | Agents | Result |
@@ -246,22 +252,21 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 ---
 
-## Memgraph Migration (M1–M6)
+## Memgraph Migration
 
 | Phase | Description | Status | Notes |
 |-------|-------------|--------|-------|
-| M1 | Memgraph 2.12.0 + Lab — Docker Compose | ✅ Complete | |
-| M2 | Native Cypher paths (`[*..5]` variable-length) | ✅ Complete | Memgraph 2.x compatible |
-| M3 | `use_memgraph` flag + auto-sync at startup | ✅ Complete | |
-| M4 | Celery async worker pool | ✅ Complete | 4 threads, queues: agent + priority |
-| M5 | Redis Dialog State | ✅ Complete | |
-| M6 | Qdrant cluster migration | ✅ Complete | 5 collections active |
-| M7 | Load testing + production tuning | 🚧 Pending | p95 773ms; needs conc=10 sign-off |
-| M8 | Real SAP HANA connection (`hdbcli`) | 🚧 Pending | Env: HANA_HOST, HANA_PORT, HANA_USER, HANA_PASSWORD |
-| M9 | Kubernetes HPA | ✅ Complete | Max 20 replicas |
-| M10 | LeanIX agent governance | ✅ Complete | |
-| M11 | Multi-tenant isolation | ✅ Complete | `TENANT_ID` env wired |
+| M1 | Memgraph 2.12.0 + Lab — Docker Compose + adapter scaffold | ✅ Complete | `docker-compose.memgraph.yml`, `memgraph_adapter.py` |
+| M2 | Native Cypher ranked paths (`[*BFS..N]`) | ✅ Complete | Hybrid model: native ranked-path exploration + NetworkX mirror for compatibility; April 22 sign-off green |
+| M3 | `use_memgraph()` startup wiring | ✅ Complete | Activated from `main.py` when `MEMGRAPH_URI` is set |
+| M4 | Celery async worker fleet | ✅ Complete | RabbitMQ-backed async execution |
+| M5 | Redis dialog state | ✅ Complete | Session/dialog state hardened for distributed runtime |
+| M6 | Qdrant migration | ✅ Complete | 5 collections active; vector backend is Qdrant, not Memgraph native vector search |
+| M7 | SAP HANA connection pooling | 🟡 Partial | `hana_pool.py` + `HANA_MODE=pool` exist; real HANA is still not the default live runtime |
+| M8 | Kubernetes autoscaling | ✅ Complete | KEDA `ScaledObject` manifests present for Celery workers |
+| M9 | Multi-tenant isolation | ✅ Complete | `TENANT_ID` env wired into Memgraph tenant labels |
 
+> **Note:** The current graph runtime is hybrid: Memgraph for persistence/native path querying, NetworkX mirror for compatibility and in-process graph algorithms.
 > **Note:** Memgraph 2.x Cypher limitations — `LENGTH(path)`, `relationships(path)`, `shortestPath()`, path-list comprehensions NOT implemented.
 
 ---
@@ -270,19 +275,18 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 | Phase | Principle | File | Status |
 |-------|-----------|------|--------|
-| 5.5 | Sandboxed Validation | `sql_executor.py`, `orchestrator.py` | ✅ Apr 12 |
-| 6b | Memory Compounding | `orchestrator.py` (Step 8b) | ✅ Apr 12 |
-| 6c | Proactive Threat Sentinel | `security_sentinel.py` (32KB) | ✅ Apr 12 |
-| 11 | Meta-Harness Loop | `meta_harness_loop.py` + `failure_trigger.py` | ✅ WIRED |
-| 12 | Quality Evaluator | `quality_evaluator.py` | ✅ WIRED |
-| 12b | Trajectory Log | `HarnessRun.trajectory_log[]` | ✅ ANALYZED |
-| 14 | Voting Executor | `voting_executor.py` | ✅ Apr 19 |
-| 15 | CIBA Approval | `ciba_approval_store.py` + `ciba.py` | ✅ Apr 19 |
-| 16 | Self-Healing Patterns DB | `healed_pattern_store.py` | ✅ Apr 19 |
-| 17 | Semantic Answer Validation | `semantic_answer_validator.py` | ✅ Apr 19 |
-| L4 | Real-Time Operations Monitoring | `monitoring_dashboard.py` + `eval.py` + `monitoring_panel.py` | ✅ Apr 19 |
-| **Videos** | Agentic Design Patterns Video Research | `docs/AGENTIC_DESIGN_PATTERNS_KYSM.md` (23-pattern analysis) | 🆕 Apr 20 |
-| 17 | Semantic Answer Validation | Qdrant cross-check + 4-component scoring (semantic_sim, row_plausibility, intent_match, table_match) | ✅ **LIVE — Apr 19** |
+| 5.5 | Sandboxed Validation | `sql_executor.py`, `orchestrator.py` | ✅ Complete |
+| 6b | Memory Compounding | `orchestrator.py` (Step 8b) | ✅ Complete |
+| 6c | Proactive Threat Sentinel | `security_sentinel.py` (32KB) | ✅ Complete |
+| 11 | Meta-Harness Loop | `meta_harness_loop.py` + `failure_trigger.py` | 🟡 Partial |
+| 12 | Quality Evaluator | `quality_evaluator.py` | 🟡 Partial |
+| 12b | Trajectory Log | `HarnessRun.trajectory_log[]` | 🟡 Partial |
+| 14 | Voting Executor | `voting_executor.py` | ✅ Complete |
+| 15 | CIBA Approval | `ciba_approval_store.py` + `ciba.py` | ✅ Complete |
+| 16 | Self-Healing Patterns DB | `healed_pattern_store.py` | ✅ Complete |
+| 17 | Semantic Answer Validation | `semantic_answer_validator.py` — Qdrant cross-check + 4-component scoring | ✅ Complete |
+| L4 | Real-Time Operations Monitoring | `monitoring_dashboard.py` + `eval.py` + `monitoring_panel.py` | ✅ Complete |
+| **Videos** | Agentic Design Patterns Video Research | `docs/AGENTIC_DESIGN_PATTERNS_KYSM.md` (23-pattern analysis) | 🟡 Partial |
 
 ---
 
@@ -290,20 +294,20 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 
 | # | Priority | Item | Phase | Status |
 |---|----------|------|-------|--------|
-| L5 | ✅ Done | Phase L5 Complexity Router — complete with adaptive voting thresholds | L5 | ✅ Done |
-| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | 🚧 WIRED (Apr 20) |
-| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | 🚧 WIRED (Apr 20) |
-| 20 | 🟢 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | ✅ WIRED (Apr 20) |
-| 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | 🆕 Planned |
-| 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | 🆕 Planned |
-| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | ✅ WIRED — Apr 20 |
-| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | ✅ WIRED — Apr 20 |
-| 1 | 🔴 P0 | Real SAP HANA connection (`hdbcli`) — replace mock executor | M8 | 🚧 Pending |
-| 2 | 🔴 P0 | M7 Load Testing sign-off (p95 ≤ 300ms @ conc=10) | M7 | 🚧 Pending |
-| L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Done |
-| 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | 📋 Next |
-| 4 | 🟡 P1 | BAPI Workflow Harness (Read-to-Write) | P1 | 📋 Planned |
-| 5 | 🟡 P1 | Long-Running Agent Infrastructure (6hr runs) | P1 | 📋 Planned |
+| L5 | — | Phase L5 Complexity Router — complete with adaptive voting thresholds | L5 | ✅ Complete |
+| 18 | 🔴 P0 | Phase 18: Exploration & Discovery — dynamic FK probing + hierarchical decomposer | 18 | 🟡 Partial |
+| 19 | 🔴 P0 | Phase 19: Agent-as-Tool Dynamic Override — suppress autonomy on Sentinel/CIBA trigger | 19 | 🟡 Partial |
+| 20 | 🟢 P1 | Phase 20: Resource-Aware Cost Router — per-tier routing cost tracking | 20 | 🟡 Partial |
+| 21 | 🟡 P1 | Phase 21: Formal Revision Loop — `exit_conditions` + `max_iterations=3` | 21 | 🚧 Planned |
+| 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | 🚧 Planned |
+| 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | 🟡 Partial |
+| 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | 🟡 Partial |
+| 1 | 🔴 P0 | Real SAP HANA activation (`HANA_MODE=pool`) — replace mock as the default runtime | M7 | 🚧 Planned |
+| 2 | 🔴 P0 | Hybrid graph runtime load/perf sign-off (Memgraph + NX mirror, p95 target) | Ops | ✅ Complete |
+| L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Complete |
+| 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | 🚧 Planned |
+| 4 | 🟡 P1 | BAPI Workflow Harness (Read-to-Write) | P1 | 🚧 Planned |
+| 5 | 🟡 P1 | Long-Running Agent Infrastructure (6hr runs) | P1 | 🚧 Planned |
 | 6 | 🟢 P2 | Ralph Wiggum PR Review Loop | P2 | 📋 Planned |
 | 7 | 🟢 P2 | Doc-Gardening Agent (stale doc scanner) | P2 | 📋 Planned |
 | 8 | 🟢 P2 | Observability Query Interface (LogQL/PromQL) | P2 | 📋 Planned |
@@ -342,7 +346,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `docs/KYSM_HARNESS_ENGINEERING.md` | Harness Engineering principles + implementation |
 | `docs/GRAPH_RAG_SAP_HANA_TECHNIQUES.md` | Graph RAG techniques deep-dive |
 | `docs/MULTI_AGENT_SWARM_ARCHITECTURE.md` | Full swarm architecture documentation |
-| `docs/MEMGRAPH_MIGRATION_GUIDE.md` | Memgraph Phase M1–M11 migration guide |
+| `docs/MEMGRAPH_MIGRATION_GUIDE.md` | Memgraph migration guide — hybrid Memgraph + NetworkX + Qdrant status |
 | `docs/SANDBOX_ARCHITECTURE.md` | 7-layer sandbox stack |
 | `docs/INTER_AGENT_MESSAGE_BUS_DESIGN.md` | Phase 13 bus design |
 | `docs/LEVEL5_ROADMAP.md` | **This file** |

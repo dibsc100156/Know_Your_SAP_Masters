@@ -30,6 +30,9 @@ from __future__ import annotations
 import os
 import re
 import logging
+import queue
+import socket
+import threading
 from typing import Dict, List, Set, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,13 +61,79 @@ def _ensure_gqlalchemy():
 
 _ensure_gqlalchemy()
 try:
-    from gqlalchemy import Memgraph, Node, Relationship, Field
-    MEMGRAPH_AVAILABLE = True
+    from neo4j import GraphDatabase
+    NEO4J_BOLT_AVAILABLE = True
 except ImportError:
-    MEMGRAPH_AVAILABLE = False
+    NEO4J_BOLT_AVAILABLE = False
+    GraphDatabase = None
+
+try:
+    from gqlalchemy import Memgraph, Node, Relationship, Field
+    GQLALCHEMY_AVAILABLE = True
+except ImportError:
+    GQLALCHEMY_AVAILABLE = False
     Memgraph = None
 
+MEMGRAPH_AVAILABLE = NEO4J_BOLT_AVAILABLE or GQLALCHEMY_AVAILABLE
+
 logger = logging.getLogger(__name__)
+
+
+class BoltMemgraphClient:
+    """Small neo4j-driver wrapper exposing gqlalchemy-like execute APIs with hard timeouts."""
+
+    def __init__(self, uri: str, username: str = "", password: str = "", timeout_seconds: float = 3.0):
+        auth = (username, password) if (username or password) else None
+        self.timeout_seconds = timeout_seconds
+        self._driver = GraphDatabase.driver(
+            uri,
+            auth=auth,
+            connection_timeout=timeout_seconds,
+            max_transaction_retry_time=1.0,
+        )
+
+    def _call(self, fn):
+        result_queue: "queue.Queue[Tuple[bool, Any]]" = queue.Queue(maxsize=1)
+
+        def worker() -> None:
+            try:
+                result_queue.put((True, fn()))
+            except Exception as exc:
+                result_queue.put((False, exc))
+
+        thread = threading.Thread(target=worker, daemon=True)
+        thread.start()
+
+        try:
+            ok, payload = result_queue.get(timeout=self.timeout_seconds)
+        except queue.Empty:
+            raise TimeoutError(f"Memgraph Bolt call timed out after {self.timeout_seconds:.1f}s")
+
+        if ok:
+            return payload
+        raise payload
+
+    def execute_and_fetch(self, query: str, params: Optional[Dict[str, Any]] = None, parameters: Optional[Dict[str, Any]] = None):
+        payload = parameters if parameters is not None else (params or {})
+
+        def _run():
+            with self._driver.session() as session:
+                return [dict(record.items()) for record in session.run(query, payload)]
+
+        return self._call(_run)
+
+    def execute(self, query: str, params: Optional[Dict[str, Any]] = None, parameters: Optional[Dict[str, Any]] = None):
+        payload = parameters if parameters is not None else (params or {})
+
+        def _run():
+            with self._driver.session() as session:
+                list(session.run(query, payload))
+                return None
+
+        return self._call(_run)
+
+    def close(self) -> None:
+        self._driver.close()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -128,8 +197,8 @@ class MemgraphGraphRAGManager:
             self._connect()
         else:
             logger.warning(
-                "[MemgraphGraphRAGManager] gqlalchemy not installed. "
-                "Run: pip install gqlalchemy\n"
+                "[MemgraphGraphRAGManager] No Memgraph client available. "
+                "Install neo4j or gqlalchemy to enable Bolt connectivity.\n"
                 "Falling back to NetworkX-only mode."
             )
 
@@ -138,15 +207,81 @@ class MemgraphGraphRAGManager:
 
     # ─── Connection Management ─────────────────────────────────────────────────
 
-    def _connect(self):
-        """Establish connection to Memgraph instance."""
+    def _probe_timeout_seconds(self) -> float:
         try:
-            self._mg = Memgraph(host=self.uri.split("://")[1].split(":")[0],
-                                port=int(self.uri.split(":")[-1]),
-                                username=self.user,
-                                password=self.password)
-            # Test connection
-            list(self._mg.execute_and_fetch("RETURN 1 AS test"))
+            return float(os.environ.get("MEMGRAPH_CONNECT_TIMEOUT_SECONDS", "3"))
+        except ValueError:
+            return 3.0
+
+    def _parse_host_port(self) -> Tuple[str, int]:
+        host = self.uri.split("://")[1].split(":")[0]
+        port = int(self.uri.split(":")[-1])
+        return host, port
+
+    def _tcp_preflight(self, timeout_seconds: float) -> bool:
+        host, port = self._parse_host_port()
+        try:
+            with socket.create_connection((host, port), timeout=timeout_seconds):
+                return True
+        except OSError as e:
+            logger.error(f"[Memgraph] TCP preflight failed for {host}:{port}: {e}")
+            return False
+
+    def _run_probe_with_timeout(self, timeout_seconds: float) -> bool:
+        if not self._mg:
+            return False
+
+        result_queue: "queue.Queue[Tuple[bool, str]]" = queue.Queue(maxsize=1)
+
+        def _worker() -> None:
+            try:
+                list(self._mg.execute_and_fetch("RETURN 1 AS test"))
+                result_queue.put((True, ""))
+            except Exception as e:
+                result_queue.put((False, str(e)))
+
+        thread = threading.Thread(target=_worker, daemon=True)
+        thread.start()
+
+        try:
+            ok, err = result_queue.get(timeout=timeout_seconds)
+        except queue.Empty:
+            logger.error(f"[Memgraph] Probe timed out after {timeout_seconds:.1f}s")
+            return False
+
+        if not ok:
+            logger.error(f"[Memgraph] Probe failed: {err}")
+            return False
+        return True
+
+    def _connect(self):
+        """Establish connection to Memgraph instance without allowing startup hangs."""
+        timeout_seconds = self._probe_timeout_seconds()
+        if not self._tcp_preflight(timeout_seconds):
+            self._mg = None
+            return
+        try:
+            if NEO4J_BOLT_AVAILABLE:
+                self._mg = BoltMemgraphClient(
+                    self.uri,
+                    username=self.user,
+                    password=self.password,
+                    timeout_seconds=timeout_seconds,
+                )
+            elif GQLALCHEMY_AVAILABLE:
+                host, port = self._parse_host_port()
+                self._mg = Memgraph(host=host,
+                                    port=port,
+                                    username=self.user,
+                                    password=self.password)
+            else:
+                self._mg = None
+                return
+
+            if not self._run_probe_with_timeout(timeout_seconds):
+                logger.error(f"[Memgraph] Connection unhealthy at {self.uri}. Falling back to NetworkX.")
+                self._mg = None
+                return
             logger.info(f"[Memgraph] Connected to {self.uri}")
         except Exception as e:
             logger.error(f"[Memgraph] Connection failed: {e}. Falling back to NetworkX.")
@@ -159,14 +294,10 @@ class MemgraphGraphRAGManager:
 
     @property
     def _is_connected(self) -> bool:
-        """Check if Memgraph connection is alive."""
+        """Check if Memgraph connection is alive without allowing indefinite hangs."""
         if not self._mg:
             return False
-        try:
-            list(self._mg.execute_and_fetch("RETURN 1"))
-            return True
-        except Exception:
-            return False
+        return self._run_probe_with_timeout(self._probe_timeout_seconds())
 
     # ─── Node / Edge helpers ───────────────────────────────────────────────────
 
@@ -772,8 +903,8 @@ class MemgraphGraphRAGManager:
         # Since we use node names as properties 'table_name' on SAPTable labeled nodes:
         # NOTE: Neo4j Python driver returns `neo4j.graph.Path` objects which are rich and easy to parse.
         query = (
-            f"MATCH path = (a:SAPTable {{table_name: $start}})-[*..{max_depth}]-(b:SAPTable {{table_name: $end}}) "
-            f"RETURN path"
+            f"MATCH path = (a:SAPTable {{table_name: $start}})-[*BFS..{max_depth}]-(b:SAPTable {{table_name: $end}}) "
+            f"RETURN path LIMIT {top_k}"
         )
         
         try:
