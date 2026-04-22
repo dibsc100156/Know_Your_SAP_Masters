@@ -39,6 +39,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - Phase 24 now goes beyond raw history loading: duplicate-turn lookup, recent query/result pairs, scratchpad-aware prompt context, and richer episodic metadata are wired into the live orchestrator path
 - Phase 19 operator guidance is now documented in `docs/PHASE19_OPERATOR_GUIDE.md`
 - Phase 22 fairness tests + queue policy are now documented/covered in `docs/PHASE22_QUEUE_POLICY.md` and `backend/tests/test_phase22_query_prioritization.py`
+- Unified Memory Architecture follow-through is now live: `memory_context.py`, `memory_orchestrator.py`, `memory_policy.py`, and `memory_writeback.py` unify episodic/session/persistent memory reads and writes, with `memory_context` + `memory_trace` surfaced in the sync chat API.
 - F3 + Phase 12 benchmark artifacts now live in `backend/benchmark_f3_phase12.py`, `backend/reports/benchmark_f3_phase12.json`, and `docs/F3_PHASE12_BENCHMARK.md`
 - Meta-Harness reporting/apply flow now has targeted close-out coverage in `backend/tests/test_phase11_meta_harness_loop.py`
 - Agent Inbox + Push Notifications are now live via `backend/app/core/agent_notifications.py`, `/chat/notifications*` endpoints, and targeted coverage in `backend/tests/test_phase17_agent_notifications.py`
@@ -123,6 +124,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue; live sync/async API wiring, fairness tests, and queue policy docs complete | ✅ Complete |
 | **23** | **Safety Guardrails (Standalone)** | `safety_guardrails.py` now owns the live layered safety contract behind the sentinel adapter; guardrail verdict/profile surfaced in API | ✅ Complete |
 | **24** | **Episodic Memory Store** | Redis-backed session scratchpad with live context/dedup integration, duplicate-turn lookup, recent query/result pairs, and surfaced episodic metadata in API | ✅ Complete |
+| **24+** | **Unified Memory Architecture Follow-Through** | `MemoryContext` + memory orchestrator + write-back router + policy layer + trace surfacing (M8.1–M8.5) | ✅ Complete |
 
 ---
 
@@ -317,6 +319,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | ✅ Complete (fairness tests + queue policy Apr 22) |
 | 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | ✅ Complete |
 | 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | ✅ Complete |
+| 24+ | 🟡 P2 | Unified Memory Architecture Follow-Through — `MemoryContext` + orchestrator + policy + write-back + trace | M8.1–M8.5 | ✅ Complete (live read/write path + API trace surfacing Apr 22) |
 | 1 | 🔴 P0 | Real SAP HANA activation (`HANA_MODE=pool`) — replace mock as the default runtime | M7 | 🚧 Planned |
 | 2 | 🔴 P0 | Hybrid graph runtime load/perf sign-off (Memgraph + NX mirror, p95 target) | Ops | ✅ Complete |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Complete |
@@ -352,6 +355,10 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `backend/app/core/agent_inbox.py` | AgentInbox per-agent inbox listener (19.7KB) |
 | `backend/app/core/agent_notifications.py` | User/session-scoped task lifecycle notifications + unread badge store |
 | `backend/app/core/long_running_jobs.py` | Durable long-running job state + resume/retry/cancel metadata |
+| `backend/app/core/memory_context.py` | Unified `MemoryContext` contract + slice/budget/trace primitives |
+| `backend/app/core/memory_orchestrator.py` | Read-path composition across episodic + persistent memory layers |
+| `backend/app/core/memory_policy.py` | Central retention + visibility/redaction policy for memory slices |
+| `backend/app/core/memory_writeback.py` | Event-driven write-back router for episodic/persistent memory |
 | `backend/app/core/pr_review_loop.py` | Ralph Wiggum PR review harness with bounded self/specialist review |
 | `backend/app/core/doc_gardening_agent.py` | Stale-doc / broken-reference scanner with confidence+risk labels |
 | `backend/app/core/observability_interface.py` | Safe LogQL/PromQL-style facade over monitoring + harness traces |

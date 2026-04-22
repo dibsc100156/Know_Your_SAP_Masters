@@ -844,52 +844,29 @@ def run_agent_loop(
     session_id = auth_context.session_id or session_id
 
 
-    # [Phase 24] Episodic Memory — load prior context + dedup check
-    from app.core.episodic_memory import get_memory_store
-    mem = get_memory_store()
-    try:
-        mem.update_session_meta(
-            session_id,
-            role_id=auth_context.role_id,
-            user_id=getattr(auth_context, "user_id", None),
-        )
-    except Exception:
-        pass
+    # [Phase 24+] Unified Memory Architecture — compose memory context + trace
+    from app.core.memory_orchestrator import get_memory_orchestrator
+    memory_context = get_memory_orchestrator().build_context(
+        query=query,
+        session_id=session_id,
+        auth_context=auth_context,
+        domain_hint=domain,
+    )
+    mem = get_memory_orchestrator().memory_store
+    is_dup = bool(memory_context.metadata.get("dedup_hit"))
+    dedup_sig = memory_context.metadata.get("dedup_signature")
+    duplicate_turn = memory_context.metadata.get("duplicate_of_turn")
+    if is_dup and dedup_sig:
+        logger.info(f"[MemoryContext] Duplicate query detected (sig={str(dedup_sig)[:12]}...) — loading cached context")
+    resolved_hint = memory_context.metadata.get("resolved_domain_hint")
+    if domain == "auto" and resolved_hint and resolved_hint != "auto":
+        domain = resolved_hint
 
-    # Deduplicate near-identical queries within this session
-    is_dup, dedup_sig = mem.check_dedup(session_id, query)
-    duplicate_record = mem.find_recent_duplicate(session_id, query, limit=10) if is_dup else None
-    if is_dup:
-        logger.info(f"[Episodic] Duplicate query detected (sig={dedup_sig[:12]}...) — loading cached context")
-        if domain == "auto" and duplicate_record and duplicate_record.domain and duplicate_record.domain != "auto":
-            domain = duplicate_record.domain
-
-    # Load prior conversation context for multi-turn continuity
-    ctx_snippet = mem.get_recent_context_for_prompt(session_id, max_turns=6)
+    recent_query_pairs = memory_context.metadata.get("recent_query_pairs") or []
+    scratchpad_state = memory_context.metadata.get("scratchpad") or {}
+    prior_tables: List[str] = list(memory_context.metadata.get("prior_tables") or [])
     prior_history = mem.get_history(session_id, limit=5)
-    recent_query_pairs = mem.get_recent_query_pairs(session_id, limit=5)
-    scratchpad_state = mem.get_all_scratchpad(session_id)
-    prior_tables: List[str] = []
-    if prior_history:
-        for rec in prior_history:
-            prior_tables.extend(rec.tables_used if hasattr(rec, "tables_used") else rec.get("tables_used", []))
-    prior_tables = list(dict.fromkeys(prior_tables))  # dedup preserve order
-
-    # Build context string for schema/pattern lookup hints
-    # [Phase 24] episodic_context is built for potential future LLM prompt injection
-    episodic_context = ""
-    if prior_history:
-        episodic_context += f"[Prior queries in this session: {len(prior_history)}]  "
-        episodic_context += f"[Prior tables accessed: {prior_tables}]\n"
-    if duplicate_record:
-        episodic_context += (
-            f"[Duplicate turn detected: turn={duplicate_record.turn_id}, domain={duplicate_record.domain}, "
-            f"tables={duplicate_record.tables_used}]\n"
-        )
-    if scratchpad_state:
-        episodic_context += f"[Scratchpad hints]: {scratchpad_state}\n"
-    if ctx_snippet:
-        episodic_context += f"[Recent context]: {ctx_snippet}"
+    episodic_context = memory_context.prompt_text()
     # Run threat evaluation BEFORE query executes
 
     sentinel_verdict = sentinel.evaluate(
@@ -3985,7 +3962,7 @@ def run_agent_loop(
         "backend": getattr(mem, "_backend_name", "unknown"),
         "dedup_hit": is_dup,
         "dedup_signature": dedup_sig,
-        "duplicate_of_turn": duplicate_record.turn_id if duplicate_record else None,
+        "duplicate_of_turn": duplicate_turn,
         "prior_turns": len(prior_history),
         "prior_tables": prior_tables,
         "recent_query_pairs": recent_query_pairs,
@@ -3993,27 +3970,36 @@ def run_agent_loop(
         "context_window": getattr(mem, "context_window", 0),
         "history_limit": getattr(mem, "query_history_limit", 0),
         "session_ttl_seconds": getattr(mem, "session_ttl", 0),
+        "policy_redactions": memory_context.metadata.get("policy_redactions", []),
     }
+    result_dict["memory_context"] = memory_context.summary()
+    result_dict["memory_trace"] = memory_context.memory_trace()
 
-    # [Phase 24] Episodic Memory — record this query after execution
+    # [Phase 24+] Unified Memory write-back router
     try:
-        mem.set_scratchpad(session_id, "last_domain", domain)
-        mem.set_scratchpad(session_id, "last_routing_tier", routing.tier.value)
-        mem.set_scratchpad(session_id, "last_tables", tables_involved[:10])
-        mem.record_query(
-            session_id=session_id,
-            query=query,
-            tables_used=tables_involved,
-            sql_generated=generated_sql if "generated_sql" in dir() else None,
-            domain=domain,
-            role_id=auth_context.role_id,
-            confidence=round(
-                result_dict.get("confidence_score", {}).get("composite", 0.0)
-                if isinstance(result_dict.get("confidence_score"), dict) else 0.0, 3),
-            answer=result_dict.get("answer", "")[:500] if result_dict.get("answer") else "",
+        from app.core.memory_writeback import MemoryEvent, get_memory_write_router
+        write_decisions = get_memory_write_router().record_result(
+            MemoryEvent(
+                event_type="result",
+                session_id=session_id,
+                query=query,
+                role_id=auth_context.role_id,
+                domain=domain,
+                tables_used=tables_involved,
+                sql_generated=generated_sql if "generated_sql" in dir() else None,
+                confidence=round(
+                    result_dict.get("confidence_score", {}).get("composite", 0.0)
+                    if isinstance(result_dict.get("confidence_score"), dict) else 0.0, 3),
+                answer=result_dict.get("answer", "")[:500] if result_dict.get("answer") else "",
+                routing_tier=routing.tier.value if routing else None,
+                metadata={"pattern_name": result_dict.get("pattern_name")},
+            )
         )
+        result_dict["memory_trace"] = result_dict["memory_trace"] + [
+            {"event": "writeback", **decision.to_dict()} for decision in write_decisions
+        ]
     except Exception:
-        pass  # fire-and-forget — never block on episodic memory
+        pass  # fire-and-forget — never block on unified memory write-back
     return result_dict
 
 

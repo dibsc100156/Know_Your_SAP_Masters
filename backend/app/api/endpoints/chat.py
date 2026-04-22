@@ -130,6 +130,8 @@ class ChatResponse(BaseModel):
     guardrails: Optional[Dict[str, Any]] = None
     episodic_context: Optional[str] = None
     episodic_memory: Optional[Dict[str, Any]] = None
+    memory_context: Optional[Dict[str, Any]] = None
+    memory_trace: Optional[List[Dict[str, Any]]] = None
     prior_turns: Optional[int] = None
     prior_tables: Optional[List[str]] = None
     urgency: Optional[str] = None            # Urgency level applied
@@ -312,6 +314,8 @@ async def chat_master_data_endpoint(request: ChatRequest, http_request: Request)
             guardrails=result.get("guardrails"),
             episodic_context=result.get("episodic_context"),
             episodic_memory=result.get("episodic_memory"),
+            memory_context=result.get("memory_context"),
+            memory_trace=result.get("memory_trace"),
             prior_turns=result.get("prior_turns"),
             prior_tables=result.get("prior_tables"),
             urgency=result.get("urgency"),
