@@ -43,6 +43,9 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - Meta-Harness reporting/apply flow now has targeted close-out coverage in `backend/tests/test_phase11_meta_harness_loop.py`
 - Agent Inbox + Push Notifications are now live via `backend/app/core/agent_notifications.py`, `/chat/notifications*` endpoints, and targeted coverage in `backend/tests/test_phase17_agent_notifications.py`
 - Long-running agent infrastructure is now live via `backend/app/core/long_running_jobs.py`, `run_orchestrator_long_task`, `/chat/jobs*`, and `/tasks/{task_id}/resume`
+- Ralph Wiggum PR Review Loop is now live via `backend/app/core/pr_review_loop.py` and `/automation/pr-review-loop`
+- Doc-Gardening Agent is now live via `backend/app/core/doc_gardening_agent.py` and `/automation/doc-gardening`
+- Observability Query Interface is now live via `backend/app/core/observability_interface.py` and `/automation/observability/*`
 - End-to-end validation sweep is now repeatable via `backend/end_to_end_validation_sweep.py` with report output at `backend/reports/end_to_end_validation_sweep.json`
 
 **April 21 commits:**
@@ -320,9 +323,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 3 | 🟡 P1 | Agent Inbox + Push Notifications | Phase 17 | ✅ Complete (notification store + user/session endpoints Apr 22) |
 | 4 | 🟡 P1 | BAPI Workflow Harness (Read-to-Write) | P1 | 🚧 Planned |
 | 5 | 🟡 P1 | Long-Running Agent Infrastructure (6hr runs) | P1 | ✅ Complete (durable job store + 6h queue + resume/cancel Apr 22) |
-| 6 | 🟢 P2 | Ralph Wiggum PR Review Loop | P2 | 📋 Planned |
-| 7 | 🟢 P2 | Doc-Gardening Agent (stale doc scanner) | P2 | 📋 Planned |
-| 8 | 🟢 P2 | Observability Query Interface (LogQL/PromQL) | P2 | 📋 Planned |
+| 6 | 🟢 P2 | Ralph Wiggum PR Review Loop | P2 | ✅ Complete (local review harness + API Apr 22) |
+| 7 | 🟢 P2 | Doc-Gardening Agent (stale doc scanner) | P2 | ✅ Complete (scanner + issue scoring API Apr 22) |
+| 8 | 🟢 P2 | Observability Query Interface (LogQL/PromQL) | P2 | ✅ Complete (safe query facade + traces API Apr 22) |
 
 ---
 
@@ -349,6 +352,9 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `backend/app/core/agent_inbox.py` | AgentInbox per-agent inbox listener (19.7KB) |
 | `backend/app/core/agent_notifications.py` | User/session-scoped task lifecycle notifications + unread badge store |
 | `backend/app/core/long_running_jobs.py` | Durable long-running job state + resume/retry/cancel metadata |
+| `backend/app/core/pr_review_loop.py` | Ralph Wiggum PR review harness with bounded self/specialist review |
+| `backend/app/core/doc_gardening_agent.py` | Stale-doc / broken-reference scanner with confidence+risk labels |
+| `backend/app/core/observability_interface.py` | Safe LogQL/PromQL-style facade over monitoring + harness traces |
 | `backend/app/core/quality_evaluator.py` | QualityEvaluator — correctness_score + trajectory_adherence |
 | `backend/app/core/meta_harness_loop.py` | Meta-Harness Loop (45KB) |
 | `backend/app/core/failure_trigger.py` | Phase 11 failure trigger (12.6KB) |

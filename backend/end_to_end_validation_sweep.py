@@ -10,6 +10,9 @@ REPORTS_DIR.mkdir(exist_ok=True)
 TEST_MODULES = [
     "tests.test_phase17_agent_notifications",
     "tests.test_phase25_long_running_jobs",
+    "tests.test_phase26_pr_review_loop",
+    "tests.test_phase27_doc_gardening",
+    "tests.test_phase28_observability_interface",
     "tests.test_phase20_router_cost_tracker",
     "tests.test_phase22_query_prioritization",
     "tests.test_phase11_meta_harness_loop",

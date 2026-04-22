@@ -179,19 +179,25 @@
 **Done when:** Sessions have a bounded short-term memory that improves continuity without leaking scope.
 
 ### 16) Ralph Wiggum PR Review Loop
-- [ ] Define review-agent scope
-- [ ] Implement PR review pass with useful output formatting
-- [ ] Test on non-critical repos first
+- [x] Define review-agent scope
+- [x] Implement PR review pass with useful output formatting
+- [x] Test on non-critical repos first
+
+**Implementation note (2026-04-22):** Added `backend/app/core/pr_review_loop.py` plus `POST /api/v1/automation/pr-review-loop`. The loop now performs self-review, specialist review (`quality`, `security`, `docs`), bounded iteration until stable, and returns merge readiness / auto-merge eligibility with structured per-round history. Coverage was added in `backend/tests/test_phase26_pr_review_loop.py`. Notes live in `docs/RALPH_WIGGUM_PR_REVIEW_LOOP.md`.
 
 ### 17) Doc-Gardening Agent
-- [ ] Scan for stale/misaligned docs
-- [ ] Propose doc updates or cleanup patches
-- [ ] Add confidence/risk labels for auto-suggested edits
+- [x] Scan for stale/misaligned docs
+- [x] Propose doc updates or cleanup patches
+- [x] Add confidence/risk labels for auto-suggested edits
+
+**Implementation note (2026-04-22):** Added `backend/app/core/doc_gardening_agent.py` plus `GET /api/v1/automation/doc-gardening`. The scanner now detects broken references, TODO/TBD placeholders, and lightly scored orphan docs, returning structured issues with confidence and risk labels. Coverage was added in `backend/tests/test_phase27_doc_gardening.py`. Notes live in `docs/DOC_GARDENING_AGENT.md`.
 
 ### 18) Observability Query Interface (LogQL/PromQL)
-- [ ] Define supported query surface
-- [ ] Add safe read-only query path
-- [ ] Document example investigations
+- [x] Define supported query surface
+- [x] Add safe read-only query path
+- [x] Document example investigations
+
+**Implementation note (2026-04-22):** Added `backend/app/core/observability_interface.py` plus endpoints for `/automation/observability/logs`, `/automation/observability/metrics`, and `/automation/observability/traces/{run_id}`. The interface exposes a small safe LogQL-style filter set over query records, a bounded PromQL-style metric map over monitoring output, and harness trajectory lookup by run id. Coverage was added in `backend/tests/test_phase28_observability_interface.py`. Notes live in `docs/OBSERVABILITY_QUERY_INTERFACE.md`.
 
 ---
 
@@ -202,7 +208,7 @@
 - [x] Compare confidence, latency, and correctness vs current baseline
 - [x] Record regressions and rollback path if needed
 
-**Implementation note (2026-04-22):** Added `backend/end_to_end_validation_sweep.py` and generated `backend/reports/end_to_end_validation_sweep.json`. The sweep currently exercises notifications, long-running job control, cost routing, prioritization, meta-harness, quality trajectory, F3 sequencing, and episodic/safety extras in one repeatable command.
+**Implementation note (2026-04-22):** Added `backend/end_to_end_validation_sweep.py` and generated `backend/reports/end_to_end_validation_sweep.json`. The sweep currently exercises notifications, long-running job control, PR review loop, doc gardening, observability query interface, cost routing, prioritization, meta-harness, quality trajectory, F3 sequencing, and episodic/safety extras in one repeatable command.
 
 ### 20) Documentation sync
 - [x] Keep `docs/LEVEL5_ROADMAP.md` aligned with actual status
