@@ -760,7 +760,14 @@ def render_answer(msg: dict):
                 cols = st.columns(len(sentinel_stats))
                 for ci, (engine, count) in enumerate(sentinel_stats.items()):
                     with cols[ci]:
-                        icon = "🔴" if count > 0 else "🟢"
+                        try:
+                            numeric_count = int(count)
+                        except (TypeError, ValueError):
+                            try:
+                                numeric_count = int(float(count))
+                            except (TypeError, ValueError):
+                                numeric_count = 0
+                        icon = "🔴" if numeric_count > 0 else "🟢"
                         st.metric(engine.replace("_", " ").title(), f"{icon} {count}")
 
     # ── Masked Fields ───────────────────────────────────────────────────────
