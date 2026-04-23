@@ -1809,6 +1809,79 @@ ORDER BY LQUA.WERKS, LAGP.LGTYP, T001L.LGORT, LQUA.MATNR
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  DOMAIN 10 — QUALITY MANAGEMENT
+# ═══════════════════════════════════════════════════════════════════════════════
+SAP_META_PATHS.append(MetaPath(
+    id="vendor_quality_scorecard",
+    name="Vendor Quality Scorecard",
+    business_description=(
+        "Chains vendor master (LFA1) → quality inspection lots (QALS) → "
+        "quality code descriptions (TQ01T) to produce a vendor quality scorecard. "
+        "Used for supplier performance reviews, incoming QC pass rates, "
+        "and QANegotiation briefing preparation."
+    ),
+    domain="quality_management",
+    module="QM",
+    tags=["vendor quality", "supplier inspection", "quality scorecard", "QALS",
+          "TQ01T", "inspection lot", "UDATE", "QSMAT", "supplier rating",
+          "quality rating", "vendor performance", "incoming QC", "QM supplier"],
+    variants=[
+        PathVariant(
+            tables=["LFA1", "QALS", "TQ01T"],
+            join_conditions=[
+                ("LFA1", "QALS", "LFA1.LIFNR = QALS.LIFNR"),
+                ("QALS", "TQ01T", "QALS.QSMAT = TQ01T.QSMAT AND TQ01T.SPRAS = 'E'"),
+            ],
+            cardinality_notes="QALS = 1 row per inspection lot per vendor-material; TQ01T is a small code-table.",
+            score=1.0,
+            bloom_filter=["vendor quality", "supplier inspection", "quality scorecard", "inspection lot"],
+        ),
+    ],
+    required_filters=["LFA1.MANDT = :P_MANDT"],
+    optional_filters=[
+        "LFA1.LIFNR = :LIFNR",
+        "QALS.UDATE >= :FROM_DATE",
+        "QALS.UDATE <= :TO_DATE",
+        "QALS.ART = :INSPECTION_TYPE",
+        "QALS.STATU = :INSPECTION_STATUS",
+    ],
+    sql_template="""
+SELECT
+    LFA1.LIFNR         AS vendor_code,
+    LFA1.NAME1         AS vendor_name,
+    LFA1.ORT01         AS city,
+    QALS.ART           AS inspection_type,
+    TQ01T.QKText       AS inspection_type_text,
+    COUNT(QALS.QLOTN)  AS total_inspection_lots,
+    SUM(CASE WHEN QALS.STATU = '10' THEN 1 ELSE 0 END) AS lots_released,
+    SUM(CASE WHEN QALS.STATU IN ('03','04') THEN 1 ELSE 0 END) AS lots_rejected,
+    ROUND(SUM(CASE WHEN QALS.STATU = '10' THEN 1 ELSE 0 END) * 100.0 / NULLIF(COUNT(QALS.QLOTN),0),1) AS release_rate_pct,
+    MIN(QALS.UDATE)    AS first_inspection_date,
+    MAX(QALS.UDATE)    AS last_inspection_date,
+    AVG(CASE WHEN QALS.QSMAT IS NOT NULL THEN 1.0 ELSE 0.0 END) AS avg_quality_score
+FROM            LFA1
+    LEFT JOIN   QALS ON LFA1.LIFNR = QALS.LIFNR
+    LEFT JOIN   TQ01T ON QALS.QSMAT = TQ01T.QSMAT AND TQ01T.SPRAS = 'E'
+WHERE  LFA1.MANDT = :P_MANDT
+GROUP BY
+    LFA1.LIFNR, LFA1.NAME1, LFA1.ORT01, QALS.ART, TQ01T.QKText
+ORDER BY
+    LFA1.LIFNR, QALS.ART;
+""",
+    example_queries=[
+        "vendor quality rating",
+        "supplier inspection results",
+        "top vendors by quality score",
+        "vendor QM scorecard",
+        "incoming inspection lots by vendor",
+        "quality performance vendor report",
+    ],
+    confidence_boost=0.2,
+    row_count_warning="LFA1 has ~10,000 rows; always filter by LIFNR or date range. QALS can be large at high-volume plants; add WERKS filter for large plants.",
+))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MetaPath Library — Search & Resolution Engine
 # ═══════════════════════════════════════════════════════════════════════════════
 

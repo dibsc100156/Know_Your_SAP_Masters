@@ -33,6 +33,33 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
+# SAP column atlas — used to resolve ambiguous column references in multi-JOIN SQL
+# ---------------------------------------------------------------------------
+KNOWN_TABLE_COLUMNS: Dict[str, Set[str]] = {
+    "LFA1": {"LIFNR", "NAME1", "NAME2", "ORT01", "STRAS", "PSTLZ", "TELF1", "STCD1", "STCD2", "KUNNR"},
+    "EKKO": {"EBELN", "BUKRS", "BSART", "BSTYP", "LIFNR", "EKORG", "EKOTX", "AEDAT", "ERNAM", "STATU"},
+    "EKPO": {"EBELN", "EBELP", "MATNR", "WERKS", "LGORT", "MENGE", "MEINS", "NETWR", "PEINH", "BUKRS"},
+    "KNA1": {"KUNNR", "NAME1", "ORT01", "STRAS", "PSTLZ", "TELF1", "STCD1", "STCD2", "LAND1"},
+    "MARA": {"MATNR", "MTART", "MATKL", "MEINS", "BRGEW", "NTGEW", "VOLTY", "VOLUM", "ERNAM", "AEDAT"},
+    "MBEW": {"MATNR", "BWHSL", "BWVHL", "STPRS", "PEINH", "BKLAS", "VPRBS", "BWMOD", "LFMON", "BWDAT"},
+    "MSEG": {"MBLNR", "ZEILE", "BUKRS", "BWART", "MATNR", "WERKS", "LGORT", "MENGE", "MEINS", "DMBTR"},
+    "QALS": {"QLOTN", "ART", "MATNR", "WERKS", "QSMAT", "UDATE", "UTIME", "ERNAM", "STATU", "QNAME"},
+    "TQ01T": {"QSMAT", "QKText", "QMTyp", "SPRAS"},
+    "BSEG": {"BUKRS", "BELNR", "GJAHR", "BUZEI", "KOART", "HKONT", "DMBTR", "Wrbtr", "WAERS", "HKONT"},
+    "BKPF": {"BUKRS", "BELNR", "GJAHR", "BLDAT", "BLDAT", "BUKRS", "WAERS", "KURSF", "Xblnr", "BKTXT"},
+    "LFB1": {"LIFNR", "BUKRS", "HBLNR", "EDISP", "AKONP", "ZAHLS", "WAERS", "WEBTR", "XZERS"},
+    "LFBK": {"LIFNR", "BANKS", "BANKL", "BANKN", "BKONT", "IBAN"},
+    "ADRC": {"ADDRNUMBER", "PERSNUMBER", "DATE_ADDR", "TITLE", "NAME1", "NAME2", "CITY1", "STREET"},
+    "BUT000": {"PARTNER", "TYPE", "NAME1", "NAME2", "CITY1", "STREET"},
+    "MARD": {"MATNR", "WERKS", "LGORT", "LABST", "INSME", "SPERM", "LFMON"},
+    "MARC": {"MATNR", "WERKS", "EKGRP", "STAWN", "SERAIL"},
+    "MAKT": {"MATNR", "SPRAS", "MAKTX", "MAKTL"},
+    "EINA": {"LIFNR", "MATNR", "EKORG", "ESOKZ", "NRFHAN", "AFFIL"},
+    "EINE": {"LIFNR", "MATNR", "EKORG", "ESOKZ", "WERKS", "PEINH", "BPUMZ", "BPUMN"},
+}
+
+
+# ---------------------------------------------------------------------------
 # Error -> Healing Rule registry
 # ---------------------------------------------------------------------------
 @dataclass
@@ -517,30 +544,44 @@ class SelfHealer:
     def _heal_qualify_column(self, sql: str, code: str) -> Tuple[str, str]:
         """
         Resolve ambiguous column references by qualifying them with table prefix.
-        Uses heuristic: first joined table that has the column wins.
+        Extracts table aliases from JOIN/FROM clauses, then rewrites bare column
+        names that appear in the known multi-table ambiguous set.
         """
         original = sql
 
-        # Find ambiguous columns (from ORA-00918)
-        # Look for columns used in SELECT without table qualification
-        # Strategy: for each naked column in SELECT, find the first table that has it
-        sql_upper = sql.upper()
+        # Extract table -> alias mapping from SQL text
+        aliases: Dict[str, str] = {}   # alias -> table
+        for m in re.finditer(r'JOIN\s+(\w+)\s+(?:AS\s+)?(\w+)', sql, re.IGNORECASE):
+            aliases[m.group(2).upper()] = m.group(1).upper()
+        for m in re.finditer(r'FROM\s+(\w+)\s+(?:AS\s+)?(\w+)', sql, re.IGNORECASE):
+            aliases[m.group(2).upper()] = m.group(1).upper()
 
-        # Simple heuristic: add alias.tablename prefix to naked columns in ORDER BY / WHERE
-        # This is a simplified version; production would need schema introspection
-        if "ORDER BY" in sql_upper:
-            # Try to qualify ORDER BY columns
-            fixed = re.sub(
-                r'ORDER\s+BY\s+([A-Z_][A-Z0-9_]*)',
-                r'ORDER BY \1',
-                sql,
-                count=1,
-                flags=re.IGNORECASE,
-            )
-            if fixed != sql:
-                return fixed, "qualified ambiguous ORDER BY column"
+        # Columns known to span multiple SAP tables in JOINs
+        ambiguous = {"MANDT", "ERDAT", "ERNAM", "AEDAT", "LAEDA",
+                     "VBELN", "POSNR", "MATNR", "LIFNR", "KUNNR", "WERKS",
+                     "BWART", "MENGE", "MEINS", "DMBTR", "WAERS",
+                     "BUKRS", "BELNR", "GJAHR", "HKONT", "BUZEI"}
 
-        return sql, "cannot resolve ambiguous column without schema context"
+
+        def qualify(col: str) -> str:
+            col_u = col.upper()
+            if col_u not in ambiguous:
+                return col
+            for alias, table in aliases.items():
+                if table in KNOWN_TABLE_COLUMNS and col_u in KNOWN_TABLE_COLUMNS[table]:
+                    return f"{alias}.{col_u}"
+            return col
+
+        def repl(m: re.Match) -> str:
+            return m.group(1) + qualify(m.group(2))
+
+        fixed = re.sub(
+            r'(\b(?:SELECT|WHERE|ON |ORDER BY|GROUP BY|HAVING)\s+[^;]+?)\b([A-Z_][A-Z0-9_]{0,28})\b',
+            repl, sql, flags=re.IGNORECASE
+        )
+        if fixed != original:
+            return fixed, "qualified ambiguous column references with table aliases"
+        return original, "no ambiguous columns resolvable without schema introspection"
 
     # -------------------------------------------------------------------------
     # Error text extraction utilities
