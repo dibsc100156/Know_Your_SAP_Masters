@@ -42,7 +42,15 @@ class CIBAApprovalRequestResponse(BaseModel):
     created_at: float
     expires_at: float
     time_remaining_seconds: float
+    edited_sql: Optional[str] = None
+    conditional_constraints: Optional[str] = None
+    feedback_instructions: Optional[str] = None
 
+class CIBAApprovalPayload(BaseModel):
+    approver_id: str
+    comments: Optional[str] = ""
+    edited_sql: Optional[str] = ""
+    conditional_constraints: Optional[str] = ""
 
 class CIBAApprovalResponse(BaseModel):
     request_id: str
@@ -56,6 +64,16 @@ class CIBADenialResponse(BaseModel):
     status: str
     message: str
     denied_at: float
+
+
+class CIBARevisePayload(BaseModel):
+    reviewer_id: str
+    feedback_instructions: str
+
+class CIBAReviseResponse(BaseModel):
+    request_id: str
+    status: str
+    message: str
 
 
 class CIBAPendingListResponse(BaseModel):
@@ -93,6 +111,9 @@ def _build_request_response(req) -> CIBAApprovalRequestResponse:
         created_at=req.created_at,
         expires_at=req.expires_at,
         time_remaining_seconds=max(0.0, req.expires_at - time.time()),
+        edited_sql=getattr(req, "edited_sql", None),
+        conditional_constraints=getattr(req, "conditional_constraints", None),
+        feedback_instructions=getattr(req, "feedback_instructions", None),
     )
 
 
@@ -145,34 +166,34 @@ def get_pending(
 @router.post("/approve/{request_id}", response_model=CIBAApprovalResponse)
 def approve_request(
     request_id: str,
-    approver_id: str = Query(..., description="ID of the approver (e.g. 'supervisor', 'admin')"),
-    comments: str = Query("", description="Optional approval comments"),
+    payload: CIBAApprovalPayload,
     x_user_id: Optional[str] = Header(None, description="User ID for access control"),
 ):
     """
     APPROVE a pending CIBA request.
-
-    After approval:
-      - The request is marked approved in Redis.
-      - A query-auto-approve hash is stored (same query from same session will
-        auto-pass for the next 1 hour without needing another approval).
-      - The blocked SQL can be re-submitted to the orchestrator.
+    Can include edited_sql and conditional_constraints.
     """
     store = get_ciba_store()
     req = store.get_pending_request(request_id)
     if not req:
         raise HTTPException(status_code=404, detail=f"Request {request_id} not found or not pending")
 
-    success = store.approve(request_id, approver_id, comments)
+    success = store.approve(
+        request_id=request_id,
+        approver_id=payload.approver_id,
+        comments=payload.comments,
+        edited_sql=payload.edited_sql,
+        conditional_constraints=payload.conditional_constraints,
+    )
     if not success:
         raise HTTPException(status_code=500, detail="Approval failed")
 
-    logger.info(f"[CIBA-API] Request {request_id} approved by {approver_id}")
+    logger.info(f"[CIBA-API] Request {request_id} approved by {payload.approver_id}")
 
     return CIBAApprovalResponse(
         request_id=request_id,
         status="approved",
-        message=f"Request approved by {approver_id}. Query auto-approved for session {req.session_id}.",
+        message=f"Request approved by {payload.approver_id}. Query auto-approved for session {req.session_id}.",
         approved_at=time.time(),
     )
 
@@ -209,6 +230,38 @@ def deny_request(
         status="denied",
         message=f"Request denied by {denier_id}. Query hard-rejected for session {req.session_id} for 30 minutes.",
         denied_at=time.time(),
+    )
+
+
+@router.post("/revise/{request_id}", response_model=CIBAReviseResponse)
+def revise_request(
+    request_id: str,
+    payload: CIBARevisePayload,
+    x_user_id: Optional[str] = Header(None, description="User ID for access control"),
+):
+    """
+    REVISE a pending CIBA request.
+    Kicks the request back to the orchestrator FormalRevisionLoop with instructions.
+    """
+    store = get_ciba_store()
+    req = store.get_pending_request(request_id)
+    if not req:
+        raise HTTPException(status_code=404, detail=f"Request {request_id} not found or not pending")
+
+    success = store.revise(
+        request_id=request_id,
+        reviewer_id=payload.reviewer_id,
+        feedback_instructions=payload.feedback_instructions,
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Revise failed")
+
+    logger.info(f"[CIBA-API] Request {request_id} REVISE triggered by {payload.reviewer_id}")
+
+    return CIBAReviseResponse(
+        request_id=request_id,
+        status="revise",
+        message=f"Request kicked back to agent for revision by {payload.reviewer_id}.",
     )
 
 
