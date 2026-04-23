@@ -204,8 +204,10 @@ class AgentInbox:
         """Poll the message bus for new messages and dispatch each one."""
         messages = message_bus.get_messages(
             receiver=self.agent_name,
+            consumer=self.agent_name,
             since=self._last_check,
             max_count=20,
+            use_consumer_groups=True,
         )
 
         if not messages:
@@ -219,8 +221,12 @@ class AgentInbox:
 
             try:
                 self._dispatch_message(msg)
+                if getattr(msg, "ack_required", False) and getattr(msg, "delivery_id", None):
+                    message_bus.ack_message(self.agent_name, msg.delivery_id)
             except Exception as e:
                 self.stats.errors += 1
+                if getattr(msg, "ack_required", False) and getattr(msg, "delivery_id", None):
+                    message_bus.nack_message(self.agent_name, msg.delivery_id, reason=str(e), requeue=False)
                 logger.error(f"[{self.agent_name}] dispatch error for {msg.msg_type}: {e}")
 
     def _dispatch_message(self, msg: AgentMessage) -> None:
