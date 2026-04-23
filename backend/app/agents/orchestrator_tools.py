@@ -1172,6 +1172,13 @@ class Tool:
     input_schema: Dict[str, Any]
     execute: Callable
     pillars: List[str]  # Which pillars this tool belongs to
+    # Role-based allowlisting (T2)
+    allowed_roles: List[str] = field(default_factory=list)   # Empty = all roles allowed
+    denied_roles: List[str] = field(default_factory=list)      # Explicitly blocked roles
+    required_tables: List[str] = field(default_factory=list)  # Tables this tool will access
+    compliance_level: str = "standard"                        # "standard" | "compliance_critical" | "restricted"
+    fallback_tools: List[str] = field(default_factory=list)   # Ordered fallback tool names
+    timeout_ms: int = 5000                                   # Execution timeout
 
 
 
@@ -1240,6 +1247,11 @@ TOOL_REGISTRY: Dict[str, Tool] = {
         },
         execute=schema_lookup,
         pillars=["Pillar 3"],
+        allowed_roles=[],
+        denied_roles=[],
+        required_tables=[],
+        compliance_level="standard",
+        fallback_tools=["graph_enhanced_schema_discovery"],
     ),
 
     "graph_enhanced_schema_discovery": Tool(
@@ -1332,6 +1344,11 @@ TOOL_REGISTRY: Dict[str, Tool] = {
         },
         execute=sql_execute,
         pillars=["Execution"],
+        allowed_roles=[],
+        denied_roles=["HR_ADMIN"], # Prevent HR from running arbitrary SQL easily unless restricted
+        required_tables=[],
+        compliance_level="restricted",
+        fallback_tools=["sql_validate"],
     ),
 
     "result_mask": Tool(

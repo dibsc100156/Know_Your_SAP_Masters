@@ -1,6 +1,6 @@
-﻿"""
+"""
 
-orchestrator.py — Agentic RAG Orchestrator (Pillar 2)
+orchestrator.py  Agentic RAG Orchestrator (Pillar 2)
 
 ======================================================
 
@@ -26,27 +26,27 @@ Coordinates all 5 Pillars via the unified tool registry:
 
 Execution flow:
 
-  Step 0: Meta-Path Match (fast-path — pre-computed JOIN templates)
+  Step 0: Meta-Path Match (fast-path  pre-computed JOIN templates)
 
   Step 1: Schema RAG (table discovery via Qdrant)
 
-  Step 1.5: Graph Embedding Search (Pillar 5½ — Node2Vec structural discovery)
+  Step 1.5: Graph Embedding Search (Pillar 5½  Node2Vec structural discovery)
 
-  Step 1.75: QM Semantic Search (Phase 8 — 20yr QM notification long-text search)
+  Step 1.75: QM Semantic Search (Phase 8  20yr QM notification long-text search)
 
   Step 2: SQL Pattern RAG (proven patterns via ChromaDB)
 
-  Step 2b: Temporal Detection (date/fiscal period → temporal SQL filters)
+  Step 2b: Temporal Detection (date/fiscal period ? temporal SQL filters)
 
-  Step 2c: Temporal Analysis Engine (Phase 7 — FY analysis, CLV, supplier SPI)
+  Step 2c: Temporal Analysis Engine (Phase 7  FY analysis, CLV, supplier SPI)
 
-  Step 2d: Negotiation Briefing (Phase 8 — CLV, PSI, churn risk, BATNA, tactics)
+  Step 2d: Negotiation Briefing (Phase 8  CLV, PSI, churn risk, BATNA, tactics)
 
-  Step 3: Graph RAG (all-ranked-paths → best JOIN)
+  Step 3: Graph RAG (all-ranked-paths ? best JOIN)
 
   Step 4: SQL Assembly + AuthContext + Temporal filter injection
 
-  Step 5: Validate → Execute → Mask
+  Step 5: Validate ? Execute ? Mask
 
 
 
@@ -161,7 +161,7 @@ def _update_harness_phase(
 
 ) -> None:
 
-    """"Log a phase completion to Redis (idempotent — safe to call even if Redis is down)."""
+    """"Log a phase completion to Redis (idempotent  safe to call even if Redis is down)."""
 
     if not run_id:
 
@@ -233,7 +233,7 @@ def _compute_confidence_score(
 
     """
 
-    Computes a multi-signal composite confidence score (0.0–1.0) plus sub-scores
+    Computes a multi-signal composite confidence score (0.01.0) plus sub-scores
 
     for each signal. Exposed to the frontend for display.
 
@@ -245,7 +245,7 @@ def _compute_confidence_score(
 
     # Signal 1: SQL Critique Gate (weight 30%)
 
-    # 7-point gate → normalize to 0-1
+    # 7-point gate ? normalize to 0-1
 
     critique_norm = critique_score / 7.0
 
@@ -275,7 +275,7 @@ def _compute_confidence_score(
 
     if row_count == 0:
 
-        data_score = 0.0   # empty result → uncertain
+        data_score = 0.0   # empty result ? uncertain
 
     elif row_count <= 5:
 
@@ -345,7 +345,7 @@ def _compute_confidence_score(
 
         "label": "Autonomous Repair",
 
-        "detail": "Self-heal applied — see banner above" if self_heal_applied else "No autonomous repair needed",
+        "detail": "Self-heal applied  see banner above" if self_heal_applied else "No autonomous repair needed",
 
     }
 
@@ -353,7 +353,7 @@ def _compute_confidence_score(
 
     # Signal 5: Temporal Awareness (weight 10%)
 
-    # Temporal filters = query specificity → higher confidence
+    # Temporal filters = query specificity ? higher confidence
 
     temporal_score = 1.0 if temporal_mode != "none" else 0.70
 
@@ -447,6 +447,8 @@ def _compute_confidence_score(
 
 
 
+router = None
+
 def run_agent_loop(
 
     query: str,
@@ -494,7 +496,7 @@ def run_agent_loop(
 
                    When True, delegates to the swarm architecture with
 
-                   PlannerAgent → Domain Agents → SynthesisAgent.
+                   PlannerAgent ? Domain Agents ? SynthesisAgent.
 
 
 
@@ -513,7 +515,7 @@ def run_agent_loop(
 
     # ============================================================================
 
-    # [Phase 6] SWARM GATE — Delegate to Multi-Agent Domain Swarm if enabled
+    # [Phase 6] SWARM GATE  Delegate to Multi-Agent Domain Swarm if enabled
 
     # ============================================================================
     # [Harness] Track every swarm execution in Redis
@@ -581,10 +583,10 @@ def run_agent_loop(
             if sentinel_verdict.recommended_action == "block":
                 ciba = get_ciba_store()
                 if ciba.is_query_approved(session_id, query):
-                    logger.info("[CIBA] Query previously approved— proceeding in tool mode despite sentinel block.")
+                    logger.info("[CIBA] Query previously approved proceeding in tool mode despite sentinel block.")
                     tool_mode_state = agent_tool_mode.evaluate_sentinel(sentinel_verdict, sentinel_profile, session_id)
                 elif ciba.is_query_denied(session_id, query):
-                    logger.warning("[!!] Query previously denied by CIBA— hard rejection.")
+                    logger.warning("[!!] Query previously denied by CIBA hard rejection.")
                     return {
                         "answer": ("Your query was denied by a security approver and cannot be re-submitted for another 30 minutes. Contact your SAP security admin if you believe this is an error."),
                         "tables_used": [],
@@ -624,7 +626,7 @@ def run_agent_loop(
                         recommended_action=sentinel_verdict.recommended_action,
                         tables_requested=[],
                     )
-                    logger.warning("[!!] CIBA hard block— approval request {} created. Waiting for approver.".format(ciba_req.request_id))
+                    logger.warning("[!!] CIBA hard block approval request {} created. Waiting for approver.".format(ciba_req.request_id))
                     return {
                         "answer": ("Your query has been blocked by the Security Sentinel and requires supervisor approval before execution.\n\nThreat: {} | Severity: {}\n\nReason: {}\n\nYour request ID: {}\nUse the CIBA /pending endpoint or your approval inbox to review and act on this request.").format(threat_val, severity_val, evidence_val, ciba_req.request_id),
                         "tables_used": [],
@@ -700,8 +702,8 @@ def run_agent_loop(
             domain_hint=domain,
         )
         if verbose:
-            tier_icon = {"TRIVIAL": "⚡", "SIMPLE": "🔹", "COMPLEX": "🔴", "EXPERT": "🔵"}.get(
-                routing.tier.value, "❓")
+            tier_icon = {"TRIVIAL": "?", "SIMPLE": "??", "COMPLEX": "??", "EXPERT": "??"}.get(
+                routing.tier.value, "?")
             logger.debug(f"  [Phase L5+20] tier={routing.tier.value} "
                          f"score={routing.score:.3f} {tier_icon} "
                          f"(cost={get_router_cost_tracker().get_cost_stats().get('total_cost_ms', 0):.1f}ms)")
@@ -709,7 +711,7 @@ def run_agent_loop(
     start_time = time.time()
 
     # ============================================================================
-    # [Phase 21] Formal Revision Loop — CoT trace + convergence detection
+    # [Phase 21] Formal Revision Loop  CoT trace + convergence detection
     # ============================================================================
     revision_loop = create_revision_loop(
         query_signature=query,
@@ -726,12 +728,12 @@ def run_agent_loop(
         return revision_loop.check_convergence(sql_hash=sql_hash, confidence=confidence)
 
     # ============================================================================
-    # [Phase L5] TRIVIAL tier — skip all steps, return direct pattern match
+    # [Phase L5] TRIVIAL tier  skip all steps, return direct pattern match
     # ============================================================================
     if routing.tier == RoutingTier.TRIVIAL:
-        logger.info(f"[Phase L5] TRIVIAL tier — skipping orchestrator steps")
+        logger.info(f"[Phase L5] TRIVIAL tier  skipping orchestrator steps")
         return {
-            "answer": "TRIVIAL query — direct pattern match path.",
+            "answer": "TRIVIAL query  direct pattern match path.",
             "tables_used": [],
             "executed_sql": None,
             "masked_fields": [],
@@ -876,9 +878,9 @@ def run_agent_loop(
 
 
 
-    # [Phase 6] Security Sentinel — Proactive Threat Evaluation
+    # [Phase 6] Security Sentinel  Proactive Threat Evaluation
 
-    # [Phase 23] Safety Guardrails — LegacySentinelAdapter (drop-in replacement)
+    # [Phase 23] Safety Guardrails  LegacySentinelAdapter (drop-in replacement)
     from app.core.safety_guardrails import get_sentinel, ThreatSeverity
 
     sentinel = get_sentinel()
@@ -886,7 +888,7 @@ def run_agent_loop(
     session_id = auth_context.session_id or session_id
 
 
-    # [Phase 24+] Unified Memory Architecture — compose memory context + trace
+    # [Phase 24+] Unified Memory Architecture  compose memory context + trace
     from app.core.memory_orchestrator import get_memory_orchestrator
     memory_context = get_memory_orchestrator().build_context(
         query=query,
@@ -899,7 +901,7 @@ def run_agent_loop(
     dedup_sig = memory_context.metadata.get("dedup_signature")
     duplicate_turn = memory_context.metadata.get("duplicate_of_turn")
     if is_dup and dedup_sig:
-        logger.info(f"[MemoryContext] Duplicate query detected (sig={str(dedup_sig)[:12]}...) — loading cached context")
+        logger.info(f"[MemoryContext] Duplicate query detected (sig={str(dedup_sig)[:12]}...)  loading cached context")
     resolved_hint = memory_context.metadata.get("resolved_domain_hint")
     if domain == "auto" and resolved_hint and resolved_hint != "auto":
         domain = resolved_hint
@@ -980,9 +982,9 @@ def run_agent_loop(
 
                 # Check if query was previously approved or denied in this session
                 if ciba.is_query_approved(session_id, query):
-                    logger.info("[CIBA] Query previously approved— proceeding despite sentinel block.")
+                    logger.info("[CIBA] Query previously approved proceeding despite sentinel block.")
                 elif ciba.is_query_denied(session_id, query):
-                    logger.warning("[!!] Query previously denied by CIBA— hard rejection.")
+                    logger.warning("[!!] Query previously denied by CIBA hard rejection.")
                     return {
                         "answer": ("Your query was denied by a security approver and cannot be re-submitted for another 30 minutes. Contact your SAP security admin if you believe this is an error."),
                         "tables_used": tables_involved,
@@ -1012,7 +1014,7 @@ def run_agent_loop(
                         recommended_action=sentinel_verdict.recommended_action,
                         tables_requested=tables_involved,
                     )
-                    logger.warning("[!!] CIBA hard block— approval request {} created. Waiting for approver.".format(ciba_req.request_id))
+                    logger.warning("[!!] CIBA hard block approval request {} created. Waiting for approver.".format(ciba_req.request_id))
                     return {
                         "answer": ("Your query has been blocked by the Security Sentinel and requires supervisor approval before execution.\n\nThreat: {} | Severity: {}\n\nReason: {}\n\nYour request ID: {}\nUse the CIBA /pending endpoint or your approval inbox to review and act on this request.").format(threat_val, severity_val, evidence_val, ciba_req.request_id),
                         "tables_used": tables_involved,
@@ -1025,7 +1027,7 @@ def run_agent_loop(
                         "confidence_score": None,
                     }
             else:
-                # recommended_action == "tighten"— soft block, apply tightening and proceed
+                # recommended_action == "tighten" soft block, apply tightening and proceed
                 sentinel.apply_tightening_to_auth_context(sentinel_verdict, auth_context)
                 logger.info("[!!] AuthContext tightened (soft block) for role {}".format(auth_context.role_id))
 
@@ -1144,7 +1146,7 @@ def run_agent_loop(
 
     # ========================================================================
 
-    # [Phase 4] SUPERVISOR GATE — Try domain agents first
+    # [Phase 4] SUPERVISOR GATE  Try domain agents first
 
     # ========================================================================
 
@@ -1194,7 +1196,7 @@ def run_agent_loop(
 
             if verbose:
 
-                logger.debug(f"\n[SUPERVISOR] Error — falling back to standard orchestrator: {e}")
+                logger.debug(f"\n[SUPERVISOR] Error  falling back to standard orchestrator: {e}")
 
 
 
@@ -1218,7 +1220,7 @@ def run_agent_loop(
 
     # =========================================================================
 
-    # PHASE 1: DISPATCH — Which tools does this query need?
+    # PHASE 1: DISPATCH  Which tools does this query need?
 
     # =========================================================================
 
@@ -1237,7 +1239,7 @@ def run_agent_loop(
     # =========================================================================
 
     if should_run_tool("search_sap_notes"):
-        sap_note_result = call_tool("search_sap_notes", {
+        sap_note_result = router.evaluate("search_sap_notes", {
             "query": query,
         }, auth_context=auth_context)
         trace("search_sap_notes", sap_note_result)
@@ -1254,8 +1256,8 @@ def run_agent_loop(
 
     meta_path_used = False
     if should_run_tool("meta_path_match"):
-        logger.info("\n[0/5] [Pillar 5] Meta-Path Match — meta_path_match()")
-        meta_result = call_tool("meta_path_match", {
+        logger.info("\n[0/5] [Pillar 5] Meta-Path Match  meta_path_match()")
+        meta_result = router.evaluate("meta_path_match", {
 
             "query": query,
 
@@ -1310,13 +1312,13 @@ def run_agent_loop(
 
 
 
-        logger.info("    [FAST PATH] Skipping Schema & SQL RAG — using Meta-Path template.")
+        logger.info("    [FAST PATH] Skipping Schema & SQL RAG  using Meta-Path template.")
 
 
 
         if len(tables_involved) >= 2 and should_run_tool("temporal_graph_search"):
 
-            temporal_result = call_tool("temporal_graph_search", {
+            temporal_result = router.evaluate("temporal_graph_search", {
 
                 "query": query,
 
@@ -1388,15 +1390,15 @@ def run_agent_loop(
 
 
 
-    # semantically relevant historical context — failures, defects, warnings.
+    # semantically relevant historical context  failures, defects, warnings.
 
 
 
-    # Example: "bearing vibration fatigue" → finds 2009 note: "Bearing B-2047
+    # Example: "bearing vibration fatigue" ? finds 2009 note: "Bearing B-2047
 
 
 
-    # showing fatigue signs — recommend replacement at next planned shutdown."
+    # showing fatigue signs  recommend replacement at next planned shutdown."
 
 
 
@@ -1438,7 +1440,7 @@ def run_agent_loop(
 
 
 
-        logger.info(f"\n[1.75/5] [Phase 8] QM Semantic Search — searching 20yr of mechanic notes")
+        logger.info(f"\n[1.75/5] [Phase 8] QM Semantic Search  searching 20yr of mechanic notes")
 
 
 
@@ -1516,7 +1518,7 @@ def run_agent_loop(
 
 
 
-                logger.info(f"    Top match: [{top_qm['year']}] {top_qm['equipment']} — "
+                logger.info(f"    Top match: [{top_qm['year']}] {top_qm['equipment']}  "
 
 
 
@@ -1658,7 +1660,7 @@ def run_agent_loop(
 
         # [Phase L5] Skip schema retrieval for SIMPLE queries (direct pattern match)
         if routing.should_skip("schema_discovery"):
-            logger.info("[1/5] [Pillar 3] Schema RAG — SKIPPED "
+            logger.info("[1/5] [Pillar 3] Schema RAG  SKIPPED "
                         f"(tier={routing.tier.value}, score={routing.score:.3f})")
             provenance.record_skip("schema_lookup", f"routing tier={routing.tier.value}")
         else:
@@ -1677,9 +1679,9 @@ def run_agent_loop(
             phase_1_start = time.time()
 
         if should_run_tool("schema_lookup"):
-            logger.info("\n[1/5] [Pillar 3] Schema RAG — schema_lookup()")
+            logger.info("\n[1/5] [Pillar 3] Schema RAG  schema_lookup()")
 
-            schema_result = call_tool("schema_lookup", {
+            schema_result = router.evaluate("schema_lookup", {
 
                 "query": query,
 
@@ -1757,11 +1759,11 @@ def run_agent_loop(
 
         # =========================================================================
 
-        # Fire when schema RAG finds nothing — last resort before generating SELECT *
+        # Fire when schema RAG finds nothing  last resort before generating SELECT *
 
         if not tables_involved:
 
-            logger.info("\n[1b/5] [Phase 5] Schema Auto-Discovery — DDIC fallback")
+            logger.info("\n[1b/5] [Phase 5] Schema Auto-Discovery  DDIC fallback")
 
             try:
 
@@ -1864,7 +1866,7 @@ def run_agent_loop(
         )
 
         if should_explore:
-            logger.info("\n[1.25/5] [Phase 18] Exploration & Discovery — exploration_engine.explore()")
+            logger.info("\n[1.25/5] [Phase 18] Exploration & Discovery  exploration_engine.explore()")
             try:
                 exploration_result = exploration_engine.explore(
                     query=query,
@@ -1940,9 +1942,9 @@ def run_agent_loop(
         phase_1b_start = time.time()
 
         if should_run_tool("graph_enhanced_schema_discovery"):
-            logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search — graph_enhanced_schema_discovery()")
+            logger.info("\n[1.5/5] [Pillar 5\u00bd] Graph Embedding Search  graph_enhanced_schema_discovery()")
 
-            graph_result = call_tool("graph_enhanced_schema_discovery", {
+            graph_result = router.evaluate("graph_enhanced_schema_discovery", {
 
                 "query": query,
 
@@ -2050,7 +2052,7 @@ def run_agent_loop(
         phase_2_start = time.time()
 
         if should_run_tool("sql_pattern_lookup"):
-            logger.info("\n[2/5] [Pillar 4] SQL RAG — sql_pattern_lookup()")
+            logger.info("\n[2/5] [Pillar 4] SQL RAG  sql_pattern_lookup()")
 
             # [Phase 4] Memory Layer: pull boosted patterns for this domain
             boosted = sap_memory.get_boosted_patterns(domain=domain, top_k=3)
@@ -2061,7 +2063,7 @@ def run_agent_loop(
 
                       f"{', '.join(p['pattern_name'] for p in boosted[:3])}")
 
-            sql_result = call_tool("sql_pattern_lookup", {
+            sql_result = router.evaluate("sql_pattern_lookup", {
 
                 "query": query,
 
@@ -2198,15 +2200,15 @@ def run_agent_loop(
 
         # =========================================================================
 
-        # STEP 2b: TEMPORAL DETECTION (Pillar 5 — Temporal)
+        # STEP 2b: TEMPORAL DETECTION (Pillar 5  Temporal)
 
         # =========================================================================
 
         if len(tables_involved) >= 2 and should_run_tool("temporal_graph_search"):
 
-            logger.info(f"\n[2b/5] [Pillar 5] Temporal Detection — checking for date anchors in query")
+            logger.info(f"\n[2b/5] [Pillar 5] Temporal Detection  checking for date anchors in query")
 
-            temporal_result = call_tool("temporal_graph_search", {
+            temporal_result = router.evaluate("temporal_graph_search", {
 
                 "query": query,
                 "start_table": tables_involved[0] if tables_involved else "LFA1",
@@ -2227,7 +2229,7 @@ def run_agent_loop(
 
             else:
 
-                logger.info(f"    [TEMPORAL] No temporal anchor in query — proceeding without temporal filters")
+                logger.info(f"    [TEMPORAL] No temporal anchor in query  proceeding without temporal filters")
 
 
 
@@ -2271,7 +2273,7 @@ def run_agent_loop(
 
         if is_temporal_analysis and len(tables_involved) >= 1:
 
-            logger.info(f"\n[2c/5] [Phase 7] Temporal Analysis Engine — detected temporal analysis query")
+            logger.info(f"\n[2c/5] [Phase 7] Temporal Analysis Engine  detected temporal analysis query")
 
             te = TemporalEngine()
 
@@ -2347,7 +2349,7 @@ def run_agent_loop(
 
                     temporal_sql = econ_result["events"][0]["comparison_sql"] if econ_result["events"] else base_sql
 
-                    logger.info(f"    [PHASE 7] Economic Cycle Analysis — {econ_result['events_found']} event(s) found")
+                    logger.info(f"    [PHASE 7] Economic Cycle Analysis  {econ_result['events_found']} event(s) found")
 
                     temporal_analysis_meta = {"type": "economic_cycle", "events_found": econ_result['events_found']}
 
@@ -2365,7 +2367,7 @@ def run_agent_loop(
 
                     # Detect FY range from query
 
-                    fy_match = re.search(r'FY(20\d{2})\s*[-–]\s*FY(20\d{2})', q_lower)
+                    fy_match = re.search(r'FY(20\d{2})\s*[-]\s*FY(20\d{2})', q_lower)
 
                     if fy_match:
 
@@ -2427,7 +2429,7 @@ def run_agent_loop(
 
                 else:
 
-                    # Generic temporal — default FY analysis
+                    # Generic temporal  default FY analysis
 
                     from datetime import date
 
@@ -2513,7 +2515,7 @@ def run_agent_loop(
 
         # When negotiation intent is detected: synthesize a structured negotiation
 
-        # brief from 20yr of SAP data — CLV, PSI, churn risk, BATNA, tactics.
+        # brief from 20yr of SAP data  CLV, PSI, churn risk, BATNA, tactics.
 
         # Fires on: "negotiate", "contract renewal", "price increase",
 
@@ -2543,7 +2545,7 @@ def run_agent_loop(
 
         if is_negotiation_query:
 
-            logger.info(f"\n[2d/5] [Phase 8] Negotiation Briefing Generator — synthesizing 20yr brief")
+            logger.info(f"\n[2d/5] [Phase 8] Negotiation Briefing Generator  synthesizing 20yr brief")
 
             try:
 
@@ -2731,7 +2733,7 @@ def run_agent_loop(
 
         # =========================================================================
 
-        # STEP 3: GRAPH TRAVERSAL (Pillar 5) — if multi-table
+        # STEP 3: GRAPH TRAVERSAL (Pillar 5)  if multi-table
 
         # =========================================================================
 
@@ -2739,15 +2741,15 @@ def run_agent_loop(
 
         if sql_result.status != ToolStatus.SUCCESS or not sql_result.data.get("patterns"):
 
-            # Only use Graph RAG when we have no pattern — build JOIN from scratch
+            # Only use Graph RAG when we have no pattern  build JOIN from scratch
 
             if len(tables_involved) > 1 and should_run_tool("all_paths_explore"):
 
                 phase_3_start = time.time()
 
-                logger.info(f"\n[3/5] [Pillar 5] Graph RAG — all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
+                logger.info(f"\n[3/5] [Pillar 5] Graph RAG  all_paths_explore({tables_involved[0]}, {tables_involved[1]}) [FALLBACK]")
 
-                graph_result = call_tool("all_paths_explore", {
+                graph_result = router.evaluate("all_paths_explore", {
 
                     "start_table": tables_involved[0],
 
@@ -2767,7 +2769,7 @@ def run_agent_loop(
 
                     base_sql += f"\n{join_clause}"
 
-                    logger.info(f"    JOIN path chosen: {' → '.join(graph_result.data['best_path_tables'])}")
+                    logger.info(f"    JOIN path chosen: {' ? '.join(graph_result.data['best_path_tables'])}")
 
                 else:
 
@@ -2791,11 +2793,11 @@ def run_agent_loop(
 
             else:
 
-                logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (single table, no traversal needed)")
+                logger.info("\n[3/5] [Pillar 5] Graph RAG  Skipped (single table, no traversal needed)")
 
         else:
 
-            logger.info("\n[3/5] [Pillar 5] Graph RAG — Skipped (pattern found, JOIN already in SQL)")
+            logger.info("\n[3/5] [Pillar 5] Graph RAG  Skipped (pattern found, JOIN already in SQL)")
 
 
 
@@ -3023,7 +3025,7 @@ def run_agent_loop(
 
     # =========================================================================
 
-    # STEP 4.5: SELF-CRITIQUE LOOP (Phase 4 — Gatekeeper)
+    # STEP 4.5: SELF-CRITIQUE LOOP (Phase 4  Gatekeeper)
 
     # =========================================================================
 
@@ -3036,7 +3038,7 @@ def run_agent_loop(
         tags=["critique", "validation"],
     )
 
-    logger.info("\n[4.5/5] [Phase 4] Self-Critique — critique_agent.critique()")
+    logger.info("\n[4.5/5] [Phase 4] Self-Critique  critique_agent.critique()")
 
     
 
@@ -3093,7 +3095,7 @@ def run_agent_loop(
 
         status=ToolStatus.SUCCESS if critique_result["passed"] else ToolStatus.ERROR,
 
-        message=f"Score: {critique_result['score']} — {'PASS' if critique_result['passed'] else 'FAIL'}",
+        message=f"Score: {critique_result['score']}  {'PASS' if critique_result['passed'] else 'FAIL'}",
 
         data=critique_result,
 
@@ -3123,7 +3125,7 @@ def run_agent_loop(
 
         for issue in critique_result["issues"]:
 
-            logger.info(f"        • {issue}")
+            logger.info(f"         {issue}")
 
         can_attempt_heal = revision_loop.should_continue()
         if can_attempt_heal:
@@ -3254,7 +3256,7 @@ def run_agent_loop(
 
     logger.info("\n[5/5] [Security] sql_validate()")
 
-    validate_result = call_tool("sql_validate", {
+    validate_result = router.evaluate("sql_validate", {
 
         "sql": generated_sql,
 
@@ -3284,13 +3286,13 @@ def run_agent_loop(
 
         if heal_code and healed_sql != generated_sql:
 
-            logger.info(f"    [!!] Validation failed — self-healed ({heal_code}): {heal_reason}")
+            logger.info(f"    [!!] Validation failed  self-healed ({heal_code}): {heal_reason}")
 
             logger.info(f"    [OK] Retrying with healed SQL...")
 
             generated_sql = healed_sql
 
-            validate_result = call_tool("sql_validate", {
+            validate_result = router.evaluate("sql_validate", {
 
                 "sql": generated_sql,
 
@@ -3346,11 +3348,11 @@ def run_agent_loop(
 
     phase_5b_start = time.time()
 
-    logger.info("\n[5.5/5] [Phase 6] Validation Harness — SELECT COUNT(*) Dry-Run")
+    logger.info("\n[5.5/5] [Phase 6] Validation Harness  SELECT COUNT(*) Dry-Run")
 
     validation_sql = f"SELECT COUNT(*) FROM (\n{generated_sql}\n) AS dry_run_sub"
 
-    val_exec_result = call_tool("sql_execute", {
+    val_exec_result = router.evaluate("sql_execute", {
 
         "sql": validation_sql,
 
@@ -3414,7 +3416,7 @@ def run_agent_loop(
 
             validation_sql = f"SELECT COUNT(*) FROM (\n{generated_sql}\n) AS dry_run_sub"
 
-            reval_exec_result = call_tool("sql_execute", {
+            reval_exec_result = router.evaluate("sql_execute", {
 
                 "sql": validation_sql,
 
@@ -3511,7 +3513,7 @@ def run_agent_loop(
 
     logger.info("\n[*] Executing Final SQL against SAP HANA (mock)...")
 
-    exec_result = call_tool("sql_execute", {
+    exec_result = router.evaluate("sql_execute", {
 
         "sql": generated_sql,
 
@@ -3535,7 +3537,7 @@ def run_agent_loop(
         {"status": exec_result.status.value, "message": exec_result.message[:120] if exec_result.message else ""},
     )
 
-    # [Phase 6] Autonomous Recovery — attempt self-heal on execution errors
+    # [Phase 6] Autonomous Recovery  attempt self-heal on execution errors
 
     from app.core.recovery_types import RecoveryCase, RecoveryAttempt, RecoverySeverity
     recovery_case = None
@@ -3590,13 +3592,13 @@ def run_agent_loop(
 
             # Re-validate and retry execution
 
-            revalidate = call_tool("sql_validate", {"sql": generated_sql, "strict": False}, auth_context=auth_context)
+            revalidate = router.evaluate("sql_validate", {"sql": generated_sql, "strict": False}, auth_context=auth_context)
 
             if revalidate.status == ToolStatus.SUCCESS:
 
                 logger.info(f"    [OK] Retrying execution with healed SQL...")
 
-                exec_result = call_tool("sql_execute", {"sql": generated_sql, "dry_run": True, "max_rows": 1000}, auth_context=auth_context)
+                exec_result = router.evaluate("sql_execute", {"sql": generated_sql, "dry_run": True, "max_rows": 1000}, auth_context=auth_context)
 
                 trace("sql_execute(retry)", exec_result)
                 revision_loop.check_convergence(
@@ -3643,7 +3645,7 @@ def run_agent_loop(
 
     # =========================================================================
 
-    # STEP 7: MASKING (Pillar 1 — Post-Execution)
+    # STEP 7: MASKING (Pillar 1  Post-Execution)
 
     # =========================================================================
 
@@ -3888,7 +3890,7 @@ def run_agent_loop(
         # [Phase 17] Semantic Answer Validation result
         "semantic_validation": semantic_validation,
 
-        # [Phase 6] Proactive Threat Sentinel verdict — surfaced in API response
+        # [Phase 6] Proactive Threat Sentinel verdict  surfaced in API response
 
         "sentinel": {
 
@@ -4058,7 +4060,7 @@ def run_agent_loop(
 
         )
 
-        # [Phase 11] Failure trigger — non-blocking, async MetaHarnessLoop on cascade
+        # [Phase 11] Failure trigger  non-blocking, async MetaHarnessLoop on cascade
         if heal_info.get("applied", False) is False:
             try:
                 from app.core.failure_trigger import check_and_trigger_meta_harness
@@ -4080,7 +4082,7 @@ def run_agent_loop(
 
     
 
-    # [Phase 6] Autonomous Self-Improvement — review and improve after every query
+    # [Phase 6] Autonomous Self-Improvement  review and improve after every query
 
     self_improver.review_and_improve(
 
@@ -4167,7 +4169,7 @@ def run_agent_loop(
         {"tables_used": tables_involved, "row_count": len(data_records)},
     )
 
-    # [Phase 12] QualityEvaluator — compute and store quality metrics from trajectory
+    # [Phase 12] QualityEvaluator  compute and store quality metrics from trajectory
 
     if current_run_id:
 
@@ -4328,7 +4330,7 @@ def run_agent_loop(
             {"event": "writeback", **decision.to_dict()} for decision in write_decisions
         ]
     except Exception:
-        pass  # fire-and-forget — never block on unified memory write-back
+        pass  # fire-and-forget  never block on unified memory write-back
     return result_dict
 
 
@@ -4337,7 +4339,7 @@ def run_agent_loop(
 
 # =============================================================================
 
-# CLI Integration — Run agent via command line
+# CLI Integration  Run agent via command line
 
 # =============================================================================
 

@@ -11,7 +11,6 @@ load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 from app.api.api import api_router
 from app.api.middleware.session_middleware import SessionMiddleware, check_redis_health
-from app.governance.leanix_middleware import LeanIXGovernanceMiddleware
 
 app = FastAPI(
     title="SAP S/4 HANA Enterprise Master Data Chatbot API",
@@ -36,13 +35,6 @@ app.add_middleware(
 # Attaches dialog state + rate info to request.state
 # Auto-creates Redis session on first request
 app.add_middleware(SessionMiddleware)
-
-# ── LeanIX Governance Middleware (M9) ────────────────────────────────────────
-# Pre-flight:  pre-authorization + compliance classification + context enrichment
-# Post-flight: audit trail + LeanIX response headers
-# Bypasses: health checks, task polling, static paths
-# Set LEANIX_ENABLED=false to disable (or omit LEANIX_BASE_URL / LEANIX_API_TOKEN)
-app.add_middleware(LeanIXGovernanceMiddleware)
 
 # ── API Routes ─────────────────────────────────────────────────────────────────
 app.include_router(api_router, prefix="/api/v1")
