@@ -1,4 +1,4 @@
-﻿"""
+"""
 Know Your SAP Masters — Modernized Frontend v2
 ===============================================
 Full 8-phase orchestration visibility:
@@ -172,7 +172,7 @@ with st.sidebar:
 
     st.divider()
 
-    if st.button("🗑 Clear Conversation", use_container_width=True):
+    if st.button("🗑 Clear Conversation", width='stretch'):
         st.session_state.messages = []
         import uuid
         st.session_state.session_id = f"st-{uuid.uuid4().hex[:12]}"
@@ -696,7 +696,7 @@ def render_answer(msg: dict):
     data = payload.get("data")
     if data:
         st.markdown(f"**📊 Results — {len(data)} record(s)**")
-        st.dataframe(pd.DataFrame(data), use_container_width=True)
+        st.dataframe(pd.DataFrame(data), width='stretch')
     elif data == []:
         st.info("No records found for this query.")
 
