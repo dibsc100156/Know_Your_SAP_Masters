@@ -400,6 +400,7 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | `docs/SANDBOX_ARCHITECTURE.md` | 7-layer sandbox stack |
 | `docs/INTER_AGENT_MESSAGE_BUS_DESIGN.md` | Phase 13 bus design |
 | `docs/KYSM_PHASE_BY_PHASE_FEATURE_TABLE.md` | Compact phase-by-phase feature map aligned to patterns and roadmap |
+| `docs/KYSM_FEATURES_GROUPED_BY_BUSINESS_VALUE.md` | Feature summary organized by business outcomes and enterprise value |
 | `docs/LEVEL5_ROADMAP.md` | **This file** |
 
 ---
