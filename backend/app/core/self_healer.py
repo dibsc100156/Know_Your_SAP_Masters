@@ -26,7 +26,7 @@ Usage:
 
 import logging
 import re
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Set
 from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
