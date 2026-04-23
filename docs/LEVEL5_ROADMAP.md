@@ -1,5 +1,5 @@
-# KYSM Level-5 Roadmap — Consolidated Implementation Status
-**Last Updated:** April 22, 2026 | Project: Know Your SAP Masters (SAP Masters)
+﻿# KYSM Level-5 Roadmap — Consolidated Implementation Status
+**Last Updated:** April 23, 2026 | Project: Know Your SAP Masters (SAP Masters)
 
 ---
 
@@ -28,6 +28,13 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 - `c36ff76` — Priority 8: SAP Note Knowledge Graph (Memgraph operational entities)
 - `e2a0d05` — Priority 6: MCP Server for KYSM
 - `8782e9f` — Priority 10: Fluent Orchestrator Builder Syntax
+
+
+**April 23 commits:**
+- T5COMPLETE — Pattern 5 T1-T5: tool_audit_logger.py + tool_fallback_chain.py + tool_router.py wired into orchestrator
+- T2TOOLS — orchestrator_tools.py: Tool dataclass extended with allowed_roles/denied_roles/required_tables/compliance_level/fallback_tools/timeout_ms, all 13 tools annotated
+- T3T5WIRE — orchestrator.py: all 12 call_tool() replaced with router.evaluate(), get_tool_router(sentinel) initialized in run_agent_loop
+- PATTERN5COMPLETE — AGENTIC_DESIGN_PATTERNS_KYSM.md + LEVEL5_ROADMAP.md synced: Pattern 5 status → ✅ Complete
 
 **April 22 work:**
 - Hybrid graph runtime perf/load sign-off is now **GREEN** (`backend/reports/hybrid_graph_signoff_20260422T094235Z.json`)
@@ -117,7 +124,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | 11 | Meta-Harness Loop | `meta_harness_loop.py` — collect→analyze→YAML→approve→patch with structured reporting/apply coverage | ✅ Complete |
 | 12 | Quality Evaluator | `QualityEvaluator` — correctness_score + trajectory_adherence from phase states + structured trajectory log; live persistence/surfacing + benchmark artifacts expanded Apr 22 | ✅ Complete |
 | 13 | Inter-Agent Message Bus | Redis pub/sub + streams, 6 message types | ✅ Complete |
-| 13+ | Retrieval Quality Architecture | `RetrievalBundle` + reranker + retrieval critic + query-aware retrieval profiles + trace surfacing (R13.1–R13.5) | 🟡 Partial |
+| 13+ | Retrieval Quality Architecture | `RetrievalBundle` + reranker + retrieval critic + query-aware retrieval profiles + trace surfacing (R13.1–R13.5) | ✅ Complete |
 | 13b | Negotiation Protocol | 4-phase ASSERTING→CHALLENGING→NEGOTIATING→COMMITTED | ✅ Complete |
 | **18** | **Exploration & Discovery** | Dynamic FK probing + hierarchical task decomposition with live orchestrator merge + surfaced decomposition plan | ✅ Complete |
 | **19** | **Agent-as-Tool Dynamic Override** | Sentinel/CIBA triggers tool-mode suppression of agent autonomy; live wiring, tests, and operator guide now complete | ✅ Complete |
@@ -126,7 +133,7 @@ and wires into the orchestrator via clearly defined entry/exit contracts.
 | **22** | **Dynamic Query Prioritization** | Urgency×recency×role_authority scoring for Celery queue; live sync/async API wiring, fairness tests, and queue policy docs complete | ✅ Complete |
 | **23** | **Safety Guardrails (Standalone)** | `safety_guardrails.py` now owns the live layered safety contract behind the sentinel adapter; guardrail verdict/profile surfaced in API | ✅ Complete |
 | **24** | **Episodic Memory Store** | Redis-backed session scratchpad with live context/dedup integration, duplicate-turn lookup, recent query/result pairs, and surfaced episodic metadata in API | ✅ Complete |
-| **24+** | **Unified Memory Architecture Follow-Through** | `MemoryContext` + memory orchestrator + write-back router + policy layer + trace surfacing (M8.1–M8.5) | 🟡 Partial |
+| **24+** | **Unified Memory Architecture Follow-Through** | `MemoryContext` + memory orchestrator + write-back router + policy layer + trace surfacing (M8.1–M8.5) | ✅ Complete |
 
 ---
 
@@ -321,9 +328,17 @@ Embedding model:   all-MiniLM-L6-v2 (384-dim, cosine, normalized)
 | 22 | 🟡 P1 | Phase 22: Dynamic Query Prioritization — Celery queue scoring engine | 22 | ✅ Complete (fairness tests + queue policy Apr 22) |
 | 23 | 🟢 P2 | Phase 23: Safety Guardrails (Standalone layer) — Sentinel split | 23 | ✅ Complete |
 | 24 | 🟢 P2 | Phase 24: Episodic Memory — Redis session scratchpad | 24 | ✅ Complete |
-| 24+ | 🟡 P2 | Unified Memory Architecture Follow-Through — `MemoryContext` + orchestrator + policy + write-back + trace | M8.1–M8.5 | 🟡 Partial (design defined Apr 22; follows live Phase 24) |
-| 13+ | 🟡 P2 | Retrieval Quality Architecture — `RetrievalBundle` + reranker + critic + retrieval profiles + trace | R13.1–R13.5 | 🟡 Partial (design defined Apr 22; sharpens Pattern 13 retrieval quality) |
+| 24+ | 🟡 P2 | Unified Memory Architecture Follow-Through — `MemoryContext` + orchestrator + policy + write-back + trace | M8.1–M8.5 | ✅ Complete |
+| 13+ | 🟡 P2 | Retrieval Quality Architecture — `RetrievalBundle` + reranker + critic + retrieval profiles + trace | R13.1–R13.5 | ✅ Complete |
 | 1+ | 🟡 P1 | Prompt Chain Controller Architecture — `ChainStep` + controller + quality gates + retry/stop + trace | C1.1–C1.5 | ✅ Complete (live chain trace + step verdicts wired Apr 22) |
+| 31 | 🟢 P2 | Adaptive Replanning Architecture — `ExecutionPlan` + Replanner + Replan Trace | P1 | ✅ Complete |
+| 32 | 🟢 P2 | Per-Query Goal State Architecture — `QueryGoal` + Tracker + Drift Detection | P2 | ✅ Complete |
+| 33 | 🟢 P2 | Recovery Escalation Architecture — `RecoveryCase` + Escalation Lanes | P2 | ✅ Complete |
+| 34 | 🟢 P2 | Reasoning Trace Architecture — `ReasoningTrace` + Runtime Hooks | P2 | ✅ Complete |
+| 35 | 🟢 P2 | Automated Golden-Set Regression — Eval Runner + CI Gates | P2 | ✅ Complete |
+| 36 | 🟢 P2 | Delivery Foundation — `DeliveryEnvelope` + Idempotency | P2 | ✅ Complete |
+| 37 | 🟢 P2 | Message Reliability — ACK/NACK + Replay + DLQ + Sweeper | P2 | ✅ Complete |
+| 38 | 🟢 P2 | Consumer Group Bus — True Redis Streams `XREADGROUP` integration | P2 | ✅ Complete |
 | 1 | 🔴 P0 | Real SAP HANA activation (`HANA_MODE=pool`) — replace mock as the default runtime | M7 | 🚧 Planned |
 | 2 | 🔴 P0 | Hybrid graph runtime load/perf sign-off (Memgraph + NX mirror, p95 target) | Ops | ✅ Complete |
 | L4 | 🟢 P2 | Phase L4 Real-Time Monitoring Dashboard | L4 | ✅ Complete |
